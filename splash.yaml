@@ -1,0 +1,7 @@
+flutter_native_splash:
+  color: "#0B2D2A"
+  image: IqraLogo.png
+  android_12:
+    image: IqraLogo.png
+  android: true
+  ios: true

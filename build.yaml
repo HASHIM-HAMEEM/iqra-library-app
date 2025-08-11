@@ -1,0 +1,29 @@
+targets:
+  $default:
+    builders:
+      drift_dev:drift_builder:
+        enabled: true
+        options:
+          store_date_time_values_as_text: true
+          generate_connect_constructor: true
+          sqlite_modules:
+            - fts5
+            - json1
+      riverpod_generator:riverpod_generator:
+        enabled: true
+        options:
+          # Generate .g.dart files
+          generate_riverpod: true
+      json_serializable:json_serializable:
+        enabled: true
+        options:
+          any_map: false
+          checked: false
+          create_factory: true
+          create_to_json: true
+          disallow_unrecognized_keys: false
+          explicit_to_json: false
+          field_rename: none
+          generic_argument_factories: false
+          ignore_unannotated: false
+          include_if_null: true
