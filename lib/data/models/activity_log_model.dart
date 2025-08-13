@@ -1,7 +1,6 @@
 import 'dart:convert';
 
-import 'package:drift/drift.dart';
-import 'package:library_registration_app/data/database/app_database.dart';
+// Removed Drift imports - using Supabase only
 import 'package:library_registration_app/domain/entities/activity_log.dart';
 
 class ActivityLogModel {
@@ -15,27 +14,7 @@ class ActivityLogModel {
     this.metadata,
   });
 
-  // Convert from Drift model to data model
-  factory ActivityLogModel.fromDrift(ActivityLogData activityLog) {
-    Map<String, dynamic>? metadata;
-    if (activityLog.details != null) {
-      try {
-        metadata = json.decode(activityLog.details!) as Map<String, dynamic>;
-      } catch (e) {
-        metadata = null;
-      }
-    }
-
-    return ActivityLogModel(
-      id: activityLog.id,
-      activityType: ActivityType.fromString(activityLog.action),
-      description: activityLog.details ?? '',
-      entityId: activityLog.entityId,
-      entityType: activityLog.entityType,
-      metadata: metadata,
-      timestamp: activityLog.timestamp,
-    );
-  }
+  // fromDrift method removed - using Supabase only
 
   // Convert from domain entity to data model
   factory ActivityLogModel.fromEntity(ActivityLog activityLog) {
@@ -57,17 +36,7 @@ class ActivityLogModel {
   final Map<String, dynamic>? metadata;
   final DateTime timestamp;
 
-  // Convert to Drift model
-  ActivityLogsTableCompanion toDrift() {
-    return ActivityLogsTableCompanion.insert(
-      id: id,
-      action: activityType.databaseValue,
-      entityType: entityType ?? '',
-      entityId: Value.ofNullable(entityId),
-      details: Value.ofNullable(description),
-      timestamp: Value(timestamp),
-    );
-  }
+  // toDrift method removed - using Supabase only
 
   // Convert to domain entity
   ActivityLog toEntity() {

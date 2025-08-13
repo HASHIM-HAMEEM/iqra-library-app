@@ -135,7 +135,7 @@ class SetupNotifier extends StateNotifier<SetupState> {
     }
   }
 
-  Future<void> setBiometricEnabled(bool enabled) async {
+  Future<void> setBiometricEnabled({required bool enabled}) async {
     try {
       await _secureStorage.write(key: _biometricKey, value: enabled.toString());
     } catch (e) {

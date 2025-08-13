@@ -11,6 +11,9 @@ import 'package:library_registration_app/presentation/widgets/common/primary_but
 import 'package:local_auth/error_codes.dart' as auth_error;
 import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
+import 'package:library_registration_app/presentation/providers/auth/setup_provider.dart';
+import 'package:library_registration_app/presentation/providers/database_provider.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 
 class AuthPage extends ConsumerStatefulWidget {
   const AuthPage({super.key});
@@ -22,7 +25,9 @@ class AuthPage extends ConsumerStatefulWidget {
 class _AuthPageState extends ConsumerState<AuthPage>
     with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _passwordFocusNode = FocusNode();
   final _localAuth = LocalAuthentication();
   bool get _inTest => Platform.environment.containsKey('FLUTTER_TEST');
 
@@ -86,11 +91,12 @@ class _AuthPageState extends ConsumerState<AuthPage>
       final enrolled = await _localAuth.getAvailableBiometrics();
       // Consider any non-empty enrollment acceptable (some devices report only 'weak')
       final hasAnyBiometric = enrolled.isNotEmpty;
-      final enabledInPrefs = await ref
-          .read(authProvider.notifier)
-          .isBiometricEnabled();
-
-      final canShowIcon = isDeviceSupported && canCheck && hasAnyBiometric && enabledInPrefs;
+      // Respect user's preference from setup/settings
+      final enabledPref = await ref.read(setupProvider.notifier).isBiometricEnabled();
+      // Require the admin to have signed in at least once before offering biometric
+      final hasSignedInOnce =
+          (await ref.read(appSettingsDaoProvider).getBoolSetting('has_signed_in_once')) ?? false;
+      final canShowIcon = isDeviceSupported && canCheck && hasAnyBiometric && enabledPref && hasSignedInOnce;
       if (mounted) setState(() => _biometricAvailable = canShowIcon);
 
       // Optional auto-prompt once if conditions are good and nothing loading
@@ -106,7 +112,7 @@ class _AuthPageState extends ConsumerState<AuthPage>
         });
       }
       debugPrint(
-        '[Biometric] deviceSupported=$isDeviceSupported canCheck=$canCheck enrolled=$enrolled prefs=$enabledInPrefs',
+        '[Biometric] deviceSupported=$isDeviceSupported canCheck=$canCheck enrolled=$enrolled',
       );
     } on PlatformException catch (e) {
       debugPrint(
@@ -123,11 +129,11 @@ class _AuthPageState extends ConsumerState<AuthPage>
     if (!_formKey.currentState!.validate()) return;
     final success = await ref
         .read(authProvider.notifier)
-        .authenticateWithPassword(_passwordController.text);
+        .authenticateWithPassword(_emailController.text, _passwordController.text);
     if (!success) {
       final error = ref.read(authProvider).error;
       if (error != null) {
-        _showErrorSnackBar(error);
+        _showErrorNotification(error);
         ref.read(authProvider.notifier).clearError();
       }
     }
@@ -141,7 +147,7 @@ class _AuthPageState extends ConsumerState<AuthPage>
       final didAuthenticate = await _localAuth.authenticate(
         localizedReason: 'Unlock Library Admin with biometrics',
         options: const AuthenticationOptions(
-          biometricOnly: AppConfig.allowDeviceCredentialFallback ? false : true,
+          biometricOnly: !AppConfig.allowDeviceCredentialFallback,
           stickyAuth: true,
           useErrorDialogs: false,
         ),
@@ -161,59 +167,58 @@ class _AuthPageState extends ConsumerState<AuthPage>
       if (didAuthenticate) {
         final success = await ref
             .read(authProvider.notifier)
-            .authenticateWithBiometric();
+            // Allow offline biometric unlock if no Supabase session exists
+            .authenticateWithBiometric(allowOffline: true);
         if (!success) {
           final error = ref.read(authProvider).error;
           if (error != null) {
-            _showErrorSnackBar(error);
+            _showErrorNotification(error);
             ref.read(authProvider.notifier).clearError();
           }
         }
         debugPrint('[Biometric] success');
       } else {
         // User canceled or system returned false without exception
-        _showErrorSnackBar('Authentication canceled');
+        _showErrorNotification("Authentication canceled");
         debugPrint('[Biometric] canceled/false');
       }
     } on PlatformException catch (e) {
       debugPrint('[Biometric] PlatformException ${e.code}: ${e.message}');
       switch (e.code) {
         case auth_error.notAvailable:
-          _showErrorSnackBar('This device doesn’t support biometrics.');
+          _showErrorNotification("This device doesn't support biometrics.");
           break;
         case auth_error.notEnrolled:
-          _showErrorSnackBar('No biometric enrolled. Add a fingerprint/face in Settings.');
+          _showErrorNotification("No biometric enrolled. Add a fingerprint/face in Settings.");
           break;
         case auth_error.lockedOut:
         case auth_error.permanentlyLockedOut:
-          _showErrorSnackBar('Too many attempts. Try again later or use password.');
+          _showErrorNotification("Too many attempts. Try again later or use password.");
           break;
         case auth_error.passcodeNotSet:
-          _showErrorSnackBar('Set a device screen lock to use biometrics.');
+          _showErrorNotification("Set a device screen lock to use biometrics.");
           break;
         case auth_error.otherOperatingSystem:
-          _showErrorSnackBar('Biometrics not supported on this OS version.');
+          _showErrorNotification("Biometrics not supported on this OS version.");
           break;
         default:
-          _showErrorSnackBar('Couldn’t verify. Please try again.');
+          _showErrorNotification("Couldn't verify. Please try again.");
       }
     } catch (e) {
       debugPrint('[Biometric] error: $e');
-      _showErrorSnackBar('Couldn’t verify. Please try again.');
+      _showErrorNotification("Couldn't verify. Please try again.");
     } finally {
       if (mounted) setState(() => _authInProgress = false);
     }
   }
 
-  void _showErrorSnackBar(String message) {
-    if (_inTest) return; // avoid scheduling SnackBar timers in tests
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Theme.of(context).colorScheme.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
+  void _showErrorNotification(String message) {
+    if (_inTest) return; // avoid scheduling notification timers in tests
+    if (!mounted) return;
+    CustomNotification.show(
+      context,
+      message: message,
+      type: NotificationType.error,
     );
   }
 
@@ -221,7 +226,9 @@ class _AuthPageState extends ConsumerState<AuthPage>
   void dispose() {
     _fadeController.dispose();
     _slideController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
@@ -403,16 +410,35 @@ class _AuthPageState extends ConsumerState<AuthPage>
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 32),
-                          // Passcode form
+                          // Login form
                           Form(
                             key: _formKey,
                             child: Column(
                               children: [
                                 CustomTextField(
-                                  controller: _passwordController,
-                                  hintText: 'Enter 4-digit passcode',
-                                  obscureText: _obscurePassword,
-                                  prefixIcon: Icons.lock_outline,
+                                  controller: _emailController,
+                                  hintText: 'Enter your email',
+                                  prefixIcon: Icons.email_outlined,
+                                  keyboardType: TextInputType.emailAddress,
+                                  onChanged: (_) => setState(() {}),
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Email is required';
+                                    }
+                                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                                      return 'Enter a valid email address';
+                                    }
+                                    return null;
+                                  },
+                                  onSubmitted: (_) => _passwordFocusNode.requestFocus(),
+                                ),
+                                const SizedBox(height: 16),
+                                CustomTextField(
+                                   controller: _passwordController,
+                                   focusNode: _passwordFocusNode,
+                                   hintText: 'Enter your password',
+                                   obscureText: _obscurePassword,
+                                   prefixIcon: Icons.lock_outline,
                                   suffixIcon: IconButton(
                                     icon: Icon(
                                       _obscurePassword
@@ -425,14 +451,14 @@ class _AuthPageState extends ConsumerState<AuthPage>
                                       });
                                     },
                                   ),
-                                  keyboardType: TextInputType.number,
+                                  keyboardType: TextInputType.text,
                                   onChanged: (_) => setState(() {}),
                                   validator: (value) {
                                     if (value == null || value.isEmpty) {
-                                      return 'Passcode is required';
+                                      return 'Password is required';
                                     }
-                                    if (value.length != 4) {
-                                      return 'Enter a 4-digit passcode';
+                                    if (value.length < 6) {
+                                      return 'Password must be at least 6 characters';
                                     }
                                     return null;
                                   },
@@ -443,7 +469,8 @@ class _AuthPageState extends ConsumerState<AuthPage>
                                 PrimaryButton(
                                   text: 'Sign In',
                                   onPressed:
-                                      (_passwordController.text.length == 4) &&
+                                      (_emailController.text.isNotEmpty &&
+                                          _passwordController.text.length >= 6) &&
                                           !ref.read(authProvider).isLoading
                                       ? _authenticateWithPassword
                                       : null,

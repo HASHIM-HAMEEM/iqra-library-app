@@ -5,15 +5,18 @@ import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/domain/repositories/activity_log_repository.dart';
 import 'package:library_registration_app/domain/repositories/subscription_repository.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
+import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_provider.dart';
 
 class SubscriptionsNotifier
     extends StateNotifier<AsyncValue<List<Subscription>>> {
   SubscriptionsNotifier(
+    this._ref,
     this._subscriptionRepository,
     this._activityLogRepository,
   ) : super(const AsyncValue.loading()) {
     _loadSubscriptions();
   }
+  final Ref _ref;
   final SubscriptionRepository _subscriptionRepository;
   final ActivityLogRepository _activityLogRepository;
 
@@ -64,7 +67,7 @@ class SubscriptionsNotifier
         ActivityType.subscriptionCreated,
         'Subscription "$planName" was created for student',
         entityId: subscriptionId,
-        entityType: 'Subscription',
+        entityType: 'subscription',
         metadata: {
           'student_id': studentId,
           'plan_name': planName,
@@ -74,6 +77,9 @@ class SubscriptionsNotifier
       );
 
       await _loadSubscriptions();
+      // Force-refresh streams for immediate UI reflection
+      _ref.invalidate(subscriptionsProvider);
+      _ref.invalidate(subscriptionsByStudentProvider(studentId));
       return subscriptionId;
     } catch (error) {
       rethrow;
@@ -95,7 +101,7 @@ class SubscriptionsNotifier
         ActivityType.subscriptionUpdated,
         'Subscription "${subscription.planName}" was updated',
         entityId: subscription.id,
-        entityType: 'Subscription',
+        entityType: 'subscription',
         metadata: {
           'student_id': subscription.studentId,
           'plan_name': subscription.planName,
@@ -105,6 +111,8 @@ class SubscriptionsNotifier
       );
 
       await _loadSubscriptions();
+      _ref.invalidate(subscriptionsProvider);
+      _ref.invalidate(subscriptionsByStudentProvider(subscription.studentId));
     } catch (error) {
       rethrow;
     }
@@ -124,7 +132,7 @@ class SubscriptionsNotifier
         ActivityType.subscriptionCancelled,
         'Subscription "${subscription.planName}" was cancelled',
         entityId: subscriptionId,
-        entityType: 'Subscription',
+        entityType: 'subscription',
         metadata: {
           'student_id': subscription.studentId,
           'plan_name': subscription.planName,
@@ -133,6 +141,8 @@ class SubscriptionsNotifier
       );
 
       await _loadSubscriptions();
+      _ref.invalidate(subscriptionsProvider);
+      _ref.invalidate(subscriptionsByStudentProvider(subscription.studentId));
     } catch (error) {
       rethrow;
     }
@@ -162,7 +172,7 @@ class SubscriptionsNotifier
         ActivityType.subscriptionRenewed,
         'Subscription "${subscription.planName}" was renewed',
         entityId: subscriptionId,
-        entityType: 'Subscription',
+        entityType: 'subscription',
         metadata: {
           'student_id': subscription.studentId,
           'plan_name': subscription.planName,
@@ -173,6 +183,8 @@ class SubscriptionsNotifier
       );
 
       await _loadSubscriptions();
+      _ref.invalidate(subscriptionsProvider);
+      _ref.invalidate(subscriptionsByStudentProvider(subscription.studentId));
     } catch (error) {
       rethrow;
     }
@@ -192,7 +204,7 @@ class SubscriptionsNotifier
         ActivityType.subscriptionCancelled,
         'Subscription "${subscription.planName}" was deleted',
         entityId: subscriptionId,
-        entityType: 'Subscription',
+        entityType: 'subscription',
         metadata: {
           'student_id': subscription.studentId,
           'plan_name': subscription.planName,
@@ -201,6 +213,8 @@ class SubscriptionsNotifier
       );
 
       await _loadSubscriptions();
+      _ref.invalidate(subscriptionsProvider);
+      _ref.invalidate(subscriptionsByStudentProvider(subscription.studentId));
     } catch (error) {
       rethrow;
     }
@@ -288,6 +302,7 @@ final subscriptionsNotifierProvider =
       final subscriptionRepository = ref.watch(subscriptionRepositoryProvider);
       final activityLogRepository = ref.watch(activityLogRepositoryProvider);
       return SubscriptionsNotifier(
+        ref,
         subscriptionRepository,
         activityLogRepository,
       );

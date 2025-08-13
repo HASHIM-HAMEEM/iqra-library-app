@@ -1,5 +1,4 @@
-import 'package:drift/drift.dart';
-import 'package:library_registration_app/data/database/app_database.dart';
+// Removed Drift imports - using Supabase only
 import 'package:library_registration_app/domain/entities/subscription.dart';
 
 class SubscriptionModel {
@@ -15,21 +14,7 @@ class SubscriptionModel {
     required this.updatedAt,
   });
 
-  // Convert from Drift model to data model
-  factory SubscriptionModel.fromDrift(SubscriptionData subscription) {
-    return SubscriptionModel(
-      id: subscription.id,
-      studentId: subscription.studentId,
-      planName: subscription.planName,
-      // Treat values from DB as UTC to avoid timezone ambiguity
-      startDate: subscription.startDate.toUtc(),
-      endDate: (subscription.endDate ?? subscription.startDate).toUtc(),
-      amount: subscription.amount,
-      status: SubscriptionStatus.fromString(subscription.status),
-      createdAt: subscription.createdAt.toUtc(),
-      updatedAt: subscription.updatedAt.toUtc(),
-    );
-  }
+  // fromDrift method removed - using Supabase only
 
   // Convert from domain entity to data model
   factory SubscriptionModel.fromEntity(Subscription subscription) {
@@ -55,21 +40,7 @@ class SubscriptionModel {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  // Convert to Drift model
-  SubscriptionsTableCompanion toDrift() {
-    return SubscriptionsTableCompanion.insert(
-      id: id,
-      studentId: studentId,
-      planName: planName,
-      // Always persist as UTC
-      startDate: startDate.toUtc(),
-      endDate: Value(endDate.toUtc()),
-      amount: Value(amount),
-      status: status.name,
-      createdAt: Value(createdAt.toUtc()),
-      updatedAt: Value(updatedAt.toUtc()),
-    );
-  }
+  // toDrift method removed - using Supabase only
 
   // Convert to domain entity
   Subscription toEntity() {

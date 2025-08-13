@@ -5,6 +5,7 @@ import 'package:library_registration_app/presentation/providers/auth/auth_provid
 import 'package:library_registration_app/presentation/providers/auth/setup_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_text_field.dart';
 import 'package:library_registration_app/presentation/widgets/common/primary_button.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 import 'package:local_auth/local_auth.dart';
 
 class SetupPage extends ConsumerStatefulWidget {
@@ -97,8 +98,11 @@ class _SetupPageState extends ConsumerState<SetupPage>
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    if (!mounted) return;
+    CustomNotification.show(
+      context,
+      message: message,
+      type: NotificationType.error,
     );
   }
 
@@ -114,16 +118,13 @@ class _SetupPageState extends ConsumerState<SetupPage>
 
     if (!mounted) return;
     if (success) {
-      // Setup completed successfully, now authenticate the user automatically
-      await ref
-          .read(authProvider.notifier)
-          .authenticateWithPassword(_passcodeController.text);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Setup completed successfully!'),
-          backgroundColor: Colors.green,
-        ),
+      // Setup completed successfully. With Supabase email/password auth,
+      // we no longer auto-authenticate using a local passcode.
+      // Inform the user and let them proceed to sign in on the Auth screen.
+      CustomNotification.show(
+        context,
+        message: 'Setup completed successfully! Please sign in.',
+        type: NotificationType.success,
       );
     }
   }
@@ -381,7 +382,7 @@ class _SetupPageState extends ConsumerState<SetupPage>
                 _enableBiometric = value;
               });
               // persist preference immediately
-              ref.read(setupProvider.notifier).setBiometricEnabled(value);
+              ref.read(setupProvider.notifier).setBiometricEnabled(enabled: value);
             },
           ),
         ],

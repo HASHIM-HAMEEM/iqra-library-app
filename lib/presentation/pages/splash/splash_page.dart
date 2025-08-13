@@ -59,7 +59,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
     _dotsProgress = CurvedAnimation(parent: _controller, curve: const Interval(0.45, 0.75, curve: curve));
 
     final rnd = math.Random(9);
-    _dotSeeds = List.generate(12, (_) => Offset(rnd.nextDouble(), rnd.nextDouble()));
+    _dotSeeds = List.generate(45, (_) => Offset(rnd.nextDouble(), rnd.nextDouble()));
   }
 
   @override
@@ -344,20 +344,108 @@ class _DotsPainter extends CustomPainter {
   final List<Offset> seeds; // 0..1 normalized positions
   final Color color;
 
+  // Define target positions for "fin." characters
+  List<Offset> _getTargetPositions(Size size) {
+    final centerX = size.width / 2;
+    final centerY = size.height / 2;
+    final letterSpacing = size.width * 0.06;
+    final dotSpacing = 2.5;
+    
+    List<Offset> positions = [];
+    
+    // Letter 'f' - more detailed formation
+    final fX = centerX - letterSpacing * 2.5;
+    positions.addAll([
+      // Vertical line
+      Offset(fX, centerY - dotSpacing * 3),
+      Offset(fX, centerY - dotSpacing * 2),
+      Offset(fX, centerY - dotSpacing),
+      Offset(fX, centerY),
+      Offset(fX, centerY + dotSpacing),
+      Offset(fX, centerY + dotSpacing * 2),
+      // Top horizontal line
+      Offset(fX + dotSpacing, centerY - dotSpacing * 3),
+      Offset(fX + dotSpacing * 2, centerY - dotSpacing * 3),
+      Offset(fX + dotSpacing * 2.5, centerY - dotSpacing * 3),
+      // Middle horizontal line
+      Offset(fX + dotSpacing, centerY - dotSpacing),
+      Offset(fX + dotSpacing * 2, centerY - dotSpacing),
+    ]);
+    
+    // Letter 'i'
+    final iX = centerX - letterSpacing * 0.8;
+    positions.addAll([
+      // Dot above
+      Offset(iX, centerY - dotSpacing * 3.5),
+      // Vertical line
+      Offset(iX, centerY - dotSpacing * 2),
+      Offset(iX, centerY - dotSpacing),
+      Offset(iX, centerY),
+      Offset(iX, centerY + dotSpacing),
+      Offset(iX, centerY + dotSpacing * 2),
+    ]);
+    
+    // Letter 'n'
+    final nX = centerX + letterSpacing * 0.5;
+    positions.addAll([
+      // Left vertical line
+      Offset(nX, centerY - dotSpacing * 2),
+      Offset(nX, centerY - dotSpacing),
+      Offset(nX, centerY),
+      Offset(nX, centerY + dotSpacing),
+      Offset(nX, centerY + dotSpacing * 2),
+      // Connecting curve/line
+      Offset(nX + dotSpacing * 0.7, centerY - dotSpacing * 1.5),
+      Offset(nX + dotSpacing * 1.3, centerY - dotSpacing * 2),
+      // Right vertical line
+      Offset(nX + dotSpacing * 2, centerY - dotSpacing * 2),
+      Offset(nX + dotSpacing * 2, centerY - dotSpacing),
+      Offset(nX + dotSpacing * 2, centerY),
+      Offset(nX + dotSpacing * 2, centerY + dotSpacing),
+      Offset(nX + dotSpacing * 2, centerY + dotSpacing * 2),
+    ]);
+    
+    // Period '.'
+    final periodX = centerX + letterSpacing * 2.2;
+    positions.addAll([
+      Offset(periodX, centerY + dotSpacing * 2),
+      Offset(periodX + 1, centerY + dotSpacing * 2),
+      Offset(periodX, centerY + dotSpacing * 2 + 1),
+      Offset(periodX + 1, centerY + dotSpacing * 2 + 1),
+    ]);
+    
+    return positions;
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     if (progress <= 0) return;
     final paint = Paint()..color = color;
-    for (int i = 0; i < seeds.length; i++) {
+    final targetPositions = _getTargetPositions(size);
+    
+    // Use only the number of dots we need for "fin."
+    final dotsToUse = math.min(seeds.length, targetPositions.length);
+    
+    for (int i = 0; i < dotsToUse; i++) {
       final s = seeds[i];
-      final appearT = (i / seeds.length) * 0.6;
-      final t = ((progress - appearT) / 0.4).clamp(0.0, 1.0);
+      final target = targetPositions[i];
+      final appearT = (i / dotsToUse) * 0.2;
+      final t = ((progress - appearT) / 0.8).clamp(0.0, 1.0);
       if (t <= 0) continue;
-      final x = s.dx * size.width;
-      final y = s.dy * size.height;
-      final r = 2.0 + 1.5 * t;
-      final alpha = 0.2 + 0.6 * t;
-      canvas.drawCircle(Offset(x, y - 6 * (1 - t)), r, paint..color = color.withValues(alpha: alpha));
+      
+      // Use easing for smoother animation
+      final easedT = Curves.easeOutCubic.transform(t);
+      
+      // Interpolate between start and target position
+      final startX = s.dx * size.width;
+      final startY = s.dy * size.height;
+      final x = startX + (target.dx - startX) * easedT;
+      final y = startY + (target.dy - startY) * easedT;
+      
+      // Smaller, more precise dots
+      final r = 1.0 + 0.8 * easedT;
+      final alpha = 0.4 + 0.6 * easedT;
+      canvas.drawCircle(Offset(x, y), r, paint..color = color.withValues(alpha: alpha));
     }
   }
 

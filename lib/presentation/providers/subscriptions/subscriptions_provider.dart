@@ -3,6 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
 
+// Paginated subscriptions provider (offset-based)
+final pagedSubscriptionsProvider = FutureProvider.family<List<Subscription>, ({int offset, int limit})>((ref, params) async {
+  final repository = ref.watch(subscriptionRepositoryProvider);
+  return repository.getSubscriptionsPaginated(params.offset, params.limit);
+});
+
 // All subscriptions provider
 final subscriptionsProvider = StreamProvider<List<Subscription>>((ref) {
   final repository = ref.watch(subscriptionRepositoryProvider);

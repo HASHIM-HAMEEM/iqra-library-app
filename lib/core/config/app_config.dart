@@ -6,9 +6,7 @@ class AppConfig {
   static const String appDescription =
       'IQRA — Offline-first library management with a modern, assistant-style interface';
 
-  // Database Configuration
-  static const String databaseName = 'library_registration.db';
-  static const int databaseVersion = 1;
+  // Database Configuration (legacy local DB removed; Supabase is source of truth)
 
   // Security Configuration
   static const String encryptionKeyAlias = 'library_app_key';
@@ -49,4 +47,9 @@ class AppConfig {
   static const bool enableVoiceInput = true;
   static const bool enableDataExport = true;
   static const bool enableAutoBackup = true;
+
+  // Supabase Configuration (set via build-time env or .dart-define)
+  // Do NOT hardcode secrets in source. Use --dart-define for these values.
+  static const String supabaseUrl = String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+  static const String supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
 }

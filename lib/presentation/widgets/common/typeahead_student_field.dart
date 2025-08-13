@@ -1,9 +1,11 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:library_registration_app/domain/entities/student.dart';
-import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
+import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
 
 class TypeaheadStudentField extends ConsumerStatefulWidget {
   const TypeaheadStudentField({
@@ -61,7 +63,7 @@ class _TypeaheadStudentFieldState extends ConsumerState<TypeaheadStudentField> {
     _debounceTimer?.cancel();
 
     // If we have a selected student and the query matches their display text, don't search
-    String selectedDisplay = '';
+    var selectedDisplay = '';
     if (_selectedStudent != null) {
       final seat = _selectedStudent!.seatNumber;
       selectedDisplay = (seat == null || seat.isEmpty)
@@ -208,25 +210,22 @@ class _TypeaheadStudentFieldState extends ConsumerState<TypeaheadStudentField> {
     }
     final searchCtrl = TextEditingController();
     final focusNode = FocusNode();
-    bool didFocus = false;
+    var didFocus = false;
+    if (!mounted) return;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (ctx) {
         // Local state helpers
-        void runSearch(String q) async {
+        Future<void> runSearch(String q) async {
           setState(() {
             _isSearching = true;
           });
           try {
-            List<Student> list;
             final qLower = q.trim().toLowerCase();
-            if (qLower.isEmpty) {
-              final repo = ref.read(studentRepositoryProvider);
-              list = await repo.getActiveStudents();
-            } else {
-              list = await ref.read(searchStudentsProvider(qLower).future);
-            }
+            final list = qLower.isEmpty
+                ? await ref.read(studentRepositoryProvider).getActiveStudents()
+                : await ref.read(searchStudentsProvider(qLower).future);
             if (!mounted) return;
             setState(() {
               _isSearching = false;

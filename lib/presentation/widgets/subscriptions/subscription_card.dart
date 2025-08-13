@@ -71,6 +71,8 @@ class SubscriptionCard extends StatelessWidget {
                       ),
                     ),
                     _buildStatusChip(theme),
+                    const SizedBox(width: 4),
+                    _buildOverflowMenu(context, theme),
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -153,28 +155,7 @@ class SubscriptionCard extends StatelessWidget {
 
                 const SizedBox(height: 8),
 
-                // Action buttons (expanded to avoid overflow)
-                Row(
-                  children: [
-                    Expanded(child: _buildActionButtons(theme)),
-                    if (onDelete != null) ...[
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: 42,
-                        height: 34,
-                        child: OutlinedButton(
-                          onPressed: onDelete,
-                          style: OutlinedButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            foregroundColor: theme.colorScheme.error,
-                            side: BorderSide(color: theme.colorScheme.error),
-                          ),
-                          child: const Icon(Icons.delete_outline, size: 16),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                // No inline destructive buttons; use 3-dot menu
               ],
             ),
           ),
@@ -267,60 +248,89 @@ class SubscriptionCard extends StatelessWidget {
     );
   }
 
-  Widget _buildActionButtons(ThemeData theme) {
-    return Row(
-      children: [
-        if (onEdit != null)
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: onEdit,
-              icon: const Icon(Icons.edit_outlined, size: 16),
-              label: const Text('Edit'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                minimumSize: const Size(0, 34),
-                visualDensity: VisualDensity.compact,
-              ),
+  // Removed old inline buttons in favor of overflow menu
+
+  Widget _buildOverflowMenu(BuildContext context, ThemeData theme) {
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_vert, color: theme.colorScheme.onSurface),
+      onSelected: (value) {
+        switch (value) {
+          case 'edit':
+            if (onEdit != null) onEdit!();
+            break;
+          case 'renew':
+            if (onRenew != null) onRenew!();
+            break;
+          case 'cancel':
+            if (onCancel != null) onCancel!();
+            break;
+          case 'delete':
+            if (onDelete != null) onDelete!();
+            break;
+        }
+      },
+      itemBuilder: (ctx) {
+        final items = <PopupMenuEntry<String>>[];
+        items.add(
+          PopupMenuItem<String>(
+            value: 'edit',
+            child: Row(
+              children: const [
+                Icon(Icons.edit_outlined, size: 18),
+                SizedBox(width: 8),
+                Text('Edit'),
+              ],
             ),
           ),
-
-        if (onEdit != null && (onCancel != null || onRenew != null))
-          const SizedBox(width: 8),
-
-        if (subscription.status == SubscriptionStatus.active &&
-            onCancel != null)
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: onCancel,
-              icon: const Icon(Icons.cancel_outlined, size: 16),
-              label: const Text('Cancel'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: theme.colorScheme.error,
-                side: BorderSide(color: theme.colorScheme.error),
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                minimumSize: const Size(0, 34),
-                visualDensity: VisualDensity.compact,
+        );
+        if (onRenew != null && subscription.status == SubscriptionStatus.expired) {
+          items.add(
+            PopupMenuItem<String>(
+              value: 'renew',
+              child: Row(
+                children: const [
+                  Icon(Icons.refresh_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('Renew'),
+                ],
               ),
             ),
-          ),
-
-        if (subscription.status == SubscriptionStatus.expired &&
-            onRenew != null)
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: onRenew,
-              icon: const Icon(Icons.refresh_outlined, size: 16),
-              label: const Text('Renew'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: theme.colorScheme.primary,
-                foregroundColor: theme.colorScheme.onPrimary,
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                minimumSize: const Size(0, 34),
-                visualDensity: VisualDensity.compact,
+          );
+        }
+        if (onCancel != null && subscription.status == SubscriptionStatus.active) {
+          items.add(
+            PopupMenuItem<String>(
+              value: 'cancel',
+              child: Row(
+                children: const [
+                  Icon(Icons.cancel_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('Cancel'),
+                ],
               ),
             ),
-          ),
-      ],
+          );
+        }
+        if (onDelete != null) {
+          items.add(const PopupMenuDivider());
+          items.add(
+            PopupMenuItem<String>(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(Icons.delete_outline, size: 18, color: theme.colorScheme.error),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Delete',
+                    style: TextStyle(color: theme.colorScheme.error),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return items;
+      },
     );
   }
 }

@@ -26,10 +26,10 @@ extension MediaQueryX on BuildContext {
 typedef ResponsiveWidgetBuilder = Widget Function(BuildContext context);
 
 class Responsive extends StatelessWidget {
+  const Responsive({super.key, required this.mobile, this.tablet, this.desktop});
   final ResponsiveWidgetBuilder mobile;
   final ResponsiveWidgetBuilder? tablet;
   final ResponsiveWidgetBuilder? desktop;
-  const Responsive({super.key, required this.mobile, this.tablet, this.desktop});
 
   @override
   Widget build(BuildContext context) {
@@ -45,8 +45,8 @@ class Responsive extends StatelessWidget {
 }
 
 class ResponsivePadding extends StatelessWidget {
-  final Widget child;
   const ResponsivePadding({super.key, required this.child});
+  final Widget child;
 
   static EdgeInsets paddingFor(BuildContext context) {
     if (context.isDesktop) return const EdgeInsets.symmetric(horizontal: 32, vertical: 24);
@@ -67,10 +67,10 @@ T responsiveValue<T>(BuildContext context, {required T mobile, T? tablet, T? des
 }
 
 class MaxWidthWrapper extends StatelessWidget {
+  const MaxWidthWrapper({super.key, required this.child, this.maxWidth = 1000, this.alignment = Alignment.topCenter});
   final Widget child;
   final double maxWidth;
   final Alignment alignment;
-  const MaxWidthWrapper({super.key, required this.child, this.maxWidth = 1000, this.alignment = Alignment.topCenter});
 
   @override
   Widget build(BuildContext context) {

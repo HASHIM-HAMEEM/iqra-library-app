@@ -1,14 +1,16 @@
-import 'dart:io';
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:library_registration_app/core/utils/permission_service.dart';
-import 'package:library_registration_app/presentation/providers/students/students_notifier.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
+
+import 'package:library_registration_app/core/utils/permission_service.dart';
+import 'package:library_registration_app/presentation/providers/students/students_notifier.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
+
 
 class AddStudentPage extends ConsumerStatefulWidget {
   const AddStudentPage({super.key});
@@ -143,7 +145,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
   Future<void> _pickImage() async {
     final picker = ImagePicker();
 
-    showModalBottomSheet<void>(
+    unawaited(showModalBottomSheet<void>(
       context: context,
       builder: (BuildContext context) {
         return SafeArea(
@@ -197,7 +199,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
           ),
         );
       },
-    );
+    ));
   }
 
   Future<void> _saveImage(XFile image) async {
@@ -225,11 +227,10 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving image: $e'),
-            backgroundColor: Colors.red,
-          ),
+        CustomNotification.show(
+          context,
+          message: 'Error saving image: $e',
+          type: NotificationType.error,
         );
       }
     }
@@ -266,34 +267,36 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
     if (!_formKey.currentState!.validate()) {
       // Find which page has validation errors and navigate to it
       if (_selectedDate == null) {
-        _pageController.animateToPage(
+        unawaited(_pageController.animateToPage(
           0,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
-        );
+        ));
       }
       return;
     }
 
     if (_selectedDate == null) {
       setState(() => _dobError = true);
-      _pageController.animateToPage(
+      unawaited(_pageController.animateToPage(
         0,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
-      );
+      ));
       return;
     }
 
     if (_emailError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_emailError!), backgroundColor: Colors.red),
+      CustomNotification.show(
+        context,
+        message: _emailError!,
+        type: NotificationType.error,
       );
-      _pageController.animateToPage(
+      unawaited(_pageController.animateToPage(
         0,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
-      );
+      ));
       return;
     }
 
@@ -330,19 +333,32 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
           );
 
       if (mounted && studentId != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Student added successfully'),
-            backgroundColor: Colors.green,
-          ),
+        CustomNotification.show(
+          context,
+          message: 'Student added successfully',
+          type: NotificationType.success,
         );
         Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
-        // Gentle message only; avoid technical errors
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not add student. Please check inputs.')),
+        // Show specific error message for authentication/database issues
+        String errorMessage;
+        if (e.toString().contains('must be signed in') || 
+            e.toString().contains('session has expired') ||
+            e.toString().contains('not properly configured')) {
+          errorMessage = e.toString();
+        } else {
+          errorMessage = 'Could not add student. Please check your inputs and try again.';
+        }
+        
+        CustomNotification.show(
+          context,
+          message: errorMessage,
+          type: e.toString().contains('must be signed in') || 
+                e.toString().contains('session has expired') || 
+                e.toString().contains('not properly configured') 
+                ? NotificationType.warning : NotificationType.error,
         );
       }
     } finally {
@@ -402,19 +418,19 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
 
   void _nextPage() {
     if (_currentPage < 2) {
-      _pageController.nextPage(
+      unawaited(_pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
-      );
+      ));
     }
   }
 
   void _previousPage() {
     if (_currentPage > 0) {
-      _pageController.previousPage(
+      unawaited(_pageController.previousPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
-      );
+      ));
     }
   }
 

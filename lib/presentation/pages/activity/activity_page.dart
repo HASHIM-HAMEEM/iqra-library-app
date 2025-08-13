@@ -14,7 +14,52 @@ class ActivityPage extends ConsumerStatefulWidget {
 }
 
 class _ActivityPageState extends ConsumerState<ActivityPage> {
-  // Simplified page: no filters/search. Just a clear list of activities.
+  // Pagination
+  final ScrollController _scrollController = ScrollController();
+  final List<ActivityLog> _paged = [];
+  bool _isLoadingPage = false;
+  bool _hasMore = true;
+  int _offset = 0;
+  final int _pageSize = 50;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadNextPage());
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_hasMore || _isLoadingPage) return;
+    final p = _scrollController.position;
+    if (p.pixels >= p.maxScrollExtent - 400) {
+      _loadNextPage();
+    }
+  }
+
+  Future<void> _loadNextPage() async {
+    if (_isLoadingPage || !_hasMore) return;
+    setState(() => _isLoadingPage = true);
+    try {
+      final next = await ref.read(activityLogsPaginatedProvider((offset: _offset, limit: _pageSize)).future);
+      if (!mounted) return;
+      setState(() {
+        _paged.addAll(next);
+        _offset += next.length;
+        _hasMore = next.length == _pageSize;
+        _isLoadingPage = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingPage = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,8 +80,7 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
             } else {
               // Fall back to router home when pushed as root
               if (mounted) {
-                // ignore: use_build_context_synchronously
-                GoRouter.of(context).go('/dashboard');
+                 GoRouter.of(context).go('/dashboard');
               }
             }
           },
@@ -46,6 +90,7 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
       ),
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
+        controller: _scrollController,
         slivers: [
           // header removed; AppBar provides title
 
@@ -67,8 +112,8 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
             sliver: SliverToBoxAdapter(
               child: logsStream.when(
                 data: (logs) {
-                  // Show as simple list (no filters/search)
-                  final filtered = logs.toList();
+                  final source = _paged.isEmpty ? logs : _paged;
+                  final filtered = source.toList();
 
                   if (filtered.isEmpty) {
                     return _buildEmptyState(theme);
@@ -116,6 +161,18 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
                 },
                 loading: () => _buildLoading(theme),
                 error: (e, _) => _buildError(theme, e),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: _isLoadingPage
+                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                    : (!_hasMore
+                        ? Text('All activity loaded', style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor))
+                        : const SizedBox.shrink()),
               ),
             ),
           ),

@@ -1,30 +1,22 @@
-import 'package:library_registration_app/data/database/app_database.dart';
 import 'package:library_registration_app/data/models/activity_log_model.dart';
+import 'package:library_registration_app/data/services/supabase_service.dart';
 import 'package:library_registration_app/domain/entities/activity_log.dart';
 import 'package:library_registration_app/domain/repositories/activity_log_repository.dart';
 import 'package:uuid/uuid.dart';
 
 class ActivityLogRepositoryImpl implements ActivityLogRepository {
-  ActivityLogRepositoryImpl(this._database);
-  final AppDatabase _database;
+  ActivityLogRepositoryImpl(this._supabase);
+  final SupabaseService _supabase;
   final Uuid _uuid = const Uuid();
 
   @override
   Future<List<ActivityLog>> getAllActivityLogs() async {
-    final logs = await _database.activityLogsDao.getAllActivityLogs();
-    return logs
-        .map((log) => ActivityLogModel.fromDrift(log).toEntity())
-        .toList();
+    return await _supabase.getAllActivityLogs();
   }
 
   @override
   Future<List<ActivityLog>> getActivityLogsByType(ActivityType type) async {
-    final logs = await _database.activityLogsDao.getActivityLogsByType(
-      type.databaseValue,
-    );
-    return logs
-        .map((log) => ActivityLogModel.fromDrift(log).toEntity())
-        .toList();
+    return await _supabase.getActivityLogsByType(type.databaseValue);
   }
 
   @override
@@ -32,13 +24,7 @@ class ActivityLogRepositoryImpl implements ActivityLogRepository {
     String entityId,
     String entityType,
   ) async {
-    final logs = await _database.activityLogsDao.getActivityLogsByEntity(
-      entityId,
-      entityType,
-    );
-    return logs
-        .map((log) => ActivityLogModel.fromDrift(log).toEntity())
-        .toList();
+    return await _supabase.getActivityLogsByEntity(entityId, entityType);
   }
 
   @override
@@ -46,23 +32,12 @@ class ActivityLogRepositoryImpl implements ActivityLogRepository {
     DateTime startDate,
     DateTime endDate,
   ) async {
-    final logs = await _database.activityLogsDao.getActivityLogsByDateRange(
-      startDate: startDate,
-      endDate: endDate,
-    );
-    return logs
-        .map((log) => ActivityLogModel.fromDrift(log).toEntity())
-        .toList();
+    return await _supabase.getActivityLogsByDateRange(startDate, endDate);
   }
 
   @override
   Future<List<ActivityLog>> getRecentActivityLogs(int limit) async {
-    final logs = await _database.activityLogsDao.getRecentActivityLogs(
-      limit: limit,
-    );
-    return logs
-        .map((log) => ActivityLogModel.fromDrift(log).toEntity())
-        .toList();
+    return await _supabase.getRecentActivityLogs(limit);
   }
 
   @override
@@ -70,80 +45,47 @@ class ActivityLogRepositoryImpl implements ActivityLogRepository {
     int offset,
     int limit,
   ) async {
-    final logs = await _database.activityLogsDao.getActivityLogsPaginated(
-      offset,
-      limit,
-    );
-    return logs
-        .map((log) => ActivityLogModel.fromDrift(log).toEntity())
-        .toList();
+    return await _supabase.getActivityLogsPaginated(offset, limit);
   }
 
   @override
   Future<int> getActivityLogsCount() async {
-    return _database.activityLogsDao.getActivityLogsCount();
+    return await _supabase.getActivityLogsCount();
   }
 
   @override
   Future<ActivityLog?> getActivityLogById(String id) async {
-    final log = await _database.activityLogsDao.getActivityLogById(id);
-    return log != null ? ActivityLogModel.fromDrift(log).toEntity() : null;
+    return await _supabase.getActivityLogById(id);
   }
 
   @override
   Future<String> createActivityLog(ActivityLog activityLog) async {
-    final id = _uuid.v4();
-
-    final logModel = ActivityLogModel(
-      id: id,
-      activityType: activityLog.activityType,
-      description: activityLog.description,
-      entityId: activityLog.entityId,
-      entityType: activityLog.entityType,
-      metadata: activityLog.metadata,
-      timestamp: activityLog.timestamp,
-    );
-
-    await _database.activityLogsDao.insertActivityLog(logModel.toDrift());
-    return id;
+    final createdLog = await _supabase.createActivityLog(activityLog);
+    return createdLog.id;
   }
 
   @override
   Future<void> deleteActivityLog(String id) async {
-    await _database.activityLogsDao.deleteActivityLog(id);
+    await _supabase.deleteActivityLog(id);
   }
 
   @override
   Future<void> deleteOldActivityLogs(int daysToKeep) async {
-    await _database.activityLogsDao.deleteOldActivityLogs(
-      daysToKeep: daysToKeep,
-    );
+    await _supabase.deleteOldActivityLogs(daysToKeep);
   }
 
   @override
   Future<void> clearAllActivityLogs() async {
-    await _database.activityLogsDao.clearAllActivityLogs();
+    await _supabase.clearAllActivityLogs();
   }
 
   @override
   Stream<List<ActivityLog>> watchRecentActivityLogs(int limit) {
-    return _database.activityLogsDao
-        .watchRecentActivityLogs(limit)
-        .map(
-          (logs) => logs
-              .map((log) => ActivityLogModel.fromDrift(log).toEntity())
-              .toList(),
-        );
+    return _supabase.watchRecentActivityLogs(limit);
   }
 
   @override
   Stream<List<ActivityLog>> watchAllActivityLogs() {
-    return _database.activityLogsDao
-        .watchRecentActivityLogs(50)
-        .map(
-          (logs) => logs
-              .map((log) => ActivityLogModel.fromDrift(log).toEntity())
-              .toList(),
-        );
+    return _supabase.watchAllActivityLogs();
   }
 }

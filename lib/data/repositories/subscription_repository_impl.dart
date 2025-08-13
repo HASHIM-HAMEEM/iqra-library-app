@@ -1,13 +1,13 @@
-import 'package:library_registration_app/data/database/app_database.dart';
 import 'package:library_registration_app/data/models/subscription_model.dart';
+import 'package:library_registration_app/data/services/supabase_service.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/domain/repositories/subscription_repository.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 class SubscriptionRepositoryImpl implements SubscriptionRepository {
-  SubscriptionRepositoryImpl(this._database);
-  final AppDatabase _database;
+  SubscriptionRepositoryImpl(this._supabase);
+  final SupabaseService _supabase;
   final Uuid _uuid = const Uuid();
 
   DateTime _normalizeUtcDay(DateTime dt) => DateTime.utc(dt.toUtc().year, dt.toUtc().month, dt.toUtc().day);
@@ -23,11 +23,11 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
     required DateTime endUtc,
     String? excludeId,
   }) async {
-    final existing = await _database.subscriptionsDao.getSubscriptionsByStudentId(studentId);
+    final existing = await _supabase.getSubscriptionsByStudent(studentId);
     for (final sub in existing) {
       if (excludeId != null && sub.id == excludeId) continue;
       final s = _normalizeUtcDay(sub.startDate);
-      final e = _normalizeUtcDay((sub.endDate ?? sub.startDate));
+      final e = _normalizeUtcDay(sub.endDate);
       if (_rangesOverlap(startUtc, endUtc, s, e)) {
         final df = DateFormat('dd MMM yyyy');
         final range = '${df.format(s.toLocal())} to ${df.format(e.toLocal())}';
@@ -38,77 +38,44 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
 
   @override
   Future<List<Subscription>> getAllSubscriptions() async {
-    final subscriptions = await _database.subscriptionsDao
-        .getAllSubscriptions();
-    return subscriptions
-        .map((s) => SubscriptionModel.fromDrift(s).toEntity())
-        .toList();
+    return await _supabase.getAllSubscriptions();
   }
 
   @override
   Future<List<Subscription>> getActiveSubscriptions() async {
-    final subscriptions = await _database.subscriptionsDao
-        .getActiveSubscriptions();
-    return subscriptions
-        .map((s) => SubscriptionModel.fromDrift(s).toEntity())
-        .toList();
+    return await _supabase.getActiveSubscriptions();
   }
 
   @override
   Future<List<Subscription>> getExpiredSubscriptions() async {
-    final subscriptions = await _database.subscriptionsDao
-        .getExpiredSubscriptions();
-    return subscriptions
-        .map((s) => SubscriptionModel.fromDrift(s).toEntity())
-        .toList();
+    return await _supabase.getExpiredSubscriptions();
   }
 
   @override
   Future<List<Subscription>> getSubscriptionsByStatus(
     SubscriptionStatus status,
   ) async {
-    final subscriptions = await _database.subscriptionsDao
-        .getSubscriptionsByStatus(status.name);
-    return subscriptions
-        .map((s) => SubscriptionModel.fromDrift(s).toEntity())
-        .toList();
+    return await _supabase.getSubscriptionsByStatus(status.name);
   }
 
   @override
   Future<List<Subscription>> getSubscriptionsByStudent(String studentId) async {
-    final subscriptions = await _database.subscriptionsDao
-        .getSubscriptionsByStudent(studentId);
-    return subscriptions
-        .map((s) => SubscriptionModel.fromDrift(s).toEntity())
-        .toList();
+    return await _supabase.getSubscriptionsByStudent(studentId);
   }
 
   @override
   Future<Subscription?> getSubscriptionById(String id) async {
-    final subscription = await _database.subscriptionsDao.getSubscriptionById(
-      id,
-    );
-    return subscription != null
-        ? SubscriptionModel.fromDrift(subscription).toEntity()
-        : null;
+    return await _supabase.getSubscriptionById(id);
   }
 
   @override
   Future<Subscription?> getActiveSubscriptionByStudent(String studentId) async {
-    final subscription = await _database.subscriptionsDao
-        .getActiveSubscriptionByStudent(studentId);
-    return subscription != null
-        ? SubscriptionModel.fromDrift(subscription).toEntity()
-        : null;
+    return await _supabase.getActiveSubscriptionByStudent(studentId);
   }
 
   @override
   Future<List<Subscription>> getExpiringSubscriptions(int days) async {
-    final subscriptions = await _database.subscriptionsDao
-        .getExpiringSubscriptions(withinDays: days);
-    return subscriptions
-        .map((s) => SubscriptionModel.fromDrift(s).toEntity())
-        .toList();
+    return await _supabase.getExpiringSubscriptions(days);
   }
 
   @override
@@ -116,26 +83,22 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
     int offset,
     int limit,
   ) async {
-    final subscriptions = await _database.subscriptionsDao
-        .getSubscriptionsPaginated(offset, limit);
-    return subscriptions
-        .map((s) => SubscriptionModel.fromDrift(s).toEntity())
-        .toList();
+    return await _supabase.getSubscriptionsPaginated(offset, limit);
   }
 
   @override
   Future<int> getSubscriptionsCount() async {
-    return _database.subscriptionsDao.getSubscriptionsCount();
+    return await _supabase.getSubscriptionsCount();
   }
 
   @override
   Future<int> getActiveSubscriptionsCount() async {
-    return _database.subscriptionsDao.getActiveSubscriptionsCount();
+    return await _supabase.getActiveSubscriptionsCount();
   }
 
   @override
   Future<double> getTotalRevenue() async {
-    return _database.subscriptionsDao.getTotalRevenue();
+    return await _supabase.getTotalRevenue();
   }
 
   @override
@@ -143,11 +106,12 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
     DateTime startDate,
     DateTime endDate,
   ) async {
-    return _database.subscriptionsDao.getRevenueByDateRange(startDate, endDate);
+    return await _supabase.getRevenueByDateRange(startDate, endDate);
   }
 
   @override
   Future<String> createSubscription(Subscription subscription, {bool allowOverlap = false}) async {
+    
     final id = _uuid.v4();
     final now = DateTime.now().toUtc();
 
@@ -165,7 +129,7 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
       );
     }
 
-    final subscriptionModel = SubscriptionModel(
+    final subscriptionWithId = Subscription(
       id: id,
       studentId: subscription.studentId,
       planName: subscription.planName,
@@ -177,14 +141,13 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
       updatedAt: now,
     );
 
-    await _database.subscriptionsDao.insertSubscription(
-      subscriptionModel.toDrift(),
-    );
+    await _supabase.createSubscription(subscriptionWithId);
     return id;
   }
 
   @override
   Future<void> updateSubscription(Subscription subscription, {bool allowOverlap = false}) async {
+    
     // Normalize and validate dates
     final startUtc = _normalizeUtcDay(subscription.startDate);
     final endUtc = _normalizeUtcDay(subscription.endDate);
@@ -200,7 +163,7 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
       );
     }
 
-    final subscriptionModel = SubscriptionModel(
+    final updatedSubscription = Subscription(
       id: subscription.id,
       studentId: subscription.studentId,
       planName: subscription.planName,
@@ -208,19 +171,17 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
       endDate: endUtc,
       amount: subscription.amount,
       status: subscription.status,
-      createdAt: subscription.createdAt.toUtc(),
+      createdAt: subscription.createdAt,
       updatedAt: DateTime.now().toUtc(),
     );
 
-    await _database.subscriptionsDao.updateSubscription(
-      subscriptionModel.id,
-      subscriptionModel.toDrift(),
-    );
+    await _supabase.updateSubscription(updatedSubscription);
   }
 
   @override
   Future<void> cancelSubscription(String id) async {
-    await _database.subscriptionsDao.cancelSubscription(id);
+    
+    await _supabase.cancelSubscription(id);
   }
 
   @override
@@ -230,8 +191,9 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
     double amount,
     {bool allowOverlap = false}
   ) async {
+    
     // Fetch current subscription for validation
-    final current = await _database.subscriptionsDao.getSubscriptionById(id);
+    final current = await _supabase.getSubscriptionById(id);
     if (current == null) return;
     final startUtc = _normalizeUtcDay(current.startDate);
     final endUtc = _normalizeUtcDay(newEndDate);
@@ -247,51 +209,32 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
         excludeId: id,
       );
     }
-    await _database.subscriptionsDao.renewSubscription(id, endUtc);
+    await _supabase.renewSubscription(id, endUtc, amount);
   }
 
   @override
   Future<void> deleteSubscription(String id) async {
-    await _database.subscriptionsDao.deleteSubscription(id);
+    
+    await _supabase.deleteSubscription(id);
   }
 
   @override
   Stream<List<Subscription>> watchAllSubscriptions() {
-    return _database.subscriptionsDao.watchAllSubscriptions().map(
-      (subscriptions) => subscriptions
-          .map((s) => SubscriptionModel.fromDrift(s).toEntity())
-          .toList(),
-    );
+    return _supabase.watchAllSubscriptions();
   }
 
   @override
   Stream<List<Subscription>> watchActiveSubscriptions() {
-    return _database.subscriptionsDao.watchActiveSubscriptions().map(
-      (subscriptions) => subscriptions
-          .map((s) => SubscriptionModel.fromDrift(s).toEntity())
-          .toList(),
-    );
+    return _supabase.watchActiveSubscriptions();
   }
 
   @override
   Stream<List<Subscription>> watchSubscriptionsByStudent(String studentId) {
-    return _database.subscriptionsDao
-        .watchSubscriptionsByStudent(studentId)
-        .map(
-          (subscriptions) => subscriptions
-              .map((s) => SubscriptionModel.fromDrift(s).toEntity())
-              .toList(),
-        );
+    return _supabase.watchSubscriptionsByStudent(studentId);
   }
 
   @override
   Stream<Subscription?> watchSubscriptionById(String id) {
-    return _database.subscriptionsDao
-        .watchSubscriptionById(id)
-        .map(
-          (subscription) => subscription != null
-              ? SubscriptionModel.fromDrift(subscription).toEntity()
-              : null,
-        );
+    return _supabase.watchSubscriptionById(id);
   }
 }

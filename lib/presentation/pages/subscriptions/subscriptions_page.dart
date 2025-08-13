@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:library_registration_app/core/utils/error_mapper.dart';
 import 'package:library_registration_app/core/utils/responsive_utils.dart';
+import 'package:library_registration_app/core/utils/telemetry_service.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
@@ -14,14 +16,9 @@ import 'package:library_registration_app/presentation/widgets/common/typeahead_s
 import 'package:library_registration_app/presentation/widgets/subscriptions/subscription_card.dart';
 import 'package:library_registration_app/presentation/widgets/subscriptions/subscription_filters.dart';
 import 'package:library_registration_app/presentation/widgets/subscriptions/subscription_timeline.dart';
-import 'package:library_registration_app/core/utils/telemetry_service.dart';
-import 'package:library_registration_app/core/utils/error_mapper.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 
-const kPlans = <String, double>{
-  'Monthly': 1000,
-  'Quarterly': 2500,
-  'Yearly': 7500,
-};
+// Removed fixed plans and amounts; admin chooses plan name and amount freely.
 
 String _getStatusDisplayName(SubscriptionStatus status) {
   switch (status) {
@@ -48,6 +45,73 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
   SubscriptionStatus? _selectedStatus;
   String _searchQuery = '';
   String? _overlapBannerMessage;
+  
+  // Pagination
+  final ScrollController _scrollController = ScrollController();
+  final List<Subscription> _paged = [];
+  bool _isLoadingPage = false;
+  bool _hasMore = true;
+  int _offset = 0;
+  final int _pageSize = 50;
+
+  Future<void> _onRefresh() async {
+    // Refresh subscriptions and students data
+    await ref.read(subscriptionsNotifierProvider.notifier).refresh();
+    ref.invalidate(allStudentsProvider);
+    // Reset pagination
+    setState(() {
+      _paged.clear();
+      _offset = 0;
+      _hasMore = true;
+    });
+    await _loadNextPage();
+    if (!mounted) return;
+    CustomNotification.show(
+      context,
+      message: 'Subscriptions refreshed',
+      type: NotificationType.success,
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadNextPage());
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_hasMore || _isLoadingPage) return;
+    final p = _scrollController.position;
+    if (p.pixels >= p.maxScrollExtent - 400) {
+      _loadNextPage();
+    }
+  }
+
+  Future<void> _loadNextPage() async {
+    if (_isLoadingPage || !_hasMore) return;
+    setState(() => _isLoadingPage = true);
+    try {
+      final next = await ref.read(pagedSubscriptionsProvider((offset: _offset, limit: _pageSize)).future);
+      if (!mounted) return;
+      setState(() {
+        _paged.addAll(next);
+        _offset += next.length;
+        _hasMore = next.length == _pageSize;
+        _isLoadingPage = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingPage = false);
+      CustomNotification.show(context, message: 'Error loading subscriptions: $e', type: NotificationType.error);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,116 +121,122 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
     
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          // Modern Header
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: ResponsiveUtils.getResponsivePadding(
-                context,
-              ).copyWith(top: 8),
-              child: _buildModernHeader(theme),
-            ),
-          ),
-
-          // Filters Section
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: ResponsiveUtils.getResponsivePadding(
-                context,
-              ).copyWith(top: 16),
-                  child: SubscriptionFilters(
-                    selectedStatus: _selectedStatus,
-                    searchQuery: _searchQuery,
-                    onStatusChanged: (status) {
-                      setState(() {
-                        _selectedStatus = status;
-                      });
-                    },
-                    onSearchChanged: (query) {
-                      setState(() {
-                        _searchQuery = query;
-                      });
-                    },
+      body: RefreshIndicator(
+        onRefresh: _onRefresh,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          controller: _scrollController,
+          slivers: [
+            // Modern Header
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: ResponsiveUtils.getResponsivePadding(
+                  context,
+                ).copyWith(top: 8),
+                child: _buildModernHeader(theme),
               ),
-                  ),
-                ),
-                
-                // Content
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: ResponsiveUtils.getResponsivePadding(context).top,
             ),
-          ),
 
-          subscriptionsAsync.when(
-            data: (subscriptions) => studentsAsync.when(
-              data: (students) {
-                final filteredSubscriptions = _filterSubscriptions(
-                  subscriptions,
-                  students,
-                );
-                      if (filteredSubscriptions.isEmpty) {
-                  return SliverToBoxAdapter(child: _buildEmptyState(theme));
-                      }
-                final idToStudent = {for (final s in students) s.id: s};
-                      return _isTimelineView
-                    ? SliverToBoxAdapter(
-                        child: SubscriptionTimeline(
-                          subscriptions: filteredSubscriptions,
-                          studentNamesById: idToStudent.map(
-                            (k, v) => MapEntry(k, v.fullName),
+            // Filters Section
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: ResponsiveUtils.getResponsivePadding(
+                  context,
+                ).copyWith(top: 16),
+                child: SubscriptionFilters(
+                  selectedStatus: _selectedStatus,
+                  searchQuery: _searchQuery,
+                  onStatusChanged: (status) {
+                    setState(() {
+                      _selectedStatus = status;
+                    });
+                  },
+                  onSearchChanged: (query) {
+                    setState(() {
+                      _searchQuery = query;
+                    });
+                  },
+                ),
+              ),
+            ),
+
+            // Content spacer
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: ResponsiveUtils.getResponsivePadding(context).top,
+              ),
+            ),
+
+            // Content
+            subscriptionsAsync.when(
+              data: (subscriptions) => studentsAsync.when(
+                data: (students) {
+                  final source = _paged.isEmpty ? subscriptions : _paged;
+                  final filteredSubscriptions = _filterSubscriptions(
+                    source,
+                    students,
+                  );
+                  if (filteredSubscriptions.isEmpty) {
+                    return SliverToBoxAdapter(child: _buildEmptyState(theme));
+                  }
+                  final idToStudent = {for (final s in students) s.id: s};
+                  return _isTimelineView
+                      ? SliverToBoxAdapter(
+                          child: SubscriptionTimeline(
+                            subscriptions: filteredSubscriptions,
+                            studentNamesById: idToStudent.map(
+                              (k, v) => MapEntry(k, v.fullName),
+                            ),
                           ),
-                        ),
-                      )
-                    : _buildListView(filteredSubscriptions, students);
-              },
+                        )
+                      : _buildListView(filteredSubscriptions, students);
+                },
+               loading: () => const SliverToBoxAdapter(
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (_, __) => const SliverToBoxAdapter(
+                  child: Center(child: Text('Error loading students')),
+                ),
+              ),
               loading: () => const SliverToBoxAdapter(
                 child: Center(child: CircularProgressIndicator()),
               ),
-              error: (_, __) => const SliverToBoxAdapter(
-                child: Center(child: Text('Error loading students')),
-              ),
-            ),
-            loading: () => const SliverToBoxAdapter(
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (error, stack) => SliverToBoxAdapter(
-              child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.error_outline,
-                            size: 64,
-                            color: theme.colorScheme.error,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Error loading subscriptions',
-                            style: theme.textTheme.headlineSmall,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            error.toString(),
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                          PrimaryButton(
-                            text: 'Retry',
-                      onPressed: () => ref.invalidate(subscriptionsProvider),
-                          ),
-                        ],
+              error: (error, stack) => SliverToBoxAdapter(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 64,
+                        color: theme.colorScheme.error,
                       ),
-                    ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Error loading subscriptions',
+                        style: theme.textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        error.toString(),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      PrimaryButton(
+                        text: 'Retry',
+                        onPressed: () => ref.invalidate(subscriptionsProvider),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
+          ],
+        ),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showAddSubscriptionDialog(context),
         backgroundColor: theme.colorScheme.primary,
@@ -175,7 +245,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
       )
           .animate(onPlay: (c) => c.repeat(reverse: true))
           .scale(
-            begin: const Offset(1.0, 1.0),
+            begin: const Offset(1, 1),
             end: const Offset(1.04, 1.04),
             duration: 1400.ms,
             curve: Curves.easeInOut,
@@ -203,18 +273,22 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
         ],
       ),
     );
-    if (confirmed == true) {
+    if (confirmed ?? false) {
       try {
         await ref.read(subscriptionsNotifierProvider.notifier).deleteSubscription(s.id);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Subscription deleted')),
+          CustomNotification.show(
+            context,
+            message: 'Subscription deleted',
+            type: NotificationType.success,
           );
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error deleting subscription: $e')),
+          CustomNotification.show(
+            context,
+            message: 'Error deleting subscription: $e',
+            type: NotificationType.error,
           );
         }
       }
@@ -245,27 +319,16 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
             ],
           ),
         ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              onPressed: () =>
-                  setState(() => _isTimelineView = !_isTimelineView),
-              icon: Icon(
-                _isTimelineView
-                    ? Icons.view_list_outlined
-                    : Icons.timeline_outlined,
-                color: theme.colorScheme.onSurface,
-              ),
-              tooltip: _isTimelineView ? 'List View' : 'Timeline View',
-            ),
-            IconButton(
-              onPressed: () =>
-                  ref.read(subscriptionsNotifierProvider.notifier).refresh(),
-              icon: const Icon(Icons.refresh_rounded),
-              tooltip: 'Refresh',
-            ),
-          ],
+        IconButton(
+          onPressed: () =>
+              setState(() => _isTimelineView = !_isTimelineView),
+          icon: Icon(
+            _isTimelineView
+                ? Icons.view_list_outlined
+                : Icons.timeline_outlined,
+            color: theme.colorScheme.onSurface,
+          ),
+          tooltip: _isTimelineView ? 'List View' : 'Timeline View',
         ),
       ],
     );
@@ -288,9 +351,8 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
       final idToStudent = {for (final s in students) s.id: s};
       filtered = filtered.where((s) {
         final student = idToStudent[s.studentId];
-        final inStudent = student == null
-            ? false
-            : (student.fullName.toLowerCase().contains(q) ||
+        final inStudent = student != null &&
+            (student.fullName.toLowerCase().contains(q) ||
                 student.email.toLowerCase().contains(q) ||
                 (student.seatNumber?.toLowerCase().contains(q) ?? false));
         return s.planName.toLowerCase().contains(q) || inStudent;
@@ -320,7 +382,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
             subscription: subscription,
                 studentName: studentName,
                 onTap: () =>
-                    context.go('/subscriptions/details/${subscription.id}'),
+                    context.go('/students/details/${subscription.studentId}'),
             onEdit: () => _showEditSubscriptionDialog(subscription),
             onCancel: () => _cancelSubscription(subscription),
             onRenew: () => _renewSubscription(subscription),
@@ -354,7 +416,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
               subscription: subscription,
               studentName: studentName,
               onTap: () =>
-                  context.go('/subscriptions/details/${subscription.id}'),
+                  context.go('/students/details/${subscription.studentId}'),
               onEdit: () => _showEditSubscriptionDialog(subscription),
               onCancel: () => _cancelSubscription(subscription),
               onRenew: () => _renewSubscription(subscription),
@@ -421,7 +483,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
     DateTime? start = DateTime.now();
     DateTime? end = DateTime.now().add(const Duration(days: 30));
     var status = SubscriptionStatus.active;
-    String? selectedPlan = 'Monthly';
+    // free-form plan name; no fixed selection
     Student? selectedStudent;
 
     showAppBottomSheet<void>(
@@ -544,62 +606,33 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
                       ),
                     const SizedBox(height: 16),
                     Text(
-                      'Plan',
+                      'Plan name',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                         color: theme.colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest
+                    TextFormField(
+                      controller: planCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'e.g. Monthly, Quarterly, Yearly, or custom',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        filled: true,
+                        fillColor: theme.colorScheme.surfaceContainerHighest
                             .withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: theme.colorScheme.outline.withValues(
-                            alpha: 0.3,
-                          ),
-                        ),
+                        prefixIcon: const Icon(Icons.badge_outlined),
                       ),
-                      child: DropdownButtonHideUnderline(
-                        child: ButtonTheme(
-                          alignedDropdown: true,
-                          child: DropdownButton<String>(
-                            value: selectedPlan,
-                            isExpanded: true,
-                            icon: Icon(
-                              Icons.arrow_drop_down_rounded,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                            items: kPlans.keys
-                                .map(
-                                  (p) => DropdownMenuItem(
-                                    value: p,
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(12),
-                                      child: Text(p),
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (v) {
-                              if (v == null) return;
-                              setSheetState(() {
-                                selectedPlan = v;
-                                amountCtrl.text = kPlans[v]!.toStringAsFixed(2);
-                                planCtrl.text = v;
-                              });
-                            },
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
+                      textInputAction: TextInputAction.next,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Plan name is required'
+                          : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
-                      controller: amountCtrl
-                        ..text = (kPlans[selectedPlan] ?? 0).toStringAsFixed(2),
+                      controller: amountCtrl,
                       decoration: InputDecoration(
                         labelText: 'Amount',
                         border: OutlineInputBorder(
@@ -754,7 +787,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
                             ? () => _createSubscription(
                           formKey: formKey,
                           studentIdCtrl: studentIdCtrl,
-                          planCtrl: planCtrl..text = selectedPlan!,
+                           planCtrl: planCtrl,
                           amountCtrl: amountCtrl,
                           start: start,
                           end: end,
@@ -800,11 +833,10 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
     // Validation
     if (studentId.isEmpty) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select a student'),
-            backgroundColor: Colors.orange,
-          ),
+        CustomNotification.show(
+          context,
+          message: 'Please select a student',
+          type: NotificationType.warning,
         );
       }
       return;
@@ -812,11 +844,10 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
 
     if (planName.isEmpty) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select a plan'),
-            backgroundColor: Colors.orange,
-          ),
+        CustomNotification.show(
+          context,
+          message: 'Please select a plan',
+          type: NotificationType.warning,
         );
       }
       return;
@@ -825,11 +856,10 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
     final amount = double.tryParse(amountText);
     if (amount == null || amount <= 0) {
       if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-            content: Text('Please enter a valid amount'),
-            backgroundColor: Colors.orange,
-          ),
+        CustomNotification.show(
+          context,
+          message: 'Please enter a valid amount',
+          type: NotificationType.warning,
         );
       }
       return;
@@ -852,11 +882,10 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
           );
       if (!mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Subscription created successfully'),
-          backgroundColor: Colors.green,
-        ),
+      CustomNotification.show(
+        context,
+        message: 'Subscription created successfully',
+        type: NotificationType.success,
       );
     } catch (e, st) {
       TelemetryService.instance.captureException(
@@ -879,14 +908,10 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
             ? 'This period overlaps an existing subscription.'
             : _overlapBannerMessage;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          action: SnackBarAction(
-            label: 'Review dates',
-            onPressed: () {},
-          ),
-        ),
+      CustomNotification.show(
+        context,
+        message: msg,
+        type: NotificationType.error,
       );
     }
   }
@@ -903,9 +928,6 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
         var start = subscription.startDate;
         var end = subscription.endDate;
         var status = subscription.status;
-        String? selectedPlan = kPlans.keys.contains(subscription.planName)
-            ? subscription.planName
-            : 'Monthly';
         final theme = Theme.of(context);
 
         Future<void> pickDate({required bool isStart}) async {
@@ -1001,53 +1023,28 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
                     ),
                   ),
                 Text(
-                  'Plan',
+                  'Plan name',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: theme.colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest.withValues(
-                      alpha: 0.4,
+                TextFormField(
+                  controller: planCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'e.g. Monthly, Yearly, or custom',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                    ),
+                    filled: true,
+                    fillColor: theme.colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.4),
+                    prefixIcon: const Icon(Icons.badge_outlined),
                   ),
-                  child: DropdownButtonHideUnderline(
-                    child: ButtonTheme(
-                      alignedDropdown: true,
-                      child: DropdownButton<String>(
-                        value: selectedPlan,
-                        isExpanded: true,
-                        icon: Icon(
-                          Icons.arrow_drop_down_rounded,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                        items: kPlans.keys
-                            .map(
-                              (p) => DropdownMenuItem(
-                                value: p,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12),
-                                  child: Text(p),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) {
-                          selectedPlan = v;
-                          amountCtrl.text = kPlans[v]!.toStringAsFixed(2);
-                          planCtrl.text = v!;
-                        },
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Plan name is required'
+                      : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -1179,7 +1176,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
                         ? () => _saveEdit(
                       formKey: formKey,
                       original: subscription,
-                      planCtrl: planCtrl..text = selectedPlan!,
+                      planCtrl: planCtrl,
                       amountCtrl: amountCtrl,
                       start: start,
                       end: end,
@@ -1216,11 +1213,10 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
     if (!formKey.currentState!.validate()) return;
     if (end.isBefore(start)) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('End date must be after start date'),
-            backgroundColor: Colors.orange,
-          ),
+        CustomNotification.show(
+          context,
+          message: 'End date must be after start date',
+          type: NotificationType.warning,
         );
       }
       return;
@@ -1257,19 +1253,15 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
               ? 'This period overlaps an existing subscription.'
               : _overlapBannerMessage;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(msg),
-            action: SnackBarAction(
-              label: 'Review dates',
-              onPressed: () {
-                // no-op; fields are visible in sheet
-              },
-            ),
-          ),
-        );
+        if (mounted) {
+          CustomNotification.show(
+            context,
+            message: msg,
+            type: NotificationType.error,
+          );
+        }
         // Optional: allow admin to proceed anyway for backdating corrections
-        if (ErrorMapper.isOverlap(e)) {
+        if (ErrorMapper.isOverlap(e) && mounted) {
           final proceed = await showDialog<bool>(
             context: context,
             builder: (ctx) => AlertDialog(
@@ -1289,7 +1281,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
               ],
             ),
           );
-          if (proceed == true) {
+          if (proceed ?? false) {
             await ref
                 .read(subscriptionsNotifierProvider.notifier)
                 .updateSubscription(
@@ -1308,15 +1300,17 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
       if (context.mounted) Navigator.of(context).pop();
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
+        CustomNotification.show(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+          message: 'Error: $e',
+          type: NotificationType.error,
+        );
       }
     }
   }
 
   Future<void> _cancelSubscription(Subscription subscription) async {
-    showAppBottomSheet<void>(
+    await showAppBottomSheet<void>(
       context,
       builder: (ctx) {
         final theme = Theme.of(ctx);
@@ -1354,35 +1348,28 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
                   const SizedBox(height: 24),
                   PrimaryButton(
                     onPressed: () async {
+                      // theme is available via context if needed
                       if (mounted) Navigator.of(context).pop();
                       try {
                         await ref
                             .read(subscriptionsNotifierProvider.notifier)
-            .cancelSubscription(subscription.id);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                              content: Text(
-                                'Subscription cancelled successfully',
-                              ),
-                              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                              content: Text(
-                                'Error cancelling subscription: $e',
-                              ),
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.error,
-            ),
-          );
-        }
-      }
+                            .cancelSubscription(subscription.id);
+                        if (mounted) {
+                          CustomNotification.show(
+                            context,
+                            message: 'Subscription cancelled successfully',
+                            type: NotificationType.success,
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          CustomNotification.show(
+                            context,
+                            message: 'Error cancelling subscription: $e',
+                            type: NotificationType.error,
+                          );
+                        }
+                      }
                     },
                     text: 'Cancel Subscription',
                     backgroundColor: Theme.of(context).colorScheme.error,
@@ -1398,6 +1385,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
   }
 
   Future<void> _renewSubscription(Subscription subscription) async {
+    // final currentTheme = Theme.of(context); // unused
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
@@ -1406,11 +1394,53 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
       lastDate: DateTime(now.year + 10),
     );
     if (picked == null) return;
+
+    // Ask admin for renewal amount instead of forcing 0
+    final amountCtrl = TextEditingController(text: subscription.amount.toStringAsFixed(2));
+    final amount = await showDialog<double>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Renew Subscription'),
+          content: TextField(
+            controller: amountCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: 'Renewal amount',
+              prefixIcon: Icon(Icons.currency_rupee),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(null),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final v = double.tryParse(amountCtrl.text.trim());
+                if (v == null || v < 0) {
+                  CustomNotification.show(
+                    ctx,
+                    message: 'Enter a valid amount',
+                    type: NotificationType.warning,
+                  );
+                  return;
+                }
+                Navigator.of(ctx).pop(v);
+              },
+              child: const Text('Confirm'),
+            ),
+          ],
+        );
+      },
+    );
+    if (amount == null) return;
+
     try {
       try {
         await ref
             .read(subscriptionsNotifierProvider.notifier)
-            .renewSubscription(subscription.id, picked, 0);
+            .renewSubscription(subscription.id, picked, amount);
       } catch (e, st) {
         TelemetryService.instance.captureException(
           e,
@@ -1429,16 +1459,14 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
               ? 'This renewal overlaps a previous period.'
               : _overlapBannerMessage;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(msg),
-            action: SnackBarAction(
-              label: 'Review dates',
-              onPressed: () {},
-            ),
-          ),
-        );
-        if (ErrorMapper.isOverlap(e)) {
+        if (mounted) {
+          CustomNotification.show(
+            context,
+            message: msg,
+            type: NotificationType.error,
+          );
+        }
+        if (ErrorMapper.isOverlap(e) && mounted) {
           final proceed = await showDialog<bool>(
             context: context,
             builder: (ctx) => AlertDialog(
@@ -1457,30 +1485,28 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
               ],
             ),
           );
-          if (proceed == true) {
+          if (proceed ?? false) {
             await ref
                 .read(subscriptionsNotifierProvider.notifier)
-                .renewSubscription(subscription.id, picked, 0, allowOverlap: true);
+                .renewSubscription(subscription.id, picked, amount, allowOverlap: true);
           }
         }
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Subscription renewed successfully'),
-            backgroundColor: Colors.green,
-          ),
+        CustomNotification.show(
+          context,
+          message: 'Subscription renewed successfully',
+          type: NotificationType.success,
         );
       }
     } catch (e) {
       if (mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-      ),
-    );
-  }
-}
+        CustomNotification.show(
+          context,
+          message: 'Error: $e',
+          type: NotificationType.error,
+        );
+      }
+    }
   }
 }

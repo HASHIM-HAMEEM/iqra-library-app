@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:library_registration_app/data/database/dao/app_settings_dao.dart';
-import 'package:library_registration_app/presentation/providers/auth/setup_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+// import 'package:library_registration_app/core/config/app_config.dart';
+import 'package:library_registration_app/data/services/app_settings_service.dart';
+import 'package:library_registration_app/data/services/supabase_service.dart';
+
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
 
 // Authentication state
@@ -12,12 +15,20 @@ class AuthState {
     this.error,
     this.lastAuthTime,
     this.sessionTimeoutMinutes = 30,
+    this.user,
+    this.failedAttempts = 0,
+    this.lockoutUntil,
+    this.requiresReauth = false,
   });
   final bool isAuthenticated;
   final bool isLoading;
   final String? error;
   final DateTime? lastAuthTime;
   final int sessionTimeoutMinutes;
+  final User? user;
+  final int failedAttempts;
+  final DateTime? lockoutUntil;
+  final bool requiresReauth;
 
   AuthState copyWith({
     bool? isAuthenticated,
@@ -25,6 +36,10 @@ class AuthState {
     String? error,
     DateTime? lastAuthTime,
     int? sessionTimeoutMinutes,
+    User? user,
+    int? failedAttempts,
+    DateTime? lockoutUntil,
+    bool? requiresReauth,
   }) {
     return AuthState(
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
@@ -33,6 +48,10 @@ class AuthState {
       lastAuthTime: lastAuthTime ?? this.lastAuthTime,
       sessionTimeoutMinutes:
           sessionTimeoutMinutes ?? this.sessionTimeoutMinutes,
+      user: user ?? this.user,
+      failedAttempts: failedAttempts ?? this.failedAttempts,
+      lockoutUntil: lockoutUntil,
+      requiresReauth: requiresReauth ?? this.requiresReauth,
     );
   }
 
@@ -42,22 +61,39 @@ class AuthState {
     final sessionDuration = Duration(minutes: sessionTimeoutMinutes);
     return now.difference(lastAuthTime!) > sessionDuration;
   }
+
+  bool get isLockedOut {
+    if (lockoutUntil == null) return false;
+    return DateTime.now().isBefore(lockoutUntil!);
+  }
+
+  Duration? get lockoutTimeRemaining {
+    if (!isLockedOut) return null;
+    return lockoutUntil!.difference(DateTime.now());
+  }
 }
 
 // Authentication notifier
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier(this._appSettingsDao, this._setupNotifier)
+  AuthNotifier(this._appSettingsService, this._supabaseService)
     : super(const AuthState()) {
     _loadSessionTimeout();
+    _loadFailedAttempts();
     _checkExistingSession();
+    _listenToAuthChanges();
   }
 
-  final AppSettingsDao _appSettingsDao;
-  final SetupNotifier _setupNotifier;
+  final AppSettingsService _appSettingsService;
+  final SupabaseService _supabaseService;
+  
+  // Security constants
+  static const int _maxFailedAttempts = 13;
+  static const Duration _lockoutDuration = Duration(minutes: 15);
+  static const Duration _sessionWarningThreshold = Duration(minutes: 5);
 
   Future<void> _loadSessionTimeout() async {
     try {
-      final timeout = await _appSettingsDao.getIntSetting(
+      final timeout = await _appSettingsService.getIntSetting(
         'session_timeout_minutes',
       );
       if (timeout != null) {
@@ -68,29 +104,123 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> _loadFailedAttempts() async {
+    try {
+      final attempts = await _appSettingsService.getIntSetting('failed_auth_attempts') ?? 0;
+    final lockoutString = await _appSettingsService.getStringSetting('lockout_until');
+      DateTime? lockoutUntil;
+      if (lockoutString != null) {
+        lockoutUntil = DateTime.tryParse(lockoutString);
+        // Clear expired lockouts
+        if (lockoutUntil != null && DateTime.now().isAfter(lockoutUntil)) {
+          await _clearLockout();
+          lockoutUntil = null;
+        }
+      }
+      state = state.copyWith(
+        failedAttempts: attempts,
+        lockoutUntil: lockoutUntil,
+      );
+    } catch (e) {
+      // Use default values if error
+    }
+  }
+
+  Future<void> _incrementFailedAttempts() async {
+    final newAttempts = state.failedAttempts + 1;
+    await _appSettingsService.setIntSetting(
+      'failed_auth_attempts',
+      newAttempts,
+      description: 'Number of failed authentication attempts',
+    );
+    
+    if (newAttempts >= _maxFailedAttempts) {
+      final lockoutUntil = DateTime.now().add(_lockoutDuration);
+      await _appSettingsService.setStringSetting(
+        'lockout_until',
+        lockoutUntil.toIso8601String(),
+        description: 'Account lockout expiration time',
+      );
+      state = state.copyWith(
+        failedAttempts: newAttempts,
+        lockoutUntil: lockoutUntil,
+      );
+    } else {
+      state = state.copyWith(failedAttempts: newAttempts);
+    }
+  }
+
+  Future<void> _clearFailedAttempts() async {
+    await _appSettingsService.deleteSetting('failed_auth_attempts');
+    await _clearLockout();
+    state = state.copyWith(
+      failedAttempts: 0,
+      lockoutUntil: null,
+    );
+  }
+
+  Future<void> _clearLockout() async {
+    await _appSettingsService.deleteSetting('lockout_until');
+  }
+
   // Public method to refresh the session timeout from settings immediately
   Future<void> refreshSessionTimeout() async {
     await _loadSessionTimeout();
   }
 
+  void _listenToAuthChanges() {
+    _supabaseService.authStateChanges.listen((authState) {
+      final user = authState.session?.user;
+      if (user != null) {
+        // User is authenticated
+        final now = DateTime.now();
+        state = state.copyWith(
+          isAuthenticated: true,
+          user: user,
+          lastAuthTime: now,
+        );
+        // Save auth time to local storage
+        _appSettingsService.setStringSetting(
+          'last_auth_time',
+          now.toIso8601String(),
+          description: 'Last successful authentication time',
+        ).catchError((e) {
+          // Ignore storage errors
+        });
+      } else {
+        // User is not authenticated
+        state = state.copyWith(
+          isAuthenticated: false,
+          user: null,
+        );
+        _clearSession();
+      }
+    });
+  }
+
   Future<void> _checkExistingSession() async {
     try {
-      final lastAuthString = await _appSettingsDao.getStringSetting(
-        'last_auth_time',
-      );
-      if (lastAuthString != null) {
-        final lastAuthTime = DateTime.tryParse(lastAuthString);
-        if (lastAuthTime != null) {
-          final tempState = state.copyWith(lastAuthTime: lastAuthTime);
-          if (!tempState.isSessionExpired) {
-            state = state.copyWith(
-              isAuthenticated: true,
-              lastAuthTime: lastAuthTime,
-            );
-          } else {
-            // Session expired, clear it
-            await _clearSession();
-          }
+      // Check if user is already authenticated with Supabase
+      final user = _supabaseService.currentUser;
+      if (user != null) {
+        final lastAuthString = await _appSettingsService.getStringSetting(
+          'last_auth_time',
+        );
+        DateTime? lastAuthTime;
+        if (lastAuthString != null) {
+          lastAuthTime = DateTime.tryParse(lastAuthString);
+        }
+        
+        final tempState = state.copyWith(lastAuthTime: lastAuthTime);
+        if (lastAuthTime == null || !tempState.isSessionExpired) {
+          state = state.copyWith(
+            isAuthenticated: true,
+            user: user,
+            lastAuthTime: lastAuthTime ?? DateTime.now(),
+          );
+        } else {
+          // Session expired, sign out
+          await _supabaseService.signOut();
         }
       }
     } catch (e) {
@@ -98,62 +228,104 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<bool> authenticateWithPassword(String password) async {
-    state = state.copyWith(isLoading: true);
+  Future<bool> authenticateWithPassword(String email, String password) async {
+    // Check if account is locked out
+    if (state.isLockedOut) {
+      final remaining = state.lockoutTimeRemaining;
+      final minutes = remaining?.inMinutes ?? 0;
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Account temporarily locked. Try again in $minutes minutes.',
+      );
+      return false;
+    }
+
+    state = state.copyWith(isLoading: true, error: null);
 
     try {
-      // Validate input
+      // Enhanced input validation
+      if (email.trim().isEmpty) {
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Please enter your email address',
+        );
+        return false;
+      }
+
       if (password.isEmpty) {
         state = state.copyWith(
           isLoading: false,
-          error: 'Please enter your passcode',
+          error: 'Please enter your password',
         );
         return false;
       }
 
-      // Use setup provider to validate passcode
-      final isValid = await _setupNotifier.validatePasscode(password);
-
-      if (isValid) {
-        try {
-          final now = DateTime.now();
-          await _appSettingsDao.setStringSetting(
-            'last_auth_time',
-            now.toIso8601String(),
-            description: 'Last successful authentication time',
-          );
-
-          state = state.copyWith(
-            isAuthenticated: true,
-            isLoading: false,
-            lastAuthTime: now,
-          );
-          return true;
-        } catch (dbError) {
-          // Database error during session save
-          state = state.copyWith(
-            isLoading: false,
-            error: 'Database error: Unable to save session. Please try again.',
-          );
-          return false;
-        }
-      } else {
+      // Basic email format validation
+      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email.trim())) {
         state = state.copyWith(
           isLoading: false,
-          error: 'Invalid passcode. Please try again.',
+          error: 'Please enter a valid email address',
         );
         return false;
       }
+
+      // Validate connection before attempting authentication
+      if (!await _supabaseService.validateConnection()) {
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Unable to connect to authentication service. Please check your internet connection.',
+        );
+        return false;
+      }
+
+      // Use Supabase to authenticate
+      await _supabaseService.signInWithPassword(email.trim(), password);
+      
+      // Authentication successful - clear failed attempts
+      await _clearFailedAttempts();
+      // Mark that a real credential sign-in occurred. Used to gate biometrics visibility.
+      await _appSettingsService.setBoolSetting('has_signed_in_once', true,
+          description: 'Admin has completed at least one credential login');
+      state = state.copyWith(isLoading: false);
+      return true;
     } catch (e) {
-      // Handle different types of errors
+      // Increment failed attempts for authentication failures
+      await _incrementFailedAttempts();
+      
+      // Handle different types of errors with enhanced messaging
       String errorMessage;
-      if (e.toString().contains('SQL')) {
-        errorMessage =
-            'Database error occurred. Please restart the app and try again.';
-      } else if (e.toString().contains('secure_storage')) {
-        errorMessage = 'Security error: Unable to access stored credentials.';
+      if (e is AuthException) {
+        switch (e.statusCode) {
+          case '400':
+            errorMessage = 'Invalid email or password. Please check your credentials.';
+            break;
+          case '401':
+            errorMessage = 'Invalid email or password.';
+            break;
+          case '422':
+            errorMessage = 'Email not confirmed. Please check your email for a confirmation link.';
+            break;
+          case '429':
+            errorMessage = 'Too many login attempts. Please wait before trying again.';
+            break;
+          case '500':
+            errorMessage = 'Server error. Please try again later.';
+            break;
+          default:
+            errorMessage = e.message.isNotEmpty ? e.message : 'Authentication failed. Please try again.';
+        }
+      } else if (e.toString().toLowerCase().contains('network') || 
+                 e.toString().toLowerCase().contains('socket') ||
+                 e.toString().toLowerCase().contains('connection')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
       } else {
-        errorMessage = 'Authentication failed. Please try again.';
+        errorMessage = 'Authentication failed. Please check your credentials and try again.';
+      }
+
+      // Add lockout warning if approaching limit
+      final attemptsRemaining = _maxFailedAttempts - state.failedAttempts;
+      if (attemptsRemaining <= 2 && attemptsRemaining > 0) {
+        errorMessage += ' ($attemptsRemaining attempts remaining)';
       }
 
       state = state.copyWith(isLoading: false, error: errorMessage);
@@ -161,42 +333,106 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<bool> authenticateWithBiometric() async {
-    state = state.copyWith(isLoading: true);
+  Future<bool> authenticateWithBiometric({bool allowOffline = false}) async {
+    // Check if account is locked out
+    if (state.isLockedOut) {
+      final remaining = state.lockoutTimeRemaining;
+      final minutes = remaining?.inMinutes ?? 0;
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Account temporarily locked. Try again in $minutes minutes.',
+      );
+      return false;
+    }
+
+    state = state.copyWith(isLoading: true, error: null);
 
     try {
-      // This would be handled by the calling widget with local_auth
-      // Here we just update the state assuming successful biometric auth
-      final now = DateTime.now();
-      await _appSettingsDao.setStringSetting(
-        'last_auth_time',
-        now.toIso8601String(),
-        description: 'Last successful authentication time',
-      );
+      // If we already have a valid Supabase session, use it
+      final user = _supabaseService.currentUser;
+      final session = _supabaseService.currentSession;
+      if (user != null && session != null) {
+        // Optional: if session has explicit expiry and it's in the past, treat as no session
+        if (session.expiresAt != null &&
+            DateTime.fromMillisecondsSinceEpoch(session.expiresAt! * 1000).isBefore(DateTime.now())) {
+          // fall through to offline path if allowed
+        } else {
+          final now = DateTime.now();
+          await _appSettingsService.setStringSetting(
+            'last_auth_time',
+            now.toIso8601String(),
+            description: 'Last successful authentication time',
+          );
+          await _clearFailedAttempts();
+          state = state.copyWith(
+            isAuthenticated: true,
+            isLoading: false,
+            lastAuthTime: now,
+            user: user,
+            requiresReauth: false,
+          );
+          return true;
+        }
+      }
 
+      // No valid Supabase session. If offline biometric is allowed, unlock locally.
+      if (allowOffline) {
+        final now = DateTime.now();
+        await _appSettingsService.setStringSetting(
+          'last_auth_time',
+          now.toIso8601String(),
+          description: 'Last successful authentication time',
+        );
+        await _clearFailedAttempts();
+        state = state.copyWith(
+          isAuthenticated: true,
+          isLoading: false,
+          lastAuthTime: now,
+          // user remains null; app may require reauth for server ops
+          requiresReauth: true,
+        );
+        return true;
+      }
+
+      // Otherwise, require credentials because we cannot identify a Supabase session
       state = state.copyWith(
-        isAuthenticated: true,
         isLoading: false,
-        lastAuthTime: now,
+        error: 'No valid session found. Please sign in with email and password first.',
       );
-      return true;
+      return false;
     } catch (e) {
+      // Don't increment failed attempts for biometric failures as they're handled by the OS
+      String errorMessage;
+      if (e.toString().toLowerCase().contains('network') || 
+          e.toString().toLowerCase().contains('connection')) {
+        errorMessage = 'Network error during biometric authentication. Please try again.';
+      } else {
+        errorMessage = 'Biometric authentication failed. Please try again or use password.';
+      }
+      
       state = state.copyWith(
         isLoading: false,
-        error: 'Biometric authentication failed: $e',
+        error: errorMessage,
       );
       return false;
     }
   }
 
   Future<void> logout() async {
-    await _clearSession();
-    state = const AuthState();
+    try {
+      await _supabaseService.signOut();
+      await _clearSession();
+      state = const AuthState();
+    } catch (e) {
+      // Even if sign out fails, clear local state
+      await _clearSession();
+      state = const AuthState();
+    }
   }
 
   Future<void> _clearSession() async {
     try {
-      await _appSettingsDao.deleteSetting('last_auth_time');
+      await _appSettingsService.deleteSetting('last_auth_time');
     } catch (e) {
       // Error clearing session, continue anyway
     }
@@ -206,28 +442,90 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith();
   }
 
-  Future<bool> isBiometricEnabled() async {
+  /// Check if session is approaching expiration and needs warning
+  bool get shouldWarnSessionExpiry {
+    if (state.lastAuthTime == null || !state.isAuthenticated) return false;
+    final now = DateTime.now();
+    final sessionDuration = Duration(minutes: state.sessionTimeoutMinutes);
+    final timeUntilExpiry = sessionDuration - now.difference(state.lastAuthTime!);
+    return timeUntilExpiry <= _sessionWarningThreshold && timeUntilExpiry > Duration.zero;
+  }
+
+  /// Extend current session (useful for "keep me logged in" functionality)
+  Future<void> extendSession() async {
+    if (!state.isAuthenticated) return;
+    
     try {
-      return await _setupNotifier.isBiometricEnabled();
+      // Validate that the Supabase session is still valid
+      final session = _supabaseService.currentSession;
+      if (session == null) {
+        await logout();
+        return;
+      }
+
+      final now = DateTime.now();
+      await _appSettingsService.setStringSetting(
+        'last_auth_time',
+        now.toIso8601String(),
+        description: 'Last successful authentication time',
+      );
+
+      state = state.copyWith(lastAuthTime: now);
     } catch (e) {
-      return false;
+      // If extending session fails, force logout for security
+      await logout();
     }
   }
 
-  Future<void> setBiometricEnabled({required bool enabled}) async {
+  /// Force re-authentication for sensitive operations
+  void requireReauth() {
+    state = state.copyWith(requiresReauth: true);
+  }
+
+  /// Clear re-authentication requirement after successful auth
+  void clearReauthRequirement() {
+    state = state.copyWith(requiresReauth: false);
+  }
+
+  /// Check session validity and auto-logout if expired
+  Future<void> validateSession() async {
+    if (!state.isAuthenticated) return;
+
     try {
-      await _setupNotifier.setBiometricEnabled(enabled);
+      // Check local session expiry
+      if (state.isSessionExpired) {
+        await logout();
+        return;
+      }
+
+      // Check Supabase session validity
+      final session = _supabaseService.currentSession;
+      if (session == null) {
+        await logout();
+        return;
+      }
+
+      // Check if Supabase session is expired
+      if (session.expiresAt != null) {
+        final expiryTime = DateTime.fromMillisecondsSinceEpoch(session.expiresAt! * 1000);
+        if (expiryTime.isBefore(DateTime.now())) {
+          await logout();
+          return;
+        }
+      }
     } catch (e) {
-      // Error setting biometric preference
+      // If validation fails, logout for security
+      await logout();
     }
   }
+
 }
 
 // Auth provider
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  final appSettingsDao = ref.watch(appSettingsDaoProvider);
-  final setupNotifier = ref.watch(setupProvider.notifier);
-  return AuthNotifier(appSettingsDao, setupNotifier);
+  final appSettingsService = ref.watch(appSettingsServiceProvider);
+  final supabaseService = ref.watch(supabaseServiceProvider);
+  return AuthNotifier(appSettingsService, supabaseService);
 });
 
 // Convenience providers

@@ -1,19 +1,12 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:file_selector/file_selector.dart';
-import 'package:file_picker/file_picker.dart' as fp;
-import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:library_registration_app/data/services/backup_service.dart';
+
 import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
 import 'package:library_registration_app/presentation/providers/auth/setup_provider.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
 import 'package:library_registration_app/presentation/providers/ui/ui_state_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -26,8 +19,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _loading = true;
   ThemeMode _themeMode = ThemeMode.system;
   bool _biometricEnabled = false;
-  bool _autoBackup = true;
-  int _backupFrequencyDays = 7;
+
   int _sessionTimeout = 30;
   final _libraryNameCtrl = TextEditingController();
   final _adminEmailCtrl = TextEditingController();
@@ -38,19 +30,25 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _loadSettings();
   }
 
+  Future<void> _logout() async {
+    await ref.read(authProvider.notifier).logout();
+    if (!mounted) return;
+    // Navigate to auth screen
+    Navigator.of(context).pushNamedAndRemoveUntil('/auth', (route) => false);
+  }
+
   Future<void> _loadSettings() async {
     final dao = ref.read(appSettingsDaoProvider);
     final setup = ref.read(setupProvider.notifier);
-    final themePref = await dao.getSettingValue('theme_mode');
-    final autoBackup = await dao.getBoolSetting('auto_backup_enabled');
-    final backupDays = await dao.getIntSetting('backup_frequency_days');
+    final themePref = await dao.getStringSetting('theme_mode');
+
     final session = await dao.getIntSetting('session_timeout_minutes');
     final bio = await setup.isBiometricEnabled();
     final libName =
-        await dao.getSettingValue('library_name') ??
+        await dao.getStringSetting('library_name') ??
         'Library Registration System';
     final adminEmail =
-        await dao.getSettingValue('admin_email') ?? 'admin@library.com';
+        await dao.getStringSetting('admin_email') ?? 'admin@library.com';
     if (!mounted) return;
     setState(() {
       _themeMode = switch (themePref) {
@@ -58,8 +56,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         'dark' => ThemeMode.dark,
         _ => ThemeMode.system,
       };
-      _autoBackup = autoBackup ?? true;
-      _backupFrequencyDays = backupDays ?? 7;
+
       _sessionTimeout = session ?? 30;
       _biometricEnabled = bio;
       _libraryNameCtrl.text = libName;
@@ -88,7 +85,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   Future<void> _saveBiometric(bool enabled) async {
     setState(() => _biometricEnabled = enabled);
-    await ref.read(setupProvider.notifier).setBiometricEnabled(enabled);
+    await ref.read(setupProvider.notifier).setBiometricEnabled(enabled: enabled);
     await ref
         .read(appSettingsDaoProvider)
         .setBoolSetting(
@@ -110,27 +107,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     await ref.read(authProvider.notifier).refreshSessionTimeout();
   }
 
-  Future<void> _saveAutoBackup(bool enabled) async {
-    setState(() => _autoBackup = enabled);
-    await ref
-        .read(appSettingsDaoProvider)
-        .setBoolSetting(
-          'auto_backup_enabled',
-          enabled,
-          description: 'Auto backup',
-        );
-  }
 
-  Future<void> _saveBackupFrequency(int days) async {
-    setState(() => _backupFrequencyDays = days);
-    await ref
-        .read(appSettingsDaoProvider)
-        .setIntSetting(
-          'backup_frequency_days',
-          days,
-          description: 'Backup frequency',
-        );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -220,53 +197,37 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           subtitle: '$_sessionTimeout minutes',
                           onTap: _showSessionSheet,
                         ),
+                         _buildDivider(theme),
+                         ListTile(
+                           contentPadding: EdgeInsets.zero,
+                           leading: Container(
+                             width: 44,
+                             height: 44,
+                             decoration: BoxDecoration(
+                               color: theme.colorScheme.errorContainer.withValues(alpha: 0.2),
+                               borderRadius: BorderRadius.circular(12),
+                             ),
+                             child: Icon(Icons.logout_rounded, color: theme.colorScheme.error, size: 22),
+                           ),
+                           title: Text(
+                             'Sign out',
+                             style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                           ),
+                           subtitle: Text(
+                             'Return to the login screen',
+                             style: theme.textTheme.bodyMedium?.copyWith(
+                               color: theme.colorScheme.onSurfaceVariant,
+                             ),
+                           ),
+                           onTap: _logout,
+                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 24),
 
-                  // Backup & Storage Section
-                  _buildSectionHeader('Backup & Storage', theme),
-                  _buildCard(
-                    theme,
-                    child: Column(
-                      children: [
-                        _buildSwitchListTile(
-                          icon: Icons.cloud_outlined,
-                          title: 'Automatic Backups',
-                          subtitle: 'Periodically back up your data',
-                          value: _autoBackup,
-                          onChanged: _saveAutoBackup,
-                        ),
-                        _buildDivider(theme),
-                        _buildListTile(
-                          icon: Icons.schedule_outlined,
-                          title: 'Backup Frequency',
-                          subtitle: _frequencyLabel(_backupFrequencyDays),
-                          onTap: _showBackupSheet,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
 
-                  // Action Cards
-                  _buildActionCard(
-                    icon: Icons.backup_outlined,
-                    title: 'Export Full Backup',
-                    subtitle: 'All data and media into a ZIP',
-                    onTap: _showExportOptions,
-                    theme: theme,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildActionCard(
-                    icon: Icons.settings_backup_restore_outlined,
-                    title: 'Import Backup',
-                    subtitle: 'Restore from an exported ZIP',
-                    onTap: _showImportBackupPicker,
-                    theme: theme,
-                  ),
-                  const SizedBox(height: 12),
+
                   _buildActionCard(
                     icon: Icons.restart_alt_outlined,
                     title: 'Reset to Defaults',
@@ -276,10 +237,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       await ref.read(appSettingsDaoProvider).resetToDefaults();
                       await _loadSettings();
                       if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Settings reset to defaults'),
-                        ),
+                      CustomNotification.show(
+                        context,
+                        message: 'Settings reset to defaults',
+                        type: NotificationType.success,
                       );
                     },
                     theme: theme,
@@ -582,20 +543,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  String _frequencyLabel(int days) {
-    switch (days) {
-      case 1:
-        return 'Daily';
-      case 7:
-        return 'Weekly';
-      case 14:
-        return 'Every 2 weeks';
-      case 30:
-        return 'Monthly';
-      default:
-        return 'Every $days days';
-    }
-  }
+
 
   void _showThemeSheet() {
     final theme = Theme.of(context);
@@ -637,555 +585,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  Future<void> _showExportOptions() async {
-    final theme = Theme.of(context);
-    var includeMedia = true;
-    await showAppBottomSheet<void>(
-      context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setState) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    'Export options',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                SwitchListTile(
-                  value: includeMedia,
-                  onChanged: (v) => setState(() => includeMedia = v),
-                  title: const Text('Include media files'),
-                  subtitle: const Text('Photos and other attachments'),
-                ),
-                const SizedBox(height: 8),
-                ListTile(
-                  leading: const Icon(Icons.cloud_upload_outlined),
-                  title: const Text('Start export'),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    _exportFullBackup(includeMedia: includeMedia);
-                  },
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
 
-  Future<void> _exportFullBackup({bool includeMedia = true}) async {
-    final backup = ref.read(backupServiceProvider);
-    var stage = 'Starting…';
-    var current = 0;
-    var total = 0;
-    var started = false;
-    late StateSetter dialogSetState;
-    BuildContext? dialogContext;
-    var dialogClosed = false;
 
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setState) {
-            dialogSetState = setState;
-            dialogContext = ctx;
-            if (dialogClosed) return const SizedBox.shrink();
-            if (!started) {
-              started = true;
-              Future<void>.microtask(() async {
-                try {
-                  final result = await backup.exportBackup(
-                    includeMedia: includeMedia,
-                    onProgress: (p) {
-                      final dc = dialogContext;
-                      if (dc != null && dc.mounted && !dialogClosed) {
-                        dialogSetState(() {
-                          stage = p.stage;
-                          current = p.current;
-                          total = p.total;
-                        });
-                      }
-                    },
-                  );
-                  if (!dialogClosed && ctx.mounted) {
-                    dialogClosed = true;
-                    Navigator.of(ctx).pop();
-                  }
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Backup saved: ${p.basename(result.filePath)}',
-                      ),
-                    ),
-                  );
-                  await _showShareBackupSheet(result.filePath, result.bytes);
-                } catch (e) {
-                  if (!dialogClosed && ctx.mounted) {
-                    dialogClosed = true;
-                    Navigator.of(ctx).pop();
-                  }
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('Backup failed: $e')));
-                }
-              });
-            }
-            final progress = total > 0 ? current / total : null;
-            return AlertDialog(
-              title: const Text('Exporting backup'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  LinearProgressIndicator(value: progress),
-                  const SizedBox(height: 12),
-                  Text('$stage ($current/$total)'),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    ).whenComplete(() {
-      dialogClosed = true;
-    });
-  }
 
-  Future<void> _showImportBackupPicker() async {
-    final docs = await getApplicationDocumentsDirectory();
-    final backupsDir = Directory(p.join(docs.path, 'backups'));
-    final hasDir = await backupsDir.exists();
-    final entries = hasDir
-        ? backupsDir
-              .listSync()
-              .whereType<File>()
-              .where((f) => f.path.toLowerCase().endsWith('.zip'))
-              .toList()
-        : <File>[];
 
-    if (entries.isEmpty) {
-      if (!mounted) return;
-      final theme = Theme.of(context);
-      await showAppBottomSheet<void>(
-        context,
-        builder: (ctx) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'No backups found',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.file_open_outlined),
-                title: const Text('Choose from device files'),
-                onTap: () async {
-                  Navigator.of(ctx).pop();
-                  await _pickFromDeviceAndImport();
-                },
-              ),
-              const ListTile(
-                leading: Icon(Icons.info_outline),
-                title: Text('Backups will appear here after you create one.'),
-                subtitle: Text(
-                  "Backups are stored in the app's documents/backups folder.",
-                ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.cloud_upload_outlined),
-                title: const Text('Create Backup Now'),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  _showExportOptions();
-                },
-              ),
-            ],
-          );
-        },
-      );
-      return;
-    }
 
-    // Cache stats and sort once
-    final pairs = entries.map((f) => MapEntry(f, f.statSync())).toList()
-      ..sort((a, b) => b.value.modified.compareTo(a.value.modified));
-
-    final theme = Theme.of(context);
-    await showAppBottomSheet<void>(
-      context,
-      builder: (ctx) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Select a backup to import',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.file_open_outlined),
-              title: const Text('Choose from device files'),
-              onTap: () async {
-                Navigator.of(ctx).pop();
-                await _pickFromDeviceAndImport();
-              },
-            ),
-            ...pairs.map((pair) {
-              final f = pair.key;
-              final stat = pair.value;
-              return ListTile(
-                leading: const Icon(Icons.archive_outlined),
-                title: Text(p.basename(f.path)),
-                subtitle: Text(
-                  '${_fmtBytes(stat.size)} • ${_fmtDateTime(stat.modified)}',
-                ),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  _confirmAndImport(f.path);
-                },
-                trailing: IconButton(
-                  icon: const Icon(Icons.share_outlined),
-                  onPressed: () {
-                    Share.shareFiles(
-                      [f.path],
-                      subject: 'Library backup',
-                      text: p.basename(f.path),
-                    );
-                  },
-                ),
-              );
-            }),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _confirmAndImport(String path) async {
-    final theme = Theme.of(context);
-    await showAppBottomSheet<void>(
-      context,
-      builder: (ctx) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Import mode',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.merge_type_outlined),
-              title: const Text('Merge (skip duplicates)'),
-              onTap: () {
-                Navigator.of(ctx).pop();
-                _importBackup(
-                  path,
-                  const ImportOptions(
-                    
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.warning_amber_outlined,
-                color: Colors.red,
-              ),
-              title: const Text('Overwrite (replace) — clears existing data'),
-              onTap: () {
-                Navigator.of(ctx).pop();
-                _confirmOverwriteImport(path);
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _pickFromDeviceAndImport() async {
-    try {
-      // Best-effort: request storage permission on Android (pre-13 devices)
-      try {
-        await Permission.storage.request();
-      } catch (_) {}
-
-      const typeGroup = XTypeGroup(
-        label: 'Backup',
-        extensions: ['zip', 'csv'],
-        mimeTypes: [
-          'application/zip',
-          'application/x-zip-compressed',
-          'text/csv',
-          'application/csv',
-        ],
-      );
-      XFile? picked;
-      try {
-        picked = await openFile(acceptedTypeGroups: [typeGroup]);
-      } catch (_) {
-        picked = null;
-      }
-      String? destPath;
-      if (picked != null) {
-        final bytes = await picked.readAsBytes();
-        final tmp = await getTemporaryDirectory();
-        destPath = p.join(
-          tmp.path,
-          'import_${DateTime.now().millisecondsSinceEpoch}.zip',
-        );
-        final file = File(destPath);
-        await file.writeAsBytes(bytes);
-      } else {
-        // Fallback to file_picker
-        final res = await fp.FilePicker.platform.pickFiles(
-          type: fp.FileType.custom,
-          allowedExtensions: const ['zip', 'csv'],
-          withData: true,
-        );
-        if (res == null || res.files.isEmpty) return;
-        final f = res.files.single;
-        final bytes = f.bytes ?? await File(f.path!).readAsBytes();
-        final tmp = await getTemporaryDirectory();
-        destPath = p.join(
-          tmp.path,
-          'import_${DateTime.now().millisecondsSinceEpoch}.zip',
-        );
-        final file = File(destPath);
-        await file.writeAsBytes(bytes);
-      }
-      if (!mounted) return;
-      if (destPath.toLowerCase().endsWith('.csv')) {
-        await _importCsv(destPath);
-      } else {
-        await _confirmAndImport(destPath);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open file: $e')),
-      );
-    }
-  }
-
-  Future<void> _confirmOverwriteImport(String path) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Confirm overwrite'),
-          content: const Text(
-            'This will replace existing data with the backup contents. This action cannot be undone. Continue?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Overwrite'),
-            ),
-          ],
-        );
-      },
-    );
-    if (confirmed == true) {
-      _importBackup(
-        path,
-        const ImportOptions(
-          mode: ImportMode.overwrite,
-          duplicatePolicy: DuplicatePolicy.replace,
-        ),
-      );
-    }
-  }
-
-  Future<void> _importBackup(String path, ImportOptions options) async {
-    final backup = ref.read(backupServiceProvider);
-    var stage = 'Starting…';
-    var current = 0;
-    var total = 0;
-    var started = false;
-    BuildContext? dialogContext;
-    var dialogClosed = false;
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setState) {
-            dialogContext = ctx;
-            if (dialogClosed) return const SizedBox.shrink();
-            if (!started) {
-              started = true;
-              Future<void>.microtask(() async {
-                try {
-                  final result = await backup.importBackup(
-                    path,
-                    options: options,
-                    onProgress: (p) {
-                      final dc = dialogContext;
-                      if (dc != null && dc.mounted && !dialogClosed) {
-                        setState(() {
-                          stage = p.stage;
-                          current = p.current;
-                          total = p.total;
-                        });
-                      }
-                    },
-                  );
-                  if (!dialogClosed && ctx.mounted) {
-                    dialogClosed = true;
-                    Navigator.of(ctx).pop();
-                  }
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Import complete: inserted ${result.inserted.values.fold<int>(0, (a, b) => a + b)}, updated ${result.updated.values.fold<int>(0, (a, b) => a + b)}, skipped ${result.skipped.values.fold<int>(0, (a, b) => a + b)}',
-                      ),
-                    ),
-                  );
-                } catch (e) {
-                  if (!dialogClosed && ctx.mounted) {
-                    dialogClosed = true;
-                    Navigator.of(ctx).pop();
-                  }
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('Import failed: $e')));
-                }
-              });
-            }
-            final progress = total > 0 ? current / total : null;
-            return AlertDialog(
-              title: const Text('Importing backup'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  LinearProgressIndicator(value: progress),
-                  const SizedBox(height: 12),
-                  Text('$stage ($current/$total)'),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    ).whenComplete(() {
-      dialogClosed = true;
-    });
-  }
-
-  Future<void> _importCsv(String path) async {
-    try {
-      final backup = ref.read(backupServiceProvider);
-      await backup.importCsv(path, onProgress: (_) {});
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('CSV import completed')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('CSV import failed: $e')),
-      );
-    }
-  }
-
-  Future<void> _showShareBackupSheet(String filePath, int bytes) async {
-    final theme = Theme.of(context);
-    await showAppBottomSheet<void>(
-      context,
-      builder: (ctx) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Backup created',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.archive_outlined),
-              title: Text(p.basename(filePath)),
-              subtitle: Text(_fmtBytes(bytes)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.share_outlined),
-              title: const Text('Share backup'),
-              onTap: () async {
-                Navigator.of(ctx).pop();
-                await Share.shareFiles(
-                  [filePath],
-                  subject: 'Library backup',
-                  text: p.basename(filePath),
-                );
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  String _fmtBytes(int bytes) {
-    const units = ['B', 'KB', 'MB', 'GB'];
-    var size = bytes.toDouble();
-    var unit = 0;
-    while (size >= 1024 && unit < units.length - 1) {
-      size /= 1024;
-      unit++;
-    }
-    return '${size.toStringAsFixed(size < 10 && unit > 0 ? 1 : 0)} ${units[unit]}';
-  }
-
-  String _fmtDateTime(DateTime dt) {
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
-    if (diff.inDays < 1) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
-  }
 
   void _showSessionSheet() {
     final theme = Theme.of(context);
@@ -1227,43 +631,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  void _showBackupSheet() {
-    final theme = Theme.of(context);
-    const options = [1, 7, 14, 30];
-    showAppBottomSheet<void>(
-      context,
-      builder: (ctx) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Backup frequency',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            ...options.map((days) {
-              final selected = _backupFrequencyDays == days;
-              return ListTile(
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  _saveBackupFrequency(days);
-                },
-                title: Text(
-                  _frequencyLabel(days),
-                  style: theme.textTheme.bodyLarge,
-                ),
-                trailing: selected
-                    ? Icon(Icons.check, color: theme.colorScheme.primary)
-                    : const SizedBox.shrink(),
-              );
-            }),
-          ],
-        );
-      },
-    );
-  }
+
+
 }

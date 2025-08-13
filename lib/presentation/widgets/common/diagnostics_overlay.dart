@@ -1,14 +1,13 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
 class DiagnosticsOverlay extends StatefulWidget {
-  const DiagnosticsOverlay({super.key, required this.logFeed});
+  const DiagnosticsOverlay({required this.logFeed, super.key});
   final ValueListenable<List<String>> logFeed;
 
   @override
   State<DiagnosticsOverlay> createState() => _DiagnosticsOverlayState();
 }
-
 class _DiagnosticsOverlayState extends State<DiagnosticsOverlay> {
   bool _expanded = false;
 
@@ -75,5 +74,4 @@ class _DiagnosticsOverlayState extends State<DiagnosticsOverlay> {
     );
   }
 }
-
 

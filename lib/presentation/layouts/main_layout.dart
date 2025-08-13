@@ -290,6 +290,13 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
             '/settings',
             Icons.settings_outlined,
           ),
+          const SizedBox(height: 8),
+          _buildSideNavItem(
+            context,
+            'Data Migration',
+            '/migration',
+            Icons.cloud_upload_outlined,
+          ),
           const Spacer(),
           const SizedBox(height: 32),
         ],

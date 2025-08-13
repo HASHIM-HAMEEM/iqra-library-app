@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'package:library_registration_app/presentation/providers/students/student
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
 import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 
 class StudentsPage extends ConsumerStatefulWidget {
   const StudentsPage({super.key});
@@ -28,24 +30,70 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
   String _sortBy = 'Name';
   String _stagedFilter = 'All';
   String _stagedSortBy = 'Name';
+  Timer? _debounceTimer;
+  
+  // Cache for subscription status to avoid repeated calculations
+  Map<String, bool> _activeStatusCache = {};
+  Map<String, bool> _expiredStatusCache = {};
+  DateTime? _lastCacheUpdate;
+  
+  // Pagination state
+  final int _pageSize = 50;
+  final ScrollController _scrollController = ScrollController();
+  final List<Student> _pagedStudents = [];
+  bool _isLoadingPage = false;
+  bool _hasMorePages = true;
+  int _currentOffset = 0;
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  void _showSnackBar(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 2),
-      ),
+  Future<void> _onRefresh() async {
+    // Refresh students data
+    await ref.read(studentsNotifierProvider.notifier).refresh();
+    ref.invalidate(subscriptionsProvider);
+    
+    _showNotification('Students list refreshed');
+  }
+
+  void _showNotification(String message, {bool isError = false}) {
+    CustomNotification.show(
+      context,
+      message: message,
+      type: isError ? NotificationType.error : NotificationType.success,
     );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      _debounceTimer?.cancel();
+      final text = _searchController.text;
+      if (text.isEmpty) {
+        setState(() {
+          _isSearching = false;
+          _searchResults = [];
+          _searchQuery = '';
+        });
+      } else {
+        setState(() {
+          _searchQuery = text;
+        });
+        _debounceTimer = Timer(const Duration(milliseconds: 200), () {
+          _performSearch(text);
+        });
+      }
+    });
+    _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadNextPage();
+    });
   }
 
   Future<void> _performSearch(String query) async {
@@ -75,8 +123,40 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
         _searchResults = [];
       });
       if (mounted) {
-        _showSnackBar('Error searching students: $e', isError: true);
+        _showNotification('Error searching students: $e', isError: true);
       }
+    }
+  }
+
+  void _onScroll() {
+    if (!_hasMorePages || _isLoadingPage) return;
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 400) {
+      _loadNextPage();
+    }
+  }
+
+  Future<void> _loadNextPage() async {
+    if (_isLoadingPage || !_hasMorePages) return;
+    setState(() {
+      _isLoadingPage = true;
+    });
+    try {
+      final next = await ref
+          .read(pagedStudentsProvider((offset: _currentOffset, limit: _pageSize)).future);
+      if (!mounted) return;
+      setState(() {
+        _pagedStudents.addAll(next);
+        _currentOffset += next.length;
+        _hasMorePages = next.length == _pageSize;
+        _isLoadingPage = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingPage = false;
+      });
+      _showNotification('Error loading students: $e', isError: true);
     }
   }
 
@@ -85,69 +165,114 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
     List<Subscription> subscriptions,
   ) {
     final now = DateTime.now();
+    
+    // Check if cache needs to be updated (every 5 minutes or if empty)
+    final shouldUpdateCache = _lastCacheUpdate == null ||
+        now.difference(_lastCacheUpdate!).inMinutes > 5 ||
+        _activeStatusCache.isEmpty;
+    
+    if (shouldUpdateCache) {
+      _updateSubscriptionCache(subscriptions, now);
+      _lastCacheUpdate = now;
+    }
+    
+    // Pre-filter students based on active filter to reduce iterations
+    List<Student> filtered;
+    
+    switch (_activeFilter) {
+      case 'Active':
+        filtered = students.where((s) => _activeStatusCache[s.id] == true).toList();
+        break;
+      case 'Expired':
+        filtered = students.where((s) => 
+          _activeStatusCache[s.id] != true && _expiredStatusCache[s.id] == true
+        ).toList();
+        break;
+      case 'New':
+        final thirtyDaysAgo = now.subtract(const Duration(days: 30));
+        filtered = students.where((s) => s.createdAt.isAfter(thirtyDaysAgo)).toList();
+        break;
+      default:
+        filtered = List.from(students); // Create a copy to avoid modifying original
+    }
+    
+    // Sort the filtered list
+    _sortStudents(filtered);
+    
+    return filtered;
+  }
+  
+  void _updateSubscriptionCache(List<Subscription> subscriptions, DateTime now) {
+    _activeStatusCache.clear();
+    _expiredStatusCache.clear();
+    
+    // Group subscriptions by student ID for efficient lookup
     final studentIdToSubs = <String, List<Subscription>>{};
     for (final sub in subscriptions) {
       (studentIdToSubs[sub.studentId] ??= []).add(sub);
     }
-    bool hasActive(String studentId) {
-      final subs = studentIdToSubs[studentId];
-      if (subs == null) return false;
-      return subs.any(
-        (s) => s.status == SubscriptionStatus.active && s.endDate.isAfter(now),
-      );
+    
+    // Calculate status for each student
+    for (final entry in studentIdToSubs.entries) {
+      final studentId = entry.key;
+      final subs = entry.value;
+      
+      bool hasActive = false;
+      bool hasExpired = false;
+      
+      for (final sub in subs) {
+        if (sub.status == SubscriptionStatus.active && sub.endDate.isAfter(now)) {
+          hasActive = true;
+        }
+        if (sub.status == SubscriptionStatus.expired || sub.endDate.isBefore(now)) {
+          hasExpired = true;
+        }
+        
+        // Early exit if both statuses are found
+        if (hasActive && hasExpired) break;
+      }
+      
+      _activeStatusCache[studentId] = hasActive;
+      _expiredStatusCache[studentId] = hasExpired;
     }
-
-    bool hasExpired(String studentId) {
-      final subs = studentIdToSubs[studentId];
-      if (subs == null) return false;
-      return subs.any(
-        (s) =>
-            s.status == SubscriptionStatus.expired || s.endDate.isBefore(now),
-      );
-    }
-
-    var filtered = students;
-
-    switch (_activeFilter) {
-      case 'Active':
-        filtered = students.where((s) => hasActive(s.id)).toList();
-      case 'Expired':
-        filtered = students
-            .where((s) => !hasActive(s.id) && hasExpired(s.id))
-            .toList();
-      case 'New':
-        final thirtyDaysAgo = now.subtract(const Duration(days: 30));
-        filtered = students
-            .where((s) => s.createdAt.isAfter(thirtyDaysAgo))
-            .toList();
-      default:
-        filtered = students;
-    }
-
+  }
+  
+  void _clearSubscriptionCache() {
+    _activeStatusCache.clear();
+    _expiredStatusCache.clear();
+    _lastCacheUpdate = null;
+  }
+  
+  void _sortStudents(List<Student> students) {
     switch (_sortBy) {
       case 'Name':
-        filtered.sort((a, b) => a.fullName.compareTo(b.fullName));
+        students.sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+        break;
       case 'Email':
-        filtered.sort((a, b) => a.email.compareTo(b.email));
+        students.sort((a, b) => a.email.toLowerCase().compareTo(b.email.toLowerCase()));
+        break;
       case 'Date':
-        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        students.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        break;
       case 'Age':
-        filtered.sort((a, b) => a.age.compareTo(b.age));
+        students.sort((a, b) => a.age.compareTo(b.age));
+        break;
     }
-
-    return filtered;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final studentsAsync = ref.watch(studentsProvider);
+    final subsAsync = ref.watch(subscriptionsProvider);
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
+      body: RefreshIndicator(
+        onRefresh: _onRefresh,
+        child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            controller: _scrollController,
+          slivers: [
           // Modern Header
           SliverToBoxAdapter(
             child: Padding(
@@ -170,16 +295,10 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
 
           // Chips moved into filter sheet (tune icon)
 
-          // Students List
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: ResponsiveUtils.getResponsivePadding(
-                context,
-              ).copyWith(top: 16, bottom: 24),
-              child: _buildStudentsList(studentsAsync),
-            ),
-          ),
+          // Students List (slivers)
+          ..._buildStudentsSlivers(subsAsync),
         ],
+        ),
       ),
       floatingActionButton:
           Listener(
@@ -188,7 +307,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
             child: FloatingActionButton(
               onPressed: () {
                 context.go('/students/add');
-                _showSnackBar('Opening Add Student form');
+                _showNotification('Opening Add Student form');
               },
               backgroundColor: theme.colorScheme.primary,
               foregroundColor: theme.colorScheme.onPrimary,
@@ -196,7 +315,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
             )
                 .animate(onPlay: (c) => c.repeat(reverse: true))
                 .scale(
-                  begin: const Offset(1.0, 1.0),
+                  begin: const Offset(1, 1),
                   end: const Offset(1.04, 1.04),
                   duration: 1400.ms,
                   curve: Curves.easeInOut,
@@ -230,23 +349,10 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
             ],
           ),
         ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              onPressed: _showFiltersSheet,
-              icon: const Icon(Icons.tune_rounded),
-              tooltip: 'Filters & Sort',
-            ),
-            IconButton(
-              onPressed: () {
-                ref.read(studentsNotifierProvider.notifier).refresh();
-                _showSnackBar('Refreshing students list');
-              },
-              icon: const Icon(Icons.refresh_rounded),
-              tooltip: 'Refresh',
-            ),
-          ],
+        IconButton(
+          onPressed: _showFiltersSheet,
+          icon: const Icon(Icons.tune_rounded),
+          tooltip: 'Filters & Sort',
         ),
       ],
     );
@@ -294,10 +400,10 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
           ),
         ),
         onChanged: (value) {
+          // handled by controller listener with debounce
           setState(() {
             _searchQuery = value;
           });
-          _performSearch(value);
         },
       ),
     );
@@ -311,134 +417,232 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
       context,
       builder: (ctx) {
         final theme = Theme.of(ctx);
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Filters & Sort',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Status',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: ['All', 'Active', 'Expired', 'New'].map((option) {
-                final selected = _stagedFilter == option;
-                return ChoiceChip(
-                  label: Text(option),
-                  selected: selected,
-                  onSelected: (_) => setState(() => _stagedFilter = option),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Sort by',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: ['Name', 'Email', 'Date', 'Age'].map((option) {
-                final selected = _stagedSortBy == option;
-                return ChoiceChip(
-                  label: Text(option),
-                  selected: selected,
-                  onSelected: (_) => setState(() => _stagedSortBy = option),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+        return StatefulBuilder(
+          builder: (sheetCtx, setSheetState) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _stagedFilter = 'All';
-                      _stagedSortBy = 'Name';
-                    });
-                  },
-                  child: const Text('Reset'),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: () {
-                    setState(() {
-                      _activeFilter = _stagedFilter;
-                      _sortBy = _stagedSortBy;
-                    });
-                    Navigator.of(ctx).pop();
-                    _showSnackBar('Applied filters');
-                  },
-                  child: const Text('Apply'),
+                const SizedBox(height: 16),
+                Text(
+                  'Filters & Sort',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
+                const SizedBox(height: 16),
+                Text(
+                  'Status',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: ['All', 'Active', 'Expired', 'New'].map((option) {
+                    final selected = _stagedFilter == option;
+                    return ChoiceChip(
+                      label: Text(option),
+                      selected: selected,
+                      onSelected: (_) => setSheetState(() => _stagedFilter = option),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Sort by',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: ['Name', 'Email', 'Date', 'Age'].map((option) {
+                    final selected = _stagedSortBy == option;
+                    return ChoiceChip(
+                      label: Text(option),
+                      selected: selected,
+                      onSelected: (_) => setSheetState(() => _stagedSortBy = option),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        setSheetState(() {
+                          _stagedFilter = 'All';
+                          _stagedSortBy = 'Name';
+                        });
+                      },
+                      child: const Text('Reset'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: () {
+                        setState(() {
+                          _activeFilter = _stagedFilter;
+                          _sortBy = _stagedSortBy;
+                          // Clear cache when filters change to ensure fresh data
+                          _clearSubscriptionCache();
+                        });
+                        Navigator.of(ctx).pop();
+                        _showNotification('Applied filters');
+                      },
+                      child: const Text('Apply'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
               ],
-            ),
-            const SizedBox(height: 16),
-          ],
+            );
+          },
         );
       },
     );
   }
 
-  Widget _buildStudentsList(AsyncValue<List<Student>> studentsAsync) {
-    final subsAsync = ref.watch(subscriptionsProvider);
+  // Deprecated list builder (replaced by slivers)
+
+  List<Widget> _buildStudentsSlivers(AsyncValue<List<Subscription>> subsAsync) {
     if (_isSearching) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(32),
-          child: CircularProgressIndicator(),
+      return [
+        const SliverToBoxAdapter(
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: CircularProgressIndicator(),
+            ),
+          ),
+        ),
+      ];
+    }
+    if (_searchQuery.isNotEmpty) {
+      return [
+        SliverPadding(
+          padding: ResponsiveUtils.getResponsivePadding(context)
+              .copyWith(top: 16, bottom: 24),
+          sliver: _buildStudentsSliverListOrGrid(_searchResults),
+        ),
+      ];
+    }
+    // Paged mode using _pagedStudents
+    return [
+      subsAsync.when(
+        data: (subs) {
+          if (_pagedStudents.isEmpty && _isLoadingPage) {
+            return _buildLoadingSliver();
+          }
+          if (_pagedStudents.isEmpty) {
+            return SliverToBoxAdapter(child: _buildEmptyState());
+          }
+          final filtered = _getFilteredStudents(_pagedStudents, subs);
+          if (filtered.isEmpty) {
+            return SliverToBoxAdapter(child: _buildNoResultsState());
+          }
+          return SliverPadding(
+            padding: ResponsiveUtils.getResponsivePadding(context)
+                .copyWith(top: 16, bottom: 8),
+            sliver: _buildStudentsSliverListOrGrid(filtered),
+          );
+        },
+        loading: _buildLoadingSliver,
+        error: (e, _) => SliverToBoxAdapter(child: _buildErrorState(e)),
+      ),
+      SliverToBoxAdapter(
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: _isLoadingPage
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : (!_hasMorePages
+                      ? Text(
+                          'All students loaded',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: Theme.of(context).hintColor),
+                        )
+                      : const SizedBox.shrink()),
+            ),
+          ),
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildStudentsSliverListOrGrid(List<Student> students) {
+    if (ResponsiveUtils.isMobile(context)) {
+      return SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildModernStudentCard(students[index]),
+          ),
+          childCount: students.length,
         ),
       );
     }
+    final columns = ResponsiveUtils.isTablet(context) ? 2 : 3;
+    final aspect = ResponsiveUtils.isTablet(context) ? 2.2 : 2.6;
+    return SliverGrid(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) => _buildModernStudentCard(students[index]),
+        childCount: students.length,
+      ),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columns,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: aspect,
+      ),
+    );
+  }
 
-    if (_searchQuery.isNotEmpty) {
-      return _buildStudentsListView(_searchResults);
-    }
-
-    return studentsAsync.when(
-      data: (students) {
-        if (students.isEmpty) {
-          return _buildEmptyState();
-        }
-        return subsAsync.when(
-          data: (subs) {
-            final filteredStudents = _getFilteredStudents(students, subs);
-            if (filteredStudents.isEmpty) return _buildNoResultsState();
-            return _buildStudentsListView(filteredStudents);
-          },
-          loading: _buildLoadingState,
-          error: (e, _) => _buildErrorState(e),
-        );
-      },
-      loading: _buildLoadingState,
-      error: (error, stack) => _buildErrorState(error),
+  Widget _buildLoadingSliver() {
+    final theme = Theme.of(context);
+    return SliverToBoxAdapter(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: theme.colorScheme.primary),
+              const SizedBox(height: 16),
+              Text(
+                'Loading students...',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -523,27 +727,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
     );
   }
 
-  Widget _buildLoadingState() {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(color: theme.colorScheme.primary),
-            const SizedBox(height: 16),
-            Text(
-              'Loading students...',
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // Deprecated: replaced by _buildLoadingSliver
 
   Widget _buildErrorState(Object error) {
     final theme = Theme.of(context);
@@ -585,7 +769,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
             FilledButton.icon(
               onPressed: () {
                 ref.read(studentsNotifierProvider.notifier).refresh();
-                _showSnackBar('Retrying...');
+                _showNotification('Retrying...');
               },
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Retry'),
@@ -599,58 +783,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
     );
   }
 
-  Widget _buildStudentsListView(List<Student> students) {
-    if (students.isEmpty) {
-      return _buildNoResultsState();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Row(
-            children: [
-              Icon(
-                Icons.people_rounded,
-                color: Theme.of(context).colorScheme.primary,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '${students.length} student${students.length == 1 ? '' : 's'} found',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (ResponsiveUtils.isMobile(context)) ListView.separated(
-                physics: const NeverScrollableScrollPhysics(),
-                shrinkWrap: true,
-                itemCount: students.length,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: 12),
-                itemBuilder: (context, index) =>
-                    _buildModernStudentCard(students[index]),
-              ) else GridView.builder(
-                physics: const NeverScrollableScrollPhysics(),
-                shrinkWrap: true,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: ResponsiveUtils.isTablet(context) ? 2 : 3,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: ResponsiveUtils.isTablet(context) ? 2.2 : 2.6,
-                ),
-                itemCount: students.length,
-                itemBuilder: (context, index) =>
-                    _buildModernStudentCard(students[index]),
-              ),
-      ],
-    );
-  }
+  // Deprecated: replaced by _buildStudentsSliverListOrGrid
 
   Widget _buildModernStudentCard(Student student) {
     final theme = Theme.of(context);
@@ -668,7 +801,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
         child: InkWell(
           onTap: () {
             context.push('/students/details/${student.id}');
-            _showSnackBar("Opening ${student.fullName}'s profile");
+            _showNotification("Opening ${student.fullName}'s profile");
           },
           onLongPress: () {
             _showDeleteConfirmation(student);
@@ -688,7 +821,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                     color: theme.colorScheme.surfaceContainerHighest,
                   ),
                   clipBehavior: Clip.antiAlias,
-                  child: _buildStudentAvatar(student, theme, size: 48),
+                  child: _buildStudentAvatar(student, theme),
                 ),
                 const SizedBox(width: 12),
                 // Info
@@ -757,7 +890,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (student.phone?.isNotEmpty == true) ...[
+                          if (student.phone?.isNotEmpty ?? false) ...[
                             const SizedBox(width: 8),
                             Text('•',
                                 style: theme.textTheme.bodySmall?.copyWith(
@@ -791,9 +924,9 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
     );
   }
 
-  Widget _buildStudentAvatar(Student student, ThemeData theme, {double size = 60}) {
+  Widget _buildStudentAvatar(Student student, ThemeData theme, {double size = 48}) {
     // Check if student has a profile image path
-    if (student.profileImagePath?.isNotEmpty == true) {
+    if (student.profileImagePath?.isNotEmpty ?? false) {
       try {
         final file = File(student.profileImagePath!);
         if (file.existsSync()) {
@@ -883,18 +1016,18 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                           .read(studentsNotifierProvider.notifier)
                           .deleteStudent(student.id);
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              '${student.fullName} deleted successfully',
-                            ),
-                          ),
+                        CustomNotification.show(
+                          context,
+                          message: '${student.fullName} deleted successfully',
+                          type: NotificationType.success,
                         );
                       }
                     } catch (e) {
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error deleting student: $e')),
+                        CustomNotification.show(
+                          context,
+                          message: 'Error deleting student: $e',
+                          type: NotificationType.error,
                         );
                       }
                     }

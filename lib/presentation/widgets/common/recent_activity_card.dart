@@ -198,7 +198,7 @@ class RecentActivityCard extends ConsumerWidget {
 
   Widget _buildErrorState(ThemeData theme, Object error) {
     // Print error to console for debugging
-    print('RecentActivityCard error: $error');
+    debugPrint('RecentActivityCard error: $error');
 
     return Center(
       child: Padding(

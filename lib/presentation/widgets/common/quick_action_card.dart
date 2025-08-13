@@ -36,7 +36,6 @@ class QuickActionCard extends StatelessWidget {
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.start,
             children: [
               Container(
                 padding: EdgeInsets.all(
@@ -93,14 +92,12 @@ class QuickActionCard extends StatelessWidget {
         .fadeIn(duration: 400.ms, delay: 150.ms)
         .slideY(
           begin: 0.3,
-          end: 0,
           duration: 400.ms,
           delay: 150.ms,
           curve: Curves.easeOutCubic,
         )
         .scale(
           begin: const Offset(0.95, 0.95),
-          end: const Offset(1, 1),
           duration: 400.ms,
           delay: 150.ms,
           curve: Curves.easeOutCubic,

@@ -1,3 +1,6 @@
+# Environment files
+.env
+.env.*
 # Miscellaneous
 *.class
 *.log
@@ -43,3 +46,18 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Environment variables and secrets
+.env
+*.env
+.env.local
+.env.production
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Node modules for scripts
+node_modules/
+package-lock.json

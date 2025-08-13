@@ -44,7 +44,7 @@ class CompactStatTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
             ),
             child: TweenAnimationBuilder<double>(
-              tween: Tween<double>(begin: 0.95, end: 1.0),
+              tween: Tween<double>(begin: 0.95, end: 1),
               duration: const Duration(milliseconds: 260),
               curve: Curves.easeOutBack,
               builder: (context, scale, child) => Transform.scale(scale: scale, child: child),

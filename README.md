@@ -2,7 +2,7 @@
 
 # IQRA — Library Registration App
 
-Offline-first admin app for library/student subscriptions with modern, responsive UI, biometric/passcode auth, robust local database (Drift), and production-ready UX (friendly error handling, telemetry, backup/restore).
+Supabase-backed admin app for library/student subscriptions with modern, responsive UI, biometric/passcode auth, and production-ready UX (friendly error handling, telemetry). Local storage is used only for settings and secure preferences.
 
 </div>
 
@@ -18,7 +18,7 @@ Offline-first admin app for library/student subscriptions with modern, responsiv
 - Environment/Build Flavors
 - Database & Migrations
 - Authentication
-- Backup & Restore
+
 - Error Handling & Telemetry
 - Accessibility & Performance
 - Project Structure
@@ -39,14 +39,14 @@ Key goals:
 - Students: create, edit, details, search/typeahead; optional seat number support
 - Subscriptions: list/grid, filters, add/edit/renew/cancel; date validation and overlap checks
 - Dashboard: compact stats, quick actions (Export Data), recent activity
-- Settings: theme, security, backup/restore controls
+- Settings: theme, security controls
 - Authentication: 4-digit passcode with optional biometrics (fingerprint/face)
-- Backup/Restore: full data export/import (.zip/.csv), share to other devices
+
 - Responsive UI: mobile/tablet/desktop using custom `ResponsiveUtils`
 
 ## Architecture
 - State management: Riverpod (providers, notifiers)
-- Database: Drift (tables, DAOs, migrations)
+- Backend: Supabase (Auth, PostgREST, Realtime)
 - Navigation: go_router (declarative routes, shell)
 - UI: Material 3 with custom widgets (cards, tiles, filters)
 
@@ -56,7 +56,7 @@ Key goals:
 ## Tech Stack
 - Flutter 3.x
 - Riverpod 2.x
-- Drift 2.x
+- Supabase Flutter 2.x
 - go_router 12.x
 - local_auth, path_provider, share_plus, image_picker, permission_handler
 
@@ -71,12 +71,58 @@ Key goals:
 flutter pub get
 ```
 
-3) Run
+3) Supabase Setup
+   The app uses Supabase for data and authentication.
+   
+   a) Copy environment template:
+   ```bash
+   cp .env.example .env
+   ```
+   
+   b) Configure your Supabase project:
+   - Create a new project at [supabase.com](https://supabase.com)
+   - Go to Settings → API to get your project URL and anon key
+   - Update `.env` with your actual values:
+   ```
+   SUPABASE_URL=https://your-project-id.supabase.co
+   SUPABASE_ANON_KEY=your-anon-key-here
+   ```
+   
+   c) Apply database schema:
+   ```bash
+   # Install Supabase CLI if not already installed
+   npm install -g supabase
+   
+   # Link to your project
+   supabase link --project-ref your-project-id
+   
+   # Apply migrations
+   supabase db push
+   ```
+   
+   d) Create test user (for running tests):
+   - Go to Authentication → Users in your Supabase dashboard
+   - Create a test user and update `TEST_EMAIL` and `TEST_PASSWORD` in `.env`
+
+4) Run
 ```bash
+# Run with environment variables
+flutter run --dart-define-from-file=.env
+
+# Or run without Supabase (offline mode)
 flutter run
 ```
 
-4) Analyze and format
+5) Run Tests
+```bash
+# Unit tests
+flutter test
+
+# Integration tests (requires Supabase setup)
+flutter test test/integration/ --dart-define-from-file=.env
+```
+
+6) Analyze and format
 ```bash
 flutter analyze
 dart format .
@@ -87,19 +133,14 @@ dart format .
 - `developerMode` controls the diagnostics overlay (OFF by default). Do not enable in production.
 
 ## Database & Migrations
-- Drift schema versioning in `lib/data/database/app_database.dart`
-- Tables in `lib/data/database/tables/`
-- DAOs in `lib/data/database/dao/`
-- New column: `seatNumber` on students (schema v3); migrations included
+- Database schema lives in `supabase/migrations/`
+- Apply with the Supabase CLI or dashboard
 
 ## Authentication
 - 4-digit passcode flow on startup
 - Optional biometrics (checks hardware support, enrollment, settings); device credential fallback is configurable
 
-## Backup & Restore
-- Dedicated Backup page (`/backup`)—manual export (full/CSV) and import (.zip/.csv)
-- `BackupService` integrates with file pickers and share targets
-- Progress dialogs and safe `setState` with `mounted` checks
+
 
 ## Error Handling & Telemetry
 - Global error boundary: friendly fallback UI with Retry; no stack traces shown to admins

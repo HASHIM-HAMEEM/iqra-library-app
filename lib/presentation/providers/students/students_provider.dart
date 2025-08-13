@@ -58,6 +58,13 @@ final studentsByAgeRangeProvider =
       return repository.getStudentsByAgeRange(params.minAge, params.maxAge);
     });
 
+// Simple paginated students provider (offset-based)
+final pagedStudentsProvider = FutureProvider.family<List<Student>, ({int offset, int limit})>((ref, params) async {
+  final repository = ref.watch(studentRepositoryProvider);
+  final data = await repository.getStudentsPaginated(params.offset, params.limit);
+  return data;
+});
+
 // Email exists check provider
 final emailExistsProvider =
     FutureProvider.family<bool, ({String email, String? excludeId})>((

@@ -4,10 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:library_registration_app/presentation/layouts/main_layout.dart';
 import 'package:library_registration_app/presentation/pages/activity/activity_page.dart';
 import 'package:library_registration_app/presentation/pages/auth/auth_page.dart';
-import 'package:library_registration_app/presentation/pages/backup/backup_page.dart';
+
 import 'package:library_registration_app/presentation/pages/dashboard/dashboard_page.dart';
+// Migration page removed - using Supabase only
 import 'package:library_registration_app/presentation/pages/settings/settings_page.dart';
-import 'package:library_registration_app/presentation/pages/setup_page.dart';
+
 import 'package:library_registration_app/presentation/pages/students/add_student_page.dart';
 import 'package:library_registration_app/presentation/pages/students/edit_student_page.dart';
 import 'package:library_registration_app/presentation/pages/students/student_details_page.dart';
@@ -15,35 +16,25 @@ import 'package:library_registration_app/presentation/pages/students/students_pa
 import 'package:library_registration_app/presentation/pages/subscriptions/subscription_details_page.dart';
 import 'package:library_registration_app/presentation/pages/subscriptions/subscriptions_page.dart';
 import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
-import 'package:library_registration_app/presentation/providers/auth/setup_provider.dart';
-
 final routerProvider = Provider<GoRouter>((ref) {
-  final isSetupComplete = ref.watch(isSetupCompleteProvider);
-  final isAuthenticated = ref.watch(isAuthenticatedProvider);
+  // Always derive routing from auth state; auth can be local-only (offline biometric)
+  final bool isAuthenticated = ref.watch(isAuthenticatedProvider);
 
-  final computedInitialLocation = !isSetupComplete
-      ? '/setup'
-      : (!isAuthenticated ? '/auth' : '/dashboard');
+  final String computedInitialLocation = !isAuthenticated ? '/auth' : '/dashboard';
 
   return GoRouter(
     initialLocation: computedInitialLocation,
     redirect: (context, state) {
       final currentPath = state.uri.path;
 
-      // Check setup status
-      if (!isSetupComplete && currentPath != '/setup') {
-        debugPrint('[Router] redirect -> /setup (setup incomplete). from=$currentPath');
-        return '/setup';
-      }
-
       // Check authentication
-      if (isSetupComplete && !isAuthenticated && currentPath != '/auth') {
+      if (!isAuthenticated && currentPath != '/auth') {
         debugPrint('[Router] redirect -> /auth (not authenticated). from=$currentPath');
         return '/auth';
       }
 
-      // If trying to access setup or auth while authenticated, redirect to dashboard
-      if (isAuthenticated && (currentPath == '/setup' || currentPath == '/auth')) {
+      // If trying to access auth while authenticated, redirect to dashboard
+      if (isAuthenticated && currentPath == '/auth') {
         debugPrint('[Router] redirect -> /dashboard (already authed). from=$currentPath');
         return '/dashboard';
       }
@@ -56,15 +47,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/',
         builder: (context, state) => const SizedBox.shrink(),
       ),
-      // Setup route
-      GoRoute(
-        path: '/setup',
-        pageBuilder: (context, state) => _buildFadeThroughPage(
-          key: state.pageKey,
-          child: const SetupPage(),
-        ),
-      ),
-
       // Auth route
       GoRoute(
         path: '/auth',
@@ -153,15 +135,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             ],
           ),
 
-          // Backup
-          GoRoute(
-            path: '/backup',
-            pageBuilder: (context, state) => _buildSharedAxisPage(
-              key: state.pageKey,
-              child: const BackupPage(),
-              axis: SharedAxisAxis.horizontal,
-            ),
-          ),
+
 
           // Activity
           GoRoute(
@@ -194,6 +168,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               axis: SharedAxisAxis.horizontal,
             ),
           ),
+
+          // Migration removed - using Supabase only
 
           // More -> settings (mobile)
           GoRoute(

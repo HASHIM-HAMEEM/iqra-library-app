@@ -6,9 +6,13 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
+import 'package:library_registration_app/core/utils/error_mapper.dart';
+import 'package:library_registration_app/core/utils/telemetry_service.dart';
 import 'package:library_registration_app/presentation/providers/activity_logs/activity_logs_provider.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
 import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_provider.dart';
+import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_notifier.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 
 class StudentDetailsPage extends ConsumerWidget {
 
@@ -43,14 +47,15 @@ class StudentDetailsPage extends ConsumerWidget {
           if (student == null) return _buildNotFound(context, ref);
           return RefreshIndicator(
             onRefresh: () async {
-              ref.invalidate(studentByIdProvider(studentId));
-              ref.invalidate(activeSubscriptionByStudentProvider(studentId));
-              ref.invalidate(
-                activityLogsByEntityProvider((
-                  entityId: studentId,
-                  entityType: 'Student',
-                )),
-              );
+              ref
+                ..invalidate(studentByIdProvider(studentId))
+                ..invalidate(activeSubscriptionByStudentProvider(studentId))
+                ..invalidate(
+                  activityLogsByEntityProvider((
+                    entityId: studentId,
+                    entityType: 'student',
+                  )),
+                );
               await ref.read(studentByIdProvider(studentId).future);
             },
             child: SingleChildScrollView(
@@ -87,6 +92,126 @@ class StudentDetailsPage extends ConsumerWidget {
         error: (e, _) => _buildErrorState(context, ref, e),
       ),
     );
+  }
+
+  Future<void> _renewSubscriptionForStudent(
+    BuildContext context,
+    WidgetRef ref,
+    Subscription sub,
+  ) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: sub.endDate,
+      firstDate: DateTime(now.year - 10),
+      lastDate: DateTime(now.year + 10),
+    );
+    if (picked == null) return;
+
+    final amountCtrl = TextEditingController(text: sub.amount.toStringAsFixed(2));
+    final amount = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Renew Subscription'),
+        content: TextField(
+          controller: amountCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Renewal amount',
+            prefixIcon: Icon(Icons.currency_rupee),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final v = double.tryParse(amountCtrl.text.trim());
+              if (v == null || v < 0) {
+                CustomNotification.show(
+                  ctx,
+                  message: 'Enter a valid amount',
+                  type: NotificationType.error,
+                );
+                return;
+              }
+              Navigator.of(ctx).pop(v);
+            },
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    if (amount == null) return;
+
+    try {
+      await ref
+          .read(subscriptionsNotifierProvider.notifier)
+          .renewSubscription(sub.id, picked, amount);
+      if (context.mounted) {
+        CustomNotification.show(
+          context,
+          message: 'Subscription renewed successfully',
+          type: NotificationType.success,
+        );
+        // refresh widgets that display subscription
+        ref.invalidate(activeSubscriptionByStudentProvider(sub.studentId));
+      }
+    } catch (e, st) {
+      TelemetryService.instance.captureException(
+        e,
+        st,
+        feature: 'renew_subscription_student_details',
+        context: {
+          'subscription_id': sub.id,
+          'student_id': sub.studentId,
+          'picked': picked.toIso8601String(),
+        },
+      );
+      if (!context.mounted) return;
+      final msg = ErrorMapper.friendly(e);
+      final proceedOverlap = ErrorMapper.isOverlap(e)
+          ? await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Confirm renewal change'),
+                content: const Text(
+                    'The new end date overlaps a previous period. Proceed only if you are backdating intentionally.'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(false),
+                    child: const Text('Adjust dates'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(ctx).pop(true),
+                    child: const Text('Proceed anyway'),
+                  ),
+                ],
+              ),
+            )
+          : false;
+      if (proceedOverlap == true) {
+        await ref
+            .read(subscriptionsNotifierProvider.notifier)
+            .renewSubscription(sub.id, picked, amount, allowOverlap: true);
+        if (!context.mounted) return;
+        CustomNotification.show(
+          context,
+          message: 'Subscription renewed successfully',
+          type: NotificationType.success,
+        );
+        ref.invalidate(activeSubscriptionByStudentProvider(sub.studentId));
+        return;
+      }
+
+      CustomNotification.show(
+        context,
+        message: msg,
+        type: NotificationType.error,
+      );
+    }
   }
 
   double _maxWidthFor(BuildContext context) {
@@ -191,8 +316,8 @@ class StudentDetailsPage extends ConsumerWidget {
   }
 
   Widget _buildContactSection(BuildContext context, Student s) {
-    final phone = s.phone?.isNotEmpty == true ? s.phone! : '—';
-    final address = s.address?.isNotEmpty == true ? s.address! : '—';
+    final phone = (s.phone?.isNotEmpty ?? false) ? s.phone! : '—';
+    final address = (s.address?.isNotEmpty ?? false) ? s.address! : '—';
     return _sectionCard(
       context,
       title: 'Contact',
@@ -282,6 +407,15 @@ class StudentDetailsPage extends ConsumerWidget {
                     ],
                   ),
                 ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.icon(
+                    onPressed: () => _renewSubscriptionForStudent(context, ref, sub),
+                    icon: const Icon(Icons.refresh_outlined),
+                    label: const Text('Renew Subscription'),
+                  ),
+                ),
               ],
             );
           },
@@ -329,7 +463,7 @@ class StudentDetailsPage extends ConsumerWidget {
     Student s,
   ) {
     final logsAsync = ref.watch(
-      activityLogsByEntityProvider((entityId: s.id, entityType: 'Student')),
+      activityLogsByEntityProvider((entityId: s.id, entityType: 'student')),
     );
     return _sectionCard(
       context,

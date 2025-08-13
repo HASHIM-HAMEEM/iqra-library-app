@@ -8,6 +8,7 @@ import 'package:library_registration_app/core/utils/permission_service.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/presentation/providers/students/students_notifier.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 import 'package:path_provider/path_provider.dart';
 
 class EditStudentPage extends ConsumerStatefulWidget {
@@ -188,19 +189,19 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
 
   void _nextPage() {
     if (_currentPage < 2) {
-      _pageController.nextPage(
+      unawaited(_pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
-      );
+      ));
     }
   }
 
   void _previousPage() {
     if (_currentPage > 0) {
-      _pageController.previousPage(
+      unawaited(_pageController.previousPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
-      );
+      ));
     }
   }
 
@@ -235,18 +236,19 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
     }
 
     if (_emailError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_emailError!), backgroundColor: Colors.red),
+      CustomNotification.show(
+        context,
+        message: _emailError!,
+        type: NotificationType.error,
       );
       return;
     }
 
     if (!_hasFormChanges()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No changes to save'),
-          backgroundColor: Colors.orange,
-        ),
+      CustomNotification.show(
+        context,
+        message: 'No changes to save',
+        type: NotificationType.warning,
       );
       return;
     }
@@ -293,21 +295,19 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
           .updateStudent(updatedStudent);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Student updated successfully'),
-            backgroundColor: Colors.green,
-          ),
+        CustomNotification.show(
+          context,
+          message: 'Student updated successfully',
+          type: NotificationType.success,
         );
         Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating student: $e'),
-            backgroundColor: Colors.red,
-          ),
+        CustomNotification.show(
+          context,
+          message: 'Error updating student: $e',
+          type: NotificationType.error,
         );
       }
     } finally {
@@ -388,13 +388,13 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
 
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) async {
-        if (didPop) return;
-        final canPop = await _onWillPop();
-        if (canPop && context.mounted) {
-          Navigator.of(context).pop();
-        }
-      },
+      onPopInvokedWithResult: (didPop, result) async {
+         if (didPop) return;
+         final canPop = await _onWillPop();
+         if (canPop && context.mounted) {
+           Navigator.of(context).pop();
+         }
+       },
       child: Scaffold(
         appBar: AppBar(
           title: Text(

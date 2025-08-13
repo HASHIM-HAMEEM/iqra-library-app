@@ -1,78 +1,66 @@
-import 'package:library_registration_app/data/database/app_database.dart';
 import 'package:library_registration_app/data/models/student_model.dart';
+import 'package:library_registration_app/data/services/supabase_service.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/domain/repositories/student_repository.dart';
 import 'package:uuid/uuid.dart';
 
 class StudentRepositoryImpl implements StudentRepository {
-  StudentRepositoryImpl(this._database);
-  final AppDatabase _database;
+  StudentRepositoryImpl(this._supabase);
+  final SupabaseService _supabase;
   final Uuid _uuid = const Uuid();
 
   @override
   Future<List<Student>> getAllStudents() async {
-    final students = await _database.studentsDao.getAllStudents();
-    return students.map((s) => StudentModel.fromDrift(s).toEntity()).toList();
+    return await _supabase.getAllStudents();
   }
 
   @override
   Future<List<Student>> getActiveStudents() async {
-    final students = await _database.studentsDao.getActiveStudents();
-    return students.map((s) => StudentModel.fromDrift(s).toEntity()).toList();
+    return await _supabase.getActiveStudents();
   }
 
   @override
   Future<Student?> getStudentById(String id) async {
-    final student = await _database.studentsDao.getStudentById(id);
-    return student != null ? StudentModel.fromDrift(student).toEntity() : null;
+    return await _supabase.getStudentById(id);
   }
 
   @override
   Future<List<Student>> searchStudents(String query) async {
-    final students = await _database.studentsDao.searchStudents(query);
-    return students.map((s) => StudentModel.fromDrift(s).toEntity()).toList();
+    return await _supabase.searchStudents(query);
   }
 
   @override
   Future<List<Student>> getStudentsPaginated(int offset, int limit) async {
-    final students = await _database.studentsDao.getStudentsPaginated(
-      offset,
-      limit,
-    );
-    return students.map((s) => StudentModel.fromDrift(s).toEntity()).toList();
+    return await _supabase.getStudentsPaginated(offset, limit);
   }
 
   @override
   Future<int> getStudentsCount() async {
-    return _database.studentsDao.getStudentsCount();
+    return await _supabase.getStudentsCount();
   }
 
   @override
   Future<bool> isEmailExists(String email, {String? excludeId}) async {
-    return _database.studentsDao.isEmailExists(email);
+    return await _supabase.isEmailExists(email, excludeId: excludeId);
   }
 
   @override
   Future<List<Student>> getStudentsByAgeRange(int minAge, int maxAge) async {
-    final students = await _database.studentsDao.getStudentsByAgeRange(
-      minAge: minAge,
-      maxAge: maxAge,
-    );
-    return students.map((s) => StudentModel.fromDrift(s).toEntity()).toList();
+    return await _supabase.getStudentsByAgeRange(minAge, maxAge);
   }
 
   @override
   Future<List<Student>> getRecentStudents(int days) async {
-    final students = await _database.studentsDao.getRecentStudents(days);
-    return students.map((s) => StudentModel.fromDrift(s).toEntity()).toList();
+    return await _supabase.getRecentStudents(days);
   }
 
   @override
   Future<String> createStudent(Student student) async {
+    
     final id = _uuid.v4();
     final now = DateTime.now();
 
-    final studentModel = StudentModel(
+    final studentWithId = Student(
       id: id,
       firstName: student.firstName,
       lastName: student.lastName,
@@ -87,13 +75,14 @@ class StudentRepositoryImpl implements StudentRepository {
       isDeleted: false,
     );
 
-    await _database.studentsDao.insertStudent(studentModel.toDrift());
+    await _supabase.createStudent(studentWithId);
     return id;
   }
 
   @override
   Future<void> updateStudent(Student student) async {
-    final studentModel = StudentModel(
+    
+    final updatedStudent = Student(
       id: student.id,
       firstName: student.firstName,
       lastName: student.lastName,
@@ -108,50 +97,33 @@ class StudentRepositoryImpl implements StudentRepository {
       isDeleted: student.isDeleted,
     );
 
-    await _database.studentsDao.updateStudent(
-      studentModel.id,
-      studentModel.toDrift(),
-    );
+    await _supabase.updateStudent(updatedStudent);
   }
 
   @override
   Future<void> deleteStudent(String id, {bool hard = false}) async {
-    if (hard) {
-      await _database.studentsDao.hardDeleteStudent(id);
-    } else {
-      await _database.studentsDao.softDeleteStudent(id);
-    }
+    
+    await _supabase.deleteStudent(id, hard: hard);
   }
 
   @override
   Future<void> restoreStudent(String id) async {
-    await _database.studentsDao.restoreStudent(id);
+    
+    await _supabase.restoreStudent(id);
   }
 
   @override
   Stream<List<Student>> watchAllStudents() {
-    return _database.studentsDao.watchAllStudents().map(
-      (students) =>
-          students.map((s) => StudentModel.fromDrift(s).toEntity()).toList(),
-    );
+    return _supabase.watchAllStudents();
   }
 
   @override
   Stream<List<Student>> watchActiveStudents() {
-    return _database.studentsDao.watchActiveStudents().map(
-      (students) =>
-          students.map((s) => StudentModel.fromDrift(s).toEntity()).toList(),
-    );
+    return _supabase.watchActiveStudents();
   }
 
   @override
   Stream<Student?> watchStudentById(String id) {
-    return _database.studentsDao
-        .watchStudentById(id)
-        .map(
-          (student) => student != null
-              ? StudentModel.fromDrift(student).toEntity()
-              : null,
-        );
+    return _supabase.watchStudentById(id);
   }
 }

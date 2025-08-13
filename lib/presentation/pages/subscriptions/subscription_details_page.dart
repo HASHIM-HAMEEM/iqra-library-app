@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:library_registration_app/core/utils/telemetry_service.dart';
-import 'package:library_registration_app/core/utils/error_mapper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:library_registration_app/core/utils/error_mapper.dart';
+import 'package:library_registration_app/core/utils/telemetry_service.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
 import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_notifier.dart';
 import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 
 class SubscriptionDetailsPage extends ConsumerWidget {
   const SubscriptionDetailsPage({required this.id, super.key});
@@ -25,6 +26,79 @@ class SubscriptionDetailsPage extends ConsumerWidget {
         elevation: 0,
         backgroundColor: theme.colorScheme.surface,
         toolbarHeight: 56,
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) async {
+              switch (value) {
+                case 'edit':
+                  _showEdit(context, ref, (ref.read(subscriptionByIdProvider(id)).value)!);
+                  break;
+                case 'renew':
+                  {
+                    final s = ref.read(subscriptionByIdProvider(id)).value;
+                    if (s != null) {
+                      await _showRenew(context, ref, s.id, s.endDate);
+                    }
+                    break;
+                  }
+                case 'cancel':
+                  {
+                    final s = ref.read(subscriptionByIdProvider(id)).value;
+                    if (s != null) {
+                      _showCancel(context, ref, s.id, s.planName);
+                    }
+                    break;
+                  }
+                case 'delete':
+                  {
+                    final s = ref.read(subscriptionByIdProvider(id)).value;
+                    if (s != null) {
+                      await ref
+                          .read(subscriptionsNotifierProvider.notifier)
+                          .deleteSubscription(s.id);
+                      if (context.mounted) Navigator.of(context).pop();
+                    }
+                    break;
+                  }
+              }
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'edit',
+                child: ListTile(
+                  leading: Icon(Icons.edit_outlined),
+                  title: Text('Edit'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'renew',
+                child: ListTile(
+                  leading: Icon(Icons.refresh_outlined),
+                  title: Text('Renew'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'cancel',
+                child: ListTile(
+                  leading: Icon(Icons.cancel_outlined),
+                  title: Text('Cancel'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'delete',
+                child: ListTile(
+                  leading: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                  title: Text('Delete', style: TextStyle(color: theme.colorScheme.error)),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: subAsync.when(
         data: (Subscription? sub) {
@@ -70,45 +144,7 @@ class SubscriptionDetailsPage extends ConsumerWidget {
                   ),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  border: Border(
-                    top: BorderSide(
-                      color: theme.colorScheme.outlineVariant,
-                      width: 0.8,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: () => _showEdit(context, ref, sub),
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Edit'),
-                    ),
-                    const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      onPressed: () =>
-                          _showRenew(context, ref, sub.id, sub.endDate),
-                      icon: const Icon(Icons.refresh_outlined),
-                      label: const Text('Renew'),
-                    ),
-                    const Spacer(),
-                    ElevatedButton.icon(
-                      onPressed: () =>
-                          _showCancel(context, ref, sub.id, sub.planName),
-                      icon: const Icon(Icons.cancel_outlined),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: theme.colorScheme.error,
-                        foregroundColor: theme.colorScheme.onError,
-                      ),
-                      label: const Text('Cancel'),
-                    ),
-                  ],
-                ),
-              ),
+              // Bottom bar removed; actions moved to AppBar 3-dot menu.
             ],
           );
         },
@@ -210,11 +246,10 @@ class SubscriptionDetailsPage extends ConsumerWidget {
                       if (!formKey.currentState!.validate()) return;
                       if (end.isBefore(start)) {
                         if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            const SnackBar(
-                              content: Text('End date must be after start date'),
-                              backgroundColor: Colors.orange,
-                            ),
+                          CustomNotification.show(
+                            ctx,
+                            message: 'End date must be after start date',
+                            type: NotificationType.warning,
                           );
                         }
                         return;
@@ -272,14 +307,10 @@ class SubscriptionDetailsPage extends ConsumerWidget {
       );
       if (!context.mounted) return;
       final msg = ErrorMapper.friendly(e);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          action: SnackBarAction(
-            label: 'Review dates',
-            onPressed: () {},
-          ),
-        ),
+      CustomNotification.show(
+        context,
+        message: msg,
+        type: NotificationType.error,
       );
       if (ErrorMapper.isOverlap(e)) {
         final proceed = await showDialog<bool>(
@@ -300,7 +331,7 @@ class SubscriptionDetailsPage extends ConsumerWidget {
             ],
           ),
         );
-        if (proceed == true) {
+        if (proceed ?? false) {
           await ref
               .read(subscriptionsNotifierProvider.notifier)
               .renewSubscription(id, picked, 0, allowOverlap: true);

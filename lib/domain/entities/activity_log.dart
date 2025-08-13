@@ -181,4 +181,30 @@ class ActivityLog extends Equatable {
   String toString() {
     return 'ActivityLog(id: $id, type: ${activityType.displayName}, description: $description, timestamp: $formattedTimestamp)';
   }
+
+  // JSON mapping for Supabase rows
+  factory ActivityLog.fromJson(Map<String, dynamic> json) {
+    return ActivityLog(
+      id: json['id'] as String,
+      activityType: ActivityType.fromString((json['action'] ?? json['activity_type']) as String),
+      description: (json['details'] ?? json['description'] ?? '') as String,
+      entityId: json['entity_id'] as String?,
+      entityType: (json['entity_type'] ?? json['entityType']) as String?,
+      // No dedicated metadata column in Supabase schema; keep it null unless your backend encodes it in details
+      metadata: null,
+      timestamp: DateTime.parse((json['timestamp'] ?? json['created_at']) as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'action': activityType.databaseValue,
+      'details': description,
+      'entity_id': entityId,
+      'entity_type': entityType,
+      // Do not include 'metadata' as the column does not exist in the table
+      'timestamp': timestamp.toUtc().toIso8601String(),
+    };
+  }
 }

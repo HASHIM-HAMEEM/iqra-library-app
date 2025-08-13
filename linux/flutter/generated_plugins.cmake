@@ -5,7 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_linux
   flutter_secure_storage_linux
-  sqlite3_flutter_libs
+  gtk
   url_launcher_linux
 )
 

@@ -1,0 +1,14 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.55.0",
+    "dotenv": "^17.2.1"
+  },
+  "scripts": {
+    "setup-admin": "node scripts/setup_admin_user.js",
+    "test-admin": "node scripts/test_admin_features.js",
+    "verify-admin": "node scripts/verify_admin_login.js",
+    "add-dummy-data": "node scripts/add_dummy_students.js",
+    "test-rls": "node scripts/test_rls_policies.js"
+  }
+}

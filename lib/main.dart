@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'dart:ui';
+// Release builds: avoid importing ui we don't need
 import 'package:flutter/services.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform, kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:library_registration_app/core/config/app_config.dart';
+import 'package:library_registration_app/core/services/connectivity_service.dart';
 import 'package:library_registration_app/core/utils/telemetry_service.dart';
 import 'package:library_registration_app/presentation/widgets/common/diagnostics_overlay.dart';
 import 'package:library_registration_app/core/routing/app_router.dart';
@@ -11,13 +13,14 @@ import 'package:library_registration_app/core/theme/app_theme.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
 import 'package:library_registration_app/presentation/providers/ui/ui_state_provider.dart';
 import 'package:library_registration_app/presentation/pages/splash/splash_page.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-final appInitProvider = FutureProvider<void>((ref) async {
-  final dao = ref.read(appSettingsDaoProvider);
+ final appInitProvider = FutureProvider<void>((ref) async {
+  final settingsService = ref.read(appSettingsDaoProvider);
   String? themePref;
   try {
-    themePref = await dao
-        .getSettingValue('theme_mode')
+    themePref = await settingsService
+        .getStringSetting('theme_mode')
         .timeout(const Duration(milliseconds: 1200));
   } catch (_) {
     themePref = null;
@@ -31,58 +34,58 @@ final appInitProvider = FutureProvider<void>((ref) async {
   ref.read(themeModeProvider.notifier).state = mode;
 });
 
-// Ensure the Flutter splash animation is visible for at least its duration
+// Provider to manage splash screen timing
 final splashHoldProvider = FutureProvider<void>((ref) async {
-  // Match SplashPage default duration (keep in sync if changed)
-  const splashDuration = Duration(milliseconds: 3200);
-  await Future.wait<void>([
-    ref.watch(appInitProvider.future),
-    Future<void>.delayed(splashDuration),
-  ]);
+  // Wait for app initialization
+  await ref.watch(appInitProvider.future);
+  // Additional splash screen delay
+  await Future<void>.delayed(const Duration(milliseconds: 1200));
 });
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Global error handling
-  FlutterError.onError = (FlutterErrorDetails details) {
-    FlutterError.presentError(details);
-    TelemetryService.instance.captureException(
-      details.exception,
-      details.stack ?? StackTrace.current,
-      feature: 'flutter_framework',
-      context: {
-        'library': details.library ?? 'flutter',
-        'context': details.context?.toDescription() ?? 'n/a',
-      },
-    );
-  };
-  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
-    TelemetryService.instance.captureException(
-      error,
-      stack,
-      feature: 'platform_dispatcher',
-    );
-    return true; // prevent crash
-  };
+  // Prefer the highest refresh rate available on Android devices (e.g., 120Hz),
+  // and gracefully no-op on other platforms.
   try {
-    await FlutterDisplayMode.setHighRefreshRate();
-  } catch (_) {}
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarColor: Colors.transparent,
-      systemNavigationBarIconBrightness: Brightness.dark,
-    ),
-  );
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      await FlutterDisplayMode.setHighRefreshRate();
+    }
+  } catch (e, st) {
+    TelemetryService.instance.captureException(e, st, feature: 'display_mode');
+  }
+  // Initialize Supabase if config provided
+  if (AppConfig.supabaseUrl.isNotEmpty && AppConfig.supabaseAnonKey.isNotEmpty) {
+    try {
+      await Supabase.initialize(
+        url: AppConfig.supabaseUrl,
+        anonKey: AppConfig.supabaseAnonKey,
+        debug: AppConfig.developerMode,
+      );
+    } catch (e, st) {
+      TelemetryService.instance.captureException(e, st, feature: 'supabase_init');
+    }
+  }
+  
+  // Initialize connectivity service
+  try {
+    await ConnectivityService.instance.initialize();
+  } catch (e, st) {
+    TelemetryService.instance.captureException(e, st, feature: 'connectivity_init');
+  }
+   // Global error handling
+   FlutterError.onError = (FlutterErrorDetails details) {
+     FlutterError.presentError(details);
+     TelemetryService.instance.captureException(
+       details.exception,
+       details.stack ?? StackTrace.current,
+       feature: 'flutter_framework',
+       context: {
+         'library': details.library ?? 'flutter',
+         'context': details.context?.toDescription() ?? 'n/a',
+       },
+     );
+   };
   runApp(const ProviderScope(child: LibraryRegistrationApp()));
-}
+ }
 
 class LibraryRegistrationApp extends ConsumerWidget {
   const LibraryRegistrationApp({super.key});

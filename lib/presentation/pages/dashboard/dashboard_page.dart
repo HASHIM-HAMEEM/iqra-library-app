@@ -14,6 +14,9 @@ import 'package:library_registration_app/presentation/widgets/common/quick_actio
 import 'package:library_registration_app/presentation/widgets/common/recent_activity_card.dart';
 import 'package:library_registration_app/presentation/widgets/common/section_header.dart';
 import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
+import 'package:library_registration_app/presentation/providers/export/export_provider.dart';
+import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -25,14 +28,11 @@ class DashboardPage extends ConsumerStatefulWidget {
 class _DashboardPageState extends ConsumerState<DashboardPage> {
   String _selectedRange = 'Today';
 
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        margin: const EdgeInsets.all(16),
-      ),
+  void _showNotification(String message, {NotificationType type = NotificationType.success}) {
+    CustomNotification.show(
+      context,
+      message: message,
+      type: type,
     );
   }
 
@@ -72,19 +72,33 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     }
   }
 
+  Future<void> _onRefresh() async {
+    // Refresh all providers
+    ref.invalidate(studentsCountProvider);
+    ref.invalidate(activeSubscriptionsCountProvider);
+    ref.invalidate(totalRevenueProvider);
+    ref.invalidate(studentsProvider);
+    ref.invalidate(subscriptionsProvider);
+    
+    _showNotification('Dashboard refreshed');
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     // Always-live totals for tiles
     final studentsCount = ref.watch(studentsCountProvider);
     final activeSubscriptionsCount = ref.watch(activeSubscriptionsCountProvider);
-    final totalRevenue = ref.watch(totalRevenueProvider);
+    final range = _getRangeDates();
+    final totalRevenue = ref.watch(revenueByDateRangeProvider((startDate: range.startDate, endDate: range.endDate)));
     
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
+      body: RefreshIndicator(
+        onRefresh: _onRefresh,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
           // Modern Header
           SliverToBoxAdapter(
             child: Padding(
@@ -186,6 +200,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -343,7 +358,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       CompactStatTile(
         icon: Icons.currency_rupee,
         color: const Color(0xFFF59E0B),
-        label: 'Total Revenue',
+        label: 'Revenue · ' + _selectedRange,
         value: totalRevenue.when(
           data: (v) => currencyFormatter.format(v),
           loading: () => '...',
@@ -388,7 +403,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         'color': const Color(0xFF3B82F6),
         'onTap': () {
           GoRouter.of(context).go('/students/add');
-          _showSnackBar('Navigating to Add Student');
+          _showNotification('Navigating to Add Student');
         },
       },
       {
@@ -398,7 +413,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         'color': const Color(0xFF10B981),
         'onTap': () {
           GoRouter.of(context).go('/subscriptions');
-          _showSnackBar('Navigating to Subscriptions');
+          _showNotification('Navigating to Subscriptions');
         },
       },
       {
@@ -408,7 +423,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         'color': const Color(0xFF8B5CF6),
         'onTap': () {
           GoRouter.of(context).go('/students');
-          _showSnackBar('Navigating to Students List');
+          _showNotification('Navigating to Students List');
         },
       },
       {
@@ -417,8 +432,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         'icon': CupertinoIcons.square_arrow_down,
         'color': const Color(0xFFF59E0B),
         'onTap': () {
-          GoRouter.of(context).go('/backup');
-          _showSnackBar('Opening Backup');
+          _showExportOptionsSheet();
         },
       },
     ];
@@ -475,6 +489,292 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           );
         },
       );
+    }
+  }
+
+  void _showExportOptionsSheet() {
+    final theme = Theme.of(context);
+    showAppBottomSheet<void>(
+      context,
+      builder: (ctx) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                'Export Data',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            
+            _buildExportOption(
+              icon: Icons.download_outlined,
+              title: 'Export All Data',
+              subtitle: 'Students, subscriptions, and activity logs',
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _showExportSheet(ExportType.all);
+              },
+            ),
+            
+            _buildExportOption(
+              icon: Icons.people_outline,
+              title: 'Export Students Only',
+              subtitle: 'Student information and details',
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _showExportSheet(ExportType.students);
+              },
+            ),
+            
+            _buildExportOption(
+              icon: Icons.card_membership_outlined,
+              title: 'Export Subscriptions Only',
+              subtitle: 'Subscription plans and payments',
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _showExportSheet(ExportType.subscriptions);
+              },
+            ),
+            
+            _buildExportOption(
+              icon: Icons.history_outlined,
+              title: 'Export Activity Logs Only',
+              subtitle: 'System activity and audit trail',
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _showExportSheet(ExportType.activityLogs);
+              },
+            ),
+            
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildExportOption({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return ListTile(
+      leading: Icon(
+        icon,
+        color: theme.colorScheme.primary,
+      ),
+      title: Text(
+        title,
+        style: theme.textTheme.bodyLarge?.copyWith(
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+      trailing: Icon(
+        Icons.chevron_right,
+        color: theme.colorScheme.outline,
+        size: 20,
+      ),
+      onTap: onTap,
+    );
+  }
+
+  void _showExportSheet(ExportType exportType) {
+    final theme = Theme.of(context);
+    showAppBottomSheet<void>(
+      context,
+      builder: (ctx) {
+        return Consumer(
+          builder: (context, ref, child) {
+            final exportState = ref.watch(exportNotifierProvider);
+            final exportNotifier = ref.read(exportNotifierProvider.notifier);
+            
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    _getExportTitle(exportType),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                
+                if (exportState.status == ExportStatus.loading) ...
+                  _buildExportProgress(exportState, theme)
+                else if (exportState.status == ExportStatus.success) ...
+                  _buildExportSuccess(exportState, exportNotifier, theme)
+                else if (exportState.status == ExportStatus.error) ...
+                  _buildExportError(exportState, exportNotifier, theme)
+                else ...
+                  _buildExportIdle(exportType, exportNotifier, theme),
+                
+                const SizedBox(height: 16),
+                
+                if (exportState.status != ExportStatus.loading)
+                  TextButton(
+                    onPressed: () {
+                      exportNotifier.resetState();
+                      Navigator.of(ctx).pop();
+                    },
+                    child: const Text('Close'),
+                  ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _getExportTitle(ExportType type) {
+    switch (type) {
+      case ExportType.all:
+        return 'Export All Data';
+      case ExportType.students:
+        return 'Export Students Data';
+      case ExportType.subscriptions:
+        return 'Export Subscriptions Data';
+      case ExportType.activityLogs:
+        return 'Export Activity Logs';
+    }
+  }
+
+  List<Widget> _buildExportProgress(ExportState state, ThemeData theme) {
+    return [
+      CircularProgressIndicator(
+        value: state.progress,
+        backgroundColor: theme.colorScheme.surfaceContainerHighest,
+      ),
+      const SizedBox(height: 16),
+      Text(
+        'Exporting data... ${(state.progress * 100).toInt()}%',
+        style: theme.textTheme.bodyMedium,
+      ),
+    ];
+  }
+
+  List<Widget> _buildExportSuccess(ExportState state, ExportNotifier notifier, ThemeData theme) {
+    return [
+      Icon(
+        Icons.check_circle_outline,
+        color: theme.colorScheme.primary,
+        size: 48,
+      ),
+      const SizedBox(height: 16),
+      Text(
+        'Export completed successfully!',
+        style: theme.textTheme.bodyLarge?.copyWith(
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'File saved to: ${state.filePath?.split('/').last}',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        textAlign: TextAlign.center,
+      ),
+      const SizedBox(height: 16),
+      ElevatedButton.icon(
+        onPressed: () => notifier.shareExportedFile(),
+        icon: const Icon(Icons.share),
+        label: const Text('Share File'),
+      ),
+    ];
+  }
+
+  List<Widget> _buildExportError(ExportState state, ExportNotifier notifier, ThemeData theme) {
+    return [
+      Icon(
+        Icons.error_outline,
+        color: theme.colorScheme.error,
+        size: 48,
+      ),
+      const SizedBox(height: 16),
+      Text(
+        'Export failed',
+        style: theme.textTheme.bodyLarge?.copyWith(
+          fontWeight: FontWeight.w500,
+          color: theme.colorScheme.error,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        state.errorMessage ?? 'Unknown error occurred',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        textAlign: TextAlign.center,
+      ),
+      const SizedBox(height: 16),
+      ElevatedButton(
+        onPressed: () => notifier.resetState(),
+        child: const Text('Try Again'),
+      ),
+    ];
+  }
+
+  List<Widget> _buildExportIdle(ExportType type, ExportNotifier notifier, ThemeData theme) {
+    return [
+      Icon(
+        Icons.download_outlined,
+        color: theme.colorScheme.primary,
+        size: 48,
+      ),
+      const SizedBox(height: 16),
+      Text(
+        'Ready to export ${_getExportDescription(type)}',
+        style: theme.textTheme.bodyLarge?.copyWith(
+          fontWeight: FontWeight.w500,
+        ),
+        textAlign: TextAlign.center,
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'This will generate an Excel file with the selected data.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        textAlign: TextAlign.center,
+      ),
+      const SizedBox(height: 16),
+      ElevatedButton.icon(
+        onPressed: () => notifier.exportData(type),
+        icon: const Icon(Icons.download),
+        label: const Text('Start Export'),
+      ),
+    ];
+  }
+
+  String _getExportDescription(ExportType type) {
+    switch (type) {
+      case ExportType.all:
+        return 'all library data';
+      case ExportType.students:
+        return 'student information';
+      case ExportType.subscriptions:
+        return 'subscription data';
+      case ExportType.activityLogs:
+        return 'activity logs';
     }
   }
 }

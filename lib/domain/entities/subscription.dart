@@ -111,4 +111,39 @@ class Subscription extends Equatable {
   String toString() {
     return 'Subscription(id: $id, planName: $planName, status: ${status.displayName}, daysRemaining: $daysRemaining)';
   }
+
+  // JSON mapping for Supabase rows
+  factory Subscription.fromJson(Map<String, dynamic> json) {
+    final statusStr = (json['status'] ?? json['subscription_status']) as String;
+    final start = (json['start_date'] ?? json['subscription_start_date'] ?? json['startDate']) as String;
+    final endRaw = (json['end_date'] ?? json['subscription_end_date'] ?? json['endDate']) as String?;
+    final created = (json['created_at'] ?? json['createdAt']) as String;
+    final updated = (json['updated_at'] ?? json['updatedAt']) as String;
+
+    return Subscription(
+      id: json['id'] as String,
+      studentId: (json['student_id'] ?? json['studentId']) as String,
+      planName: (json['plan_name'] ?? json['planName']) as String,
+      startDate: DateTime.parse(start),
+      endDate: DateTime.parse(endRaw ?? start),
+      amount: (json['amount'] as num).toDouble(),
+      status: SubscriptionStatus.fromString(statusStr),
+      createdAt: DateTime.parse(created),
+      updatedAt: DateTime.parse(updated),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'student_id': studentId,
+      'plan_name': planName,
+      'start_date': startDate.toUtc().toIso8601String(),
+      'end_date': endDate.toUtc().toIso8601String(),
+      'amount': amount,
+      'status': status.name,
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
+    };
+  }
 }
