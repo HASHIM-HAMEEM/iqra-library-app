@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:library_registration_app/core/theme/app_theme.dart';
 
 enum NotificationType {
   success,
@@ -196,7 +196,7 @@ class _NotificationWidgetState extends State<_NotificationWidget>
                       Expanded(
                         child: Text(
                           widget.message,
-                          style: GoogleFonts.inter(
+                          style: SafeGoogleFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                             color: _getTextColor(),

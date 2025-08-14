@@ -174,18 +174,39 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   void _listenToAuthChanges() {
-    _supabaseService.authStateChanges.listen((authState) {
-      final user = authState.session?.user;
+    _supabaseService.authStateChanges.listen((change) {
+      final user = change.session?.user;
+      final event = change.event;
       if (user != null) {
-        // User is authenticated
+        // If the app is explicitly locked (requires reauth), do not auto-unlock
+        // on passive events like token refresh. Only allow explicit sign-ins to
+        // clear the lock.
+        if (state.requiresReauth && event != AuthChangeEvent.signedIn) {
+          // Still persist the last known admin email for display purposes
+          () async {
+            try {
+              if ((user.email ?? '').isNotEmpty) {
+                await _appSettingsService.setStringSetting(
+                  'last_admin_email',
+                  user.email ?? '',
+                  description: 'Last signed in admin email',
+                );
+              }
+            } catch (_) {}
+          }();
+          return;
+        }
+
+        // User is authenticated (either fresh sign-in, or we are not locked)
         final now = DateTime.now();
         state = state.copyWith(
           isAuthenticated: true,
           user: user,
           lastAuthTime: now,
           lastKnownEmail: user.email,
+          requiresReauth: false,
         );
-        // Save auth time to local storage
+        // Save auth time and identity to local storage
         () async {
           try {
             await _appSettingsService.setStringSetting(
@@ -227,15 +248,27 @@ class AuthNotifier extends StateNotifier<AuthState> {
         }
         
         final tempState = state.copyWith(lastAuthTime: lastAuthTime);
-        if (lastAuthTime == null || !tempState.isSessionExpired) {
+        // Only auto-authenticate if we have a recent, valid auth timestamp
+        if (lastAuthTime != null && !tempState.isSessionExpired) {
           state = state.copyWith(
             isAuthenticated: true,
             user: user,
-            lastAuthTime: lastAuthTime ?? DateTime.now(),
+            lastAuthTime: lastAuthTime,
+            requiresReauth: false,
+            lastKnownEmail: user.email,
           );
         } else {
-          // Session expired, sign out
-          await _supabaseService.signOut();
+          // Require reauthentication but KEEP the Supabase session so biometric can reattach
+          String? lastEmail;
+          try {
+            lastEmail = await _appSettingsService.getStringSetting('last_admin_email');
+          } catch (_) {}
+          state = state.copyWith(
+            isAuthenticated: false,
+            user: null,
+            requiresReauth: true,
+            lastKnownEmail: lastEmail ?? state.lastKnownEmail,
+          );
         }
       }
     } catch (e) {
@@ -382,15 +415,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      // If we already have a valid Supabase session, use it
-      final user = _supabaseService.currentUser;
-      final session = _supabaseService.currentSession;
-      if (user != null && session != null) {
-        // Optional: if session has explicit expiry and it's in the past, treat as no session
-        if (session.expiresAt != null &&
-            DateTime.fromMillisecondsSinceEpoch(session.expiresAt! * 1000).isBefore(DateTime.now())) {
-          // fall through to offline path if allowed
-        } else {
+      // If we have a Supabase session (or persisted tokens), ensure it's fresh and then unlock
+      var user = _supabaseService.currentUser;
+      var session = _supabaseService.currentSession;
+      if (session != null || user != null) {
+        // Refresh if expired or about to expire
+        final bool isExpired = session?.expiresAt != null &&
+            DateTime.fromMillisecondsSinceEpoch(session!.expiresAt! * 1000).isBefore(DateTime.now());
+        if (isExpired || session == null) {
+          try {
+            await Supabase.instance.client.auth.refreshSession();
+            user = _supabaseService.currentUser;
+            session = _supabaseService.currentSession;
+          } catch (_) {
+            // ignore and fall back
+          }
+        }
+
+        if (user != null && session != null) {
           final now = DateTime.now();
           await _appSettingsService.setStringSetting(
             'last_auth_time',
@@ -461,11 +503,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout({bool hard = false}) async {
     try {
+      // Soft logout by default: keep Supabase session so biometric can re-unlock
       if (hard) {
         await _supabaseService.signOut();
       }
       await _clearSession();
-      // Treat logout as an app lock by default (keep Supabase session tokens)
       state = state.copyWith(
         isAuthenticated: false,
         user: null,
@@ -490,8 +532,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Error clearing session, continue anyway
     }
 
-    // Do NOT delete 'last_admin_email' here. It must persist to display
-    // the admin identity after biometric unlock without a live session.
+    // Keep 'last_admin_email' to show identity on biometric screen if desired
   }
 
   void clearError() {

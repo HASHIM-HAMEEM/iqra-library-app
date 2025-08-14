@@ -1,41 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
+// Removed google_fonts dependency at runtime to avoid network font fetching
 
 // Helper class to provide fallback fonts when Google Fonts fail to load
 class SafeGoogleFonts {
+  // Provide a safe, offline text style. Do not call GoogleFonts at runtime.
   static TextStyle inter({
     double? fontSize,
     FontWeight? fontWeight,
     Color? color,
     double? letterSpacing,
   }) {
-    try {
-      return GoogleFonts.inter(
-        fontSize: fontSize,
-        fontWeight: fontWeight,
-        color: color,
-        letterSpacing: letterSpacing,
-      );
-    } catch (e) {
-      // Fallback to system font if Google Fonts fails
-      return TextStyle(
-        fontFamily: 'SF Pro Text', // iOS fallback
-        fontSize: fontSize,
-        fontWeight: fontWeight,
-        color: color,
-        letterSpacing: letterSpacing,
-      );
-    }
+    return TextStyle(
+      // Let platform default (Roboto/Android, SF Pro/iOS)
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: color,
+      letterSpacing: letterSpacing,
+    );
   }
 
   static TextTheme interTextTheme([TextTheme? textTheme]) {
-    try {
-      return GoogleFonts.interTextTheme(textTheme);
-    } catch (e) {
-      // Return default text theme if Google Fonts fails
-      return textTheme ?? const TextTheme();
-    }
+    // Return given text theme or default
+    return textTheme ?? const TextTheme();
   }
 }
 
@@ -128,17 +115,17 @@ class AppTheme {
           fontWeight: FontWeight.w400,
           color: _textLight,
         ),
-        labelLarge: GoogleFonts.inter(
+        labelLarge: SafeGoogleFonts.inter(
           fontSize: 14,
           fontWeight: FontWeight.w500,
           color: _textDark,
         ),
-        labelMedium: GoogleFonts.inter(
+        labelMedium: SafeGoogleFonts.inter(
           fontSize: 12,
           fontWeight: FontWeight.w500,
           color: _textDark,
         ),
-        labelSmall: GoogleFonts.inter(
+        labelSmall: SafeGoogleFonts.inter(
           fontSize: 10,
           fontWeight: FontWeight.w500,
           color: _textLight,
@@ -156,7 +143,7 @@ class AppTheme {
           systemNavigationBarColor: Colors.white,
           systemNavigationBarIconBrightness: Brightness.dark,
         ),
-        titleTextStyle: GoogleFonts.inter(
+       titleTextStyle: SafeGoogleFonts.inter(
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: _textDark,
@@ -177,7 +164,7 @@ class AppTheme {
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          textStyle: GoogleFonts.inter(
+          textStyle: SafeGoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -189,7 +176,7 @@ class AppTheme {
           side: const BorderSide(color: _borderLight),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          textStyle: GoogleFonts.inter(
+          textStyle: SafeGoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -199,7 +186,7 @@ class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: _primaryGreen,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          textStyle: GoogleFonts.inter(
+          textStyle: SafeGoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -228,8 +215,8 @@ class AppTheme {
           horizontal: 16,
           vertical: 12,
         ),
-        hintStyle: GoogleFonts.inter(fontSize: 14, color: _textLight),
-        labelStyle: GoogleFonts.inter(fontSize: 14, color: _textLight),
+        hintStyle: SafeGoogleFonts.inter(fontSize: 14, color: _textLight),
+        labelStyle: SafeGoogleFonts.inter(fontSize: 14, color: _textLight),
       ),
       dividerTheme: const DividerThemeData(
         color: _borderLight,
@@ -254,81 +241,81 @@ class AppTheme {
         surfaceContainerHighest: Color(0xFF2D2D2D),
         onSurfaceVariant: Color(0xFF9CA3AF),
       ),
-      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme)
+      textTheme: SafeGoogleFonts.interTextTheme(ThemeData.dark().textTheme)
           .copyWith(
-            displayLarge: GoogleFonts.inter(
+            displayLarge: SafeGoogleFonts.inter(
               fontSize: 32,
               fontWeight: FontWeight.w700,
               color: Colors.white,
               letterSpacing: -0.5,
             ),
-            displayMedium: GoogleFonts.inter(
+            displayMedium: SafeGoogleFonts.inter(
               fontSize: 28,
               fontWeight: FontWeight.w600,
               color: Colors.white,
               letterSpacing: -0.25,
             ),
-            displaySmall: GoogleFonts.inter(
+            displaySmall: SafeGoogleFonts.inter(
               fontSize: 24,
               fontWeight: FontWeight.w600,
               color: Colors.white,
             ),
-            headlineLarge: GoogleFonts.inter(
+            headlineLarge: SafeGoogleFonts.inter(
               fontSize: 22,
               fontWeight: FontWeight.w600,
               color: Colors.white,
             ),
-            headlineMedium: GoogleFonts.inter(
+            headlineMedium: SafeGoogleFonts.inter(
               fontSize: 20,
               fontWeight: FontWeight.w600,
               color: Colors.white,
             ),
-            headlineSmall: GoogleFonts.inter(
+            headlineSmall: SafeGoogleFonts.inter(
               fontSize: 18,
               fontWeight: FontWeight.w600,
               color: Colors.white,
             ),
-            titleLarge: GoogleFonts.inter(
+            titleLarge: SafeGoogleFonts.inter(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: Colors.white,
             ),
-            titleMedium: GoogleFonts.inter(
+            titleMedium: SafeGoogleFonts.inter(
               fontSize: 14,
               fontWeight: FontWeight.w500,
               color: Colors.white,
             ),
-            titleSmall: GoogleFonts.inter(
+            titleSmall: SafeGoogleFonts.inter(
               fontSize: 12,
               fontWeight: FontWeight.w500,
               color: Colors.white,
             ),
-            bodyLarge: GoogleFonts.inter(
+            bodyLarge: SafeGoogleFonts.inter(
               fontSize: 16,
               fontWeight: FontWeight.w400,
               color: Colors.white,
             ),
-            bodyMedium: GoogleFonts.inter(
+            bodyMedium: SafeGoogleFonts.inter(
               fontSize: 14,
               fontWeight: FontWeight.w400,
               color: Colors.white,
             ),
-            bodySmall: GoogleFonts.inter(
+            bodySmall: SafeGoogleFonts.inter(
               fontSize: 12,
               fontWeight: FontWeight.w400,
               color: const Color(0xFF9CA3AF),
             ),
-            labelLarge: GoogleFonts.inter(
+            labelLarge: SafeGoogleFonts.inter(
               fontSize: 14,
               fontWeight: FontWeight.w500,
               color: Colors.white,
             ),
-            labelMedium: GoogleFonts.inter(
+            labelMedium: SafeGoogleFonts.inter(
               fontSize: 12,
               fontWeight: FontWeight.w500,
               color: Colors.white,
             ),
-            labelSmall: GoogleFonts.inter(
+            labelSmall: SafeGoogleFonts.inter(
               fontSize: 10,
               fontWeight: FontWeight.w500,
               color: const Color(0xFF9CA3AF),
@@ -346,7 +333,7 @@ class AppTheme {
           systemNavigationBarColor: _darkSidebar,
           systemNavigationBarIconBrightness: Brightness.light,
         ),
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: SafeGoogleFonts.inter(
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: Colors.white,
@@ -367,7 +354,7 @@ class AppTheme {
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          textStyle: GoogleFonts.inter(
+           textStyle: SafeGoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -379,7 +366,7 @@ class AppTheme {
           side: const BorderSide(color: Color(0xFF374151)),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          textStyle: GoogleFonts.inter(
+           textStyle: SafeGoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -389,7 +376,7 @@ class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: _primaryGreen,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          textStyle: GoogleFonts.inter(
+           textStyle: SafeGoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -418,11 +405,11 @@ class AppTheme {
           horizontal: 16,
           vertical: 12,
         ),
-        hintStyle: GoogleFonts.inter(
+        hintStyle: SafeGoogleFonts.inter(
           fontSize: 14,
           color: const Color(0xFF9CA3AF),
         ),
-        labelStyle: GoogleFonts.inter(
+        labelStyle: SafeGoogleFonts.inter(
           fontSize: 14,
           color: const Color(0xFF9CA3AF),
         ),

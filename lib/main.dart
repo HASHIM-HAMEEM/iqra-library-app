@@ -43,6 +43,7 @@ final splashHoldProvider = FutureProvider<void>((ref) async {
 });
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Ensure no runtime font fetching
   // Prefer the highest refresh rate available on Android devices (e.g., 120Hz),
   // and gracefully no-op on other platforms.
   try {

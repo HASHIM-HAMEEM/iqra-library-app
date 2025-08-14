@@ -5,6 +5,7 @@ import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/domain/entities/activity_log.dart';
 import '../test_config.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Tests for Row Level Security (RLS) policies
 /// 
@@ -23,6 +24,9 @@ void main() {
     late SupabaseService authenticatedService;
     
     setUpAll(() async {
+      // Initialize Flutter bindings and mock shared preferences for plugin calls in test env
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SharedPreferences.setMockInitialValues({});
       supabaseClient = (await TestUtils.initializeSupabaseForTesting())!;
       supabaseService = SupabaseService(client: supabaseClient, enabled: true);
       authenticatedService = SupabaseService(client: supabaseClient, enabled: true);

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:library_registration_app/core/theme/app_theme.dart';
 import 'package:library_registration_app/core/utils/responsive_utils.dart';
 
 class CustomTextField extends StatefulWidget {
@@ -130,7 +130,7 @@ class _CustomTextFieldState extends State<CustomTextField>
                 minLines: widget.minLines,
                 enabled: widget.enabled,
                 autofocus: widget.autofocus,
-                style: GoogleFonts.inter(
+                style: SafeGoogleFonts.inter(
                   fontSize: ResponsiveUtils.getResponsiveValue(
                     context,
                     mobile: 14,
@@ -223,7 +223,7 @@ class _CustomTextFieldState extends State<CustomTextField>
                       desktop: 22,
                     ),
                   ),
-                  hintStyle: GoogleFonts.inter(
+                  hintStyle: SafeGoogleFonts.inter(
                     fontSize: ResponsiveUtils.getResponsiveValue(
                       context,
                       mobile: 14,
@@ -233,7 +233,7 @@ class _CustomTextFieldState extends State<CustomTextField>
                     fontWeight: FontWeight.w400,
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
-                  labelStyle: GoogleFonts.inter(
+                  labelStyle: SafeGoogleFonts.inter(
                     fontSize: ResponsiveUtils.getResponsiveValue(
                       context,
                       mobile: 14,
@@ -245,7 +245,7 @@ class _CustomTextFieldState extends State<CustomTextField>
                         ? Theme.of(context).primaryColor
                         : Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
-                  errorStyle: GoogleFonts.inter(
+                  errorStyle: SafeGoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w400,
                     color: Theme.of(context).colorScheme.error,

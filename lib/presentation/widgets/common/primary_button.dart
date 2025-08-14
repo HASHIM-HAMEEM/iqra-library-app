@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:library_registration_app/core/theme/app_theme.dart';
 import 'package:library_registration_app/core/utils/responsive_utils.dart';
 
 class PrimaryButton extends StatefulWidget {
@@ -202,7 +202,7 @@ class _PrimaryButtonState extends State<PrimaryButton>
                         Flexible(
                           child: Text(
                             widget.isLoading ? 'Loading...' : widget.text,
-                            style: GoogleFonts.inter(
+                            style: SafeGoogleFonts.inter(
                               fontSize: ResponsiveUtils.getResponsiveValue(
                                 context,
                                 mobile: 14,
@@ -317,7 +317,7 @@ class SecondaryButton extends StatelessWidget {
             Flexible(
               child: Text(
                 isLoading ? 'Loading...' : text,
-                style: GoogleFonts.inter(
+                style: SafeGoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: enabled

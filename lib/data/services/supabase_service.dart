@@ -163,10 +163,26 @@ class SupabaseService {
     if (!_enabled) {
       throw const AuthException('Supabase is disabled in this build');
     }
-    await _client.auth.signInWithPassword(
-      email: email,
-      password: password,
-    );
+    if (email.trim().isEmpty || password.isEmpty) {
+      throw const ValidationException('Email and password are required');
+    }
+    try {
+      await _client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+    } on AuthException catch (e) {
+      throw AuthenticationException(
+        e.message.isNotEmpty ? e.message : 'Authentication failed',
+        details: {'originalError': e.toString()},
+      );
+    } catch (e) {
+      // Normalize unknown auth errors to AuthenticationException for consistency
+      throw AuthenticationException(
+        'Authentication failed',
+        details: {'originalError': e.toString()},
+      );
+    }
   }
 
   Future<void> signOut() async {

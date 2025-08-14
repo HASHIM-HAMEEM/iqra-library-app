@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:library_registration_app/core/theme/app_theme.dart';
 import 'package:library_registration_app/core/config/app_config.dart';
 import 'package:library_registration_app/core/utils/responsive_utils.dart';
 import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
@@ -376,7 +376,7 @@ class _AuthPageState extends ConsumerState<AuthPage>
                               Flexible(
                                 child: Text(
                                   AppConfig.appName,
-                                  style: GoogleFonts.inter(
+                                  style: SafeGoogleFonts.inter(
                                     fontSize:
                                         ResponsiveUtils.getResponsiveValue(
                                           context,
@@ -427,7 +427,7 @@ class _AuthPageState extends ConsumerState<AuthPage>
                           const SizedBox(height: 8),
                           Text(
                             'Admin Access Portal',
-                            style: GoogleFonts.inter(
+                            style: SafeGoogleFonts.inter(
                               fontSize: ResponsiveUtils.getResponsiveValue(
                                 context,
                                 mobile: 14,
@@ -526,7 +526,7 @@ class _AuthPageState extends ConsumerState<AuthPage>
                                         ),
                                         child: Text(
                                           'OR',
-                                          style: GoogleFonts.inter(
+                                          style: SafeGoogleFonts.inter(
                                             color: Theme.of(context)
                                                 .colorScheme
                                                 .onSurface
@@ -584,7 +584,7 @@ class _AuthPageState extends ConsumerState<AuthPage>
                           const SizedBox(height: 24),
                           Text(
                             'Secure admin access for library management',
-                            style: GoogleFonts.inter(
+                            style: SafeGoogleFonts.inter(
                               fontSize: 12,
                               color: Theme.of(
                                 context,

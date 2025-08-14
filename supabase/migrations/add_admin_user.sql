@@ -12,8 +12,8 @@
 DO $$
 DECLARE
     new_user_id UUID := gen_random_uuid(); -- Generate a random UUID for the new user
-    admin_email TEXT := 'new-admin@iqralibrary.com'; -- CHANGE THIS EMAIL
-    admin_password TEXT := 'SecureAdminPassword123!'; -- CHANGE THIS PASSWORD
+    admin_email TEXT := 'mohsinfarooqi9906@gmail.com'; -- Admin email
+    admin_password TEXT := 'Mohsin@iqra#313'; -- Admin password
     encrypted_password TEXT;
 BEGIN
     -- Check if user already exists
@@ -63,6 +63,7 @@ BEGIN
         user_id,
         identity_data,
         provider,
+        provider_id,
         last_sign_in_at,
         created_at,
         updated_at
@@ -75,6 +76,7 @@ BEGIN
             'email_verified', true
         ),
         'email',
+        new_user_id::text,
         NOW(),
         NOW(),
         NOW()
@@ -86,13 +88,11 @@ BEGIN
         (new_user_id, 'theme_mode', 'system', 'Application theme mode'),
         (new_user_id, 'enable_biometric_auth', 'true', 'Enable biometric authentication'),
         (new_user_id, 'enable_auto_backup', 'true', 'Enable automatic backups'),
-        (new_user_id, 'max_failed_attempts', '5', 'Maximum failed authentication attempts')
-    ON CONFLICT (user_id, key) DO NOTHING;
+        (new_user_id, 'max_failed_attempts', '5', 'Maximum failed authentication attempts');
 
     -- Create initial sync metadata for the new admin user
     INSERT INTO public.sync_metadata (user_id, last_sync) VALUES
-        (new_user_id::text, NOW())
-    ON CONFLICT (user_id) DO NOTHING;
+        (new_user_id::text, NOW());
 
     RAISE NOTICE 'Successfully created admin user:';
     RAISE NOTICE 'Email: %', admin_email;
@@ -115,7 +115,7 @@ SELECT
     created_at,
     role
 FROM auth.users 
-WHERE email = 'new-admin@iqralibrary.com'; -- CHANGE THIS TO MATCH YOUR EMAIL
+WHERE email = 'mohsinfarooqi9906@gmail.com'; -- Admin email
 
 -- Optional: Check app settings for the new user
 SELECT 
@@ -124,12 +124,12 @@ SELECT
     value,
     description
 FROM public.app_settings 
-WHERE user_id = (SELECT id FROM auth.users WHERE email = 'new-admin@iqralibrary.com'); -- CHANGE THIS TO MATCH YOUR EMAIL
+WHERE user_id = (SELECT id FROM auth.users WHERE email = 'mohsinfarooqi9906@gmail.com'); -- Admin email
 
 /*
 INSTRUCTIONS:
-1. Replace 'new-admin@iqralibrary.com' with your desired admin email address
-2. Replace 'SecureAdminPassword123!' with a strong password
+1. Email: mohsinfarooqi9906@gmail.com
+2. Password: Mohsin@iqra#313
 3. Run this script in the Supabase SQL Editor
 4. The new admin user will have full access to all application features
 5. The user can log in using the email and password you specified
