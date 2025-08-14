@@ -35,6 +35,7 @@ class _AuthPageState extends ConsumerState<AuthPage>
   bool _biometricAvailable = false;
   bool _biometricAutoPrompted = false;
   bool _authInProgress = false;
+  String? _biometricWhyHidden; // developer diagnostics
 
   late AnimationController _fadeController;
   late AnimationController _slideController;
@@ -83,6 +84,9 @@ class _AuthPageState extends ConsumerState<AuthPage>
     try {
       if (!AppConfig.enableBiometricAuth) {
         if (mounted) setState(() => _biometricAvailable = false);
+        if (AppConfig.developerMode && mounted) {
+          setState(() => _biometricWhyHidden = 'enableBiometricAuth=false');
+        }
         return;
       }
 
@@ -92,12 +96,24 @@ class _AuthPageState extends ConsumerState<AuthPage>
       // Consider any non-empty enrollment acceptable (some devices report only 'weak')
       final hasAnyBiometric = enrolled.isNotEmpty;
       // Respect user's preference from setup/settings
-      final enabledPref = await ref.read(setupProvider.notifier).isBiometricEnabled();
+      final enabledPrefSetup = await ref.read(setupProvider.notifier).isBiometricEnabled();
+      // Fallback to app settings keys if present (defensive)
+      final appSettings = ref.read(appSettingsDaoProvider);
+      final enabledPrefAppPrimary = await appSettings.getBoolSetting('biometric_auth_enabled');
+      final enabledPrefAppLegacy = await appSettings.getBoolSetting('biometric_enabled');
+      final enabledPrefApp = (enabledPrefAppPrimary ?? enabledPrefAppLegacy) ?? false;
+      final enabledPref = enabledPrefSetup || enabledPrefApp;
       // Require the admin to have signed in at least once before offering biometric
+      // Note: do not reset this flag on logout; it must persist to allow biometrics on next launch
       final hasSignedInOnce =
           (await ref.read(appSettingsDaoProvider).getBoolSetting('has_signed_in_once')) ?? false;
-      final canShowIcon = isDeviceSupported && canCheck && hasAnyBiometric && enabledPref && hasSignedInOnce;
+      final canShowIcon = isDeviceSupported && enabledPref && hasSignedInOnce && (hasAnyBiometric || canCheck);
       if (mounted) setState(() => _biometricAvailable = canShowIcon);
+      if (AppConfig.developerMode && mounted) {
+        setState(() => _biometricWhyHidden = canShowIcon
+            ? null
+            : 'deviceSupported=$isDeviceSupported, canCheck=$canCheck, enrolled=${enrolled.isNotEmpty}, enabledPref=$enabledPref, signedInOnce=$hasSignedInOnce');
+      }
 
       // Optional auto-prompt once if conditions are good and nothing loading
       if (mounted &&
@@ -111,17 +127,25 @@ class _AuthPageState extends ConsumerState<AuthPage>
           _authenticateWithBiometric();
         });
       }
-      debugPrint(
-        '[Biometric] deviceSupported=$isDeviceSupported canCheck=$canCheck enrolled=$enrolled',
-      );
+      if (AppConfig.developerMode) {
+        debugPrint('[Biometric] deviceSupported=$isDeviceSupported canCheck=$canCheck enrolled=$enrolled');
+        debugPrint('[Biometric] enabledPrefSetup=$enabledPrefSetup enabledPrefApp=$enabledPrefApp hasSignedInOnce=$hasSignedInOnce');
+        debugPrint('[Biometric] canShowIcon=$canShowIcon');
+      }
     } on PlatformException catch (e) {
       debugPrint(
         '[Biometric] capability check exception: ${e.code} ${e.message}',
       );
       if (mounted) setState(() => _biometricAvailable = false);
+      if (AppConfig.developerMode && mounted) {
+        setState(() => _biometricWhyHidden = 'PlatformException: ${e.code}');
+      }
     } catch (e) {
       debugPrint('[Biometric] capability check error: $e');
       if (mounted) setState(() => _biometricAvailable = false);
+      if (AppConfig.developerMode && mounted) {
+        setState(() => _biometricWhyHidden = 'Error: $e');
+      }
     }
   }
 
@@ -177,9 +201,9 @@ class _AuthPageState extends ConsumerState<AuthPage>
           }
         }
         debugPrint('[Biometric] success');
-      } else {
+        } else {
         // User canceled or system returned false without exception
-        _showErrorNotification("Authentication canceled");
+          _showErrorNotification('Authentication canceled');
         debugPrint('[Biometric] canceled/false');
       }
     } on PlatformException catch (e) {
@@ -189,17 +213,17 @@ class _AuthPageState extends ConsumerState<AuthPage>
           _showErrorNotification("This device doesn't support biometrics.");
           break;
         case auth_error.notEnrolled:
-          _showErrorNotification("No biometric enrolled. Add a fingerprint/face in Settings.");
+          _showErrorNotification('No biometric enrolled. Add a fingerprint/face in Settings.');
           break;
         case auth_error.lockedOut:
         case auth_error.permanentlyLockedOut:
-          _showErrorNotification("Too many attempts. Try again later or use password.");
+          _showErrorNotification('Too many attempts. Try again later or use password.');
           break;
         case auth_error.passcodeNotSet:
-          _showErrorNotification("Set a device screen lock to use biometrics.");
+          _showErrorNotification('Set a device screen lock to use biometrics.');
           break;
         case auth_error.otherOperatingSystem:
-          _showErrorNotification("Biometrics not supported on this OS version.");
+          _showErrorNotification('Biometrics not supported on this OS version.');
           break;
         default:
           _showErrorNotification("Couldn't verify. Please try again.");
@@ -389,6 +413,13 @@ class _AuthPageState extends ConsumerState<AuthPage>
                                           ),
                                         )
                                       : const Icon(Icons.fingerprint_rounded),
+                                ),
+                              ],
+                              if (AppConfig.developerMode && !_biometricAvailable && _biometricWhyHidden != null) ...[
+                                const SizedBox(width: 8),
+                                Tooltip(
+                                  message: 'Biometric hidden: ${_biometricWhyHidden!}',
+                                  child: const Icon(Icons.info_outline, size: 18),
                                 ),
                               ],
                             ],

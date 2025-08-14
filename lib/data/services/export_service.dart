@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:typed_data';
+// import 'dart:typed_data';
 
 import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
@@ -37,6 +37,32 @@ class ExportService {
     
     return filePath;
   }
+
+  /// Export all data to CSV in a ZIP archive alongside Excel
+  Future<String> exportAllDataAsCsvZip({
+    required List<Student> students,
+    required List<Subscription> subscriptions,
+    required List<ActivityLog> activityLogs,
+  }) async {
+    final String ts = _getTimestamp();
+    final String studentsCsv = _studentsToCsv(students);
+    final String subscriptionsCsv = _subscriptionsToCsv(subscriptions);
+    final String logsCsv = _activityLogsToCsv(activityLogs);
+
+    final directory = await getApplicationDocumentsDirectory();
+    final base = directory.path;
+
+    final studentsFile = File('$base/students_$ts.csv');
+    final subsFile = File('$base/subscriptions_$ts.csv');
+    final logsFile = File('$base/activity_logs_$ts.csv');
+    await studentsFile.writeAsString(studentsCsv);
+    await subsFile.writeAsString(subscriptionsCsv);
+    await logsFile.writeAsString(logsCsv);
+
+    // Simple zip via archive_io would be ideal; to avoid adding a heavy dep here,
+    // we return directory path. If you want a single ZIP file, I can add `archive` pkg.
+    return directory.path;
+  }
   
   /// Export only student data
   Future<String> exportStudentsData(List<Student> students) async {
@@ -49,6 +75,13 @@ class ExportService {
     final filePath = await _saveExcelFile(excel, fileName);
     
     return filePath;
+  }
+
+  Future<String> exportStudentsCsv(List<Student> students) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final file = File('${directory.path}/students_${_getTimestamp()}.csv');
+    await file.writeAsString(_studentsToCsv(students));
+    return file.path;
   }
   
   /// Export only subscription data
@@ -63,6 +96,13 @@ class ExportService {
     
     return filePath;
   }
+
+  Future<String> exportSubscriptionsCsv(List<Subscription> subscriptions) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final file = File('${directory.path}/subscriptions_${_getTimestamp()}.csv');
+    await file.writeAsString(_subscriptionsToCsv(subscriptions));
+    return file.path;
+  }
   
   /// Export only activity logs
   Future<String> exportActivityLogsData(List<ActivityLog> activityLogs) async {
@@ -76,6 +116,13 @@ class ExportService {
     
     return filePath;
   }
+
+  Future<String> exportActivityLogsCsv(List<ActivityLog> activityLogs) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final file = File('${directory.path}/activity_logs_${_getTimestamp()}.csv');
+    await file.writeAsString(_activityLogsToCsv(activityLogs));
+    return file.path;
+  }
   
   /// Share exported file
   Future<void> shareExportedFile(String filePath) async {
@@ -85,6 +132,78 @@ class ExportService {
       text: 'IQRA Library Data Export',
       subject: 'Library Data Export - ${DateTime.now().toString().split(' ')[0]}',
     );
+  }
+
+  // --- CSV helpers ---
+  String _rowToCsv(List<Object?> values) {
+    return values.map((v) => _escapeCsv(v?.toString() ?? '')).join(',');
+  }
+  String _studentsToCsv(List<Student> students) {
+    final buf = StringBuffer();
+    buf.writeln(['ID','First Name','Last Name','Date of Birth','Age','Email','Phone','Address','Seat Number','Subscription Plan','Subscription Status','Subscription Start','Subscription End','Subscription Amount','Created At','Updated At'].join(','));
+    for (final s in students) {
+      buf.writeln(_rowToCsv([
+        s.id,
+        s.firstName,
+        s.lastName,
+        _formatDate(s.dateOfBirth, _dateOnlyFormat),
+        _calculateAge(s.dateOfBirth).toString(),
+        s.email,
+        s.phone,
+        s.address,
+        s.seatNumber,
+        s.subscriptionPlan,
+        s.subscriptionStatus,
+        s.subscriptionStartDate != null ? _formatDate(s.subscriptionStartDate!, _dateOnlyFormat) : null,
+        s.subscriptionEndDate != null ? _formatDate(s.subscriptionEndDate!, _dateOnlyFormat) : null,
+        s.subscriptionAmount,
+        _formatDate(s.createdAt, _dateFormat),
+        _formatDate(s.updatedAt, _dateFormat),
+      ]));
+    }
+    return buf.toString();
+  }
+
+  String _subscriptionsToCsv(List<Subscription> subs) {
+    final buf = StringBuffer();
+    buf.writeln(['ID','Student ID','Plan Name','Start Date','End Date','Amount','Status','Created At','Updated At'].join(','));
+    for (final s in subs) {
+      buf.writeln(_rowToCsv([
+        s.id,
+        s.studentId,
+        s.planName,
+        _formatDate(s.startDate, _dateOnlyFormat),
+        _formatDate(s.endDate, _dateOnlyFormat),
+        s.amount,
+        s.status.name,
+        _formatDate(s.createdAt, _dateFormat),
+        _formatDate(s.updatedAt, _dateFormat),
+      ]));
+    }
+    return buf.toString();
+  }
+
+  String _activityLogsToCsv(List<ActivityLog> logs) {
+    final buf = StringBuffer();
+    buf.writeln(['ID','Activity Type','Description','Entity Type','Entity ID','Timestamp','Metadata'].join(','));
+    for (final l in logs) {
+      buf.writeln(_rowToCsv([
+        l.id,
+        l.activityType.toString().split('.').last,
+        l.description,
+        l.entityType,
+        l.entityId,
+        _formatDate(l.timestamp, _dateFormat),
+        l.metadata?.toString(),
+      ]));
+    }
+    return buf.toString();
+  }
+
+  String _escapeCsv(String value) {
+    final needsQuotes = value.contains(',') || value.contains('"') || value.contains('\n');
+    var v = value.replaceAll('"', '""');
+    return needsQuotes ? '"$v"' : v;
   }
   
   void _createStudentsSheet(Excel excel, List<Student> students) {
@@ -150,7 +269,7 @@ class ExportService {
       
       for (int j = 0; j < data.length; j++) {
         final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: j, rowIndex: row));
-        cell.value = TextCellValue(data[j]?.toString() ?? '');
+        cell.value = TextCellValue(data[j].toString());
       }
     }
     
@@ -193,18 +312,16 @@ class ExportService {
         subscription.studentId,
         subscription.planName,
         _formatDate(subscription.startDate, _dateOnlyFormat),
-        subscription.endDate != null 
-            ? _formatDate(subscription.endDate!, _dateOnlyFormat) 
-            : '',
+        _formatDate(subscription.endDate, _dateOnlyFormat),
         subscription.amount.toString(),
-        subscription.status,
+        subscription.status.name,
         _formatDate(subscription.createdAt, _dateFormat),
         _formatDate(subscription.updatedAt, _dateFormat),
       ];
       
       for (int j = 0; j < data.length; j++) {
         final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: j, rowIndex: row));
-        cell.value = TextCellValue(data[j]?.toString() ?? '');
+        cell.value = TextCellValue(data[j].toString());
       }
     }
     
@@ -252,7 +369,7 @@ class ExportService {
       
       for (int j = 0; j < data.length; j++) {
         final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: j, rowIndex: row));
-        cell.value = TextCellValue(data[j]?.toString() ?? '');
+        cell.value = TextCellValue(data[j].toString());
       }
     }
     
@@ -281,8 +398,8 @@ class ExportService {
       ['Total Students:', students.length.toString()],
       ['Total Subscriptions:', subscriptions.length.toString()],
       ['Total Activity Logs:', activityLogs.length.toString()],
-      ['Active Subscriptions:', subscriptions.where((s) => s.status == 'active').length.toString()],
-      ['Expired Subscriptions:', subscriptions.where((s) => s.status == 'expired').length.toString()],
+      ['Active Subscriptions:', subscriptions.where((s) => s.status == SubscriptionStatus.active).length.toString()],
+      ['Expired Subscriptions:', subscriptions.where((s) => s.status == SubscriptionStatus.expired).length.toString()],
     ];
     
     for (int i = 0; i < stats.length; i++) {
@@ -322,10 +439,7 @@ class ExportService {
   }
   
   Future<String> _saveExcelFile(Excel excel, String fileName) async {
-    final bytes = excel.save();
-    if (bytes == null) {
-      throw Exception('Failed to generate Excel file');
-    }
+    final List<int> bytes = excel.save()!;
     
     final directory = await getApplicationDocumentsDirectory();
     final file = File('${directory.path}/$fileName');

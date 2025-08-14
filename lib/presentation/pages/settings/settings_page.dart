@@ -44,11 +44,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
     final session = await dao.getIntSetting('session_timeout_minutes');
     final bio = await setup.isBiometricEnabled();
-    final libName =
-        await dao.getStringSetting('library_name') ??
-        'Library Registration System';
-    final adminEmail =
-        await dao.getStringSetting('admin_email') ?? 'admin@library.com';
+    final libName = await dao.getStringSetting('library_name');
+    final adminEmail = await dao.getStringSetting('admin_email');
     if (!mounted) return;
     setState(() {
       _themeMode = switch (themePref) {
@@ -59,8 +56,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
       _sessionTimeout = session ?? 30;
       _biometricEnabled = bio;
-      _libraryNameCtrl.text = libName;
-      _adminEmailCtrl.text = adminEmail;
+      _libraryNameCtrl.text = libName ?? _libraryNameCtrl.text;
+      _adminEmailCtrl.text = adminEmail ?? _adminEmailCtrl.text;
       _loading = false;
     });
     // sync theme to UI provider
@@ -139,21 +136,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     theme,
                     child: Column(
                       children: [
-                        _buildTextField(
+                         _buildTextField(
                           label: 'Library Name',
                           controller: _libraryNameCtrl,
-                          onChanged: (v) => ref
-                              .read(appSettingsDaoProvider)
-                              .setStringSetting('library_name', v),
+                           onChanged: (v) async {
+                             await ref.read(appSettingsDaoProvider).setStringSetting('library_name', v);
+                           },
                         ),
                         const SizedBox(height: 16),
-                        _buildTextField(
+                         _buildTextField(
                           label: 'Admin Email',
                           controller: _adminEmailCtrl,
                           keyboardType: TextInputType.emailAddress,
-                          onChanged: (v) => ref
-                              .read(appSettingsDaoProvider)
-                              .setStringSetting('admin_email', v),
+                           onChanged: (v) async {
+                             await ref.read(appSettingsDaoProvider).setStringSetting('admin_email', v);
+                           },
                         ),
                       ],
                     ),

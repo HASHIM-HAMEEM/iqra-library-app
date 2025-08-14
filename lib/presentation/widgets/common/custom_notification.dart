@@ -150,8 +150,13 @@ class _NotificationWidgetState extends State<_NotificationWidget>
 
   @override
   Widget build(BuildContext context) {
+    // Get keyboard height to position notification above it
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    // Position notification above keyboard when visible, otherwise use default position
+    final bottomPosition = keyboardHeight > 0 ? keyboardHeight + 16 : 100.0;
+    
     return Positioned(
-      bottom: 100,
+      bottom: bottomPosition,
       left: 16,
       right: 16,
       child: AnimatedBuilder(

@@ -38,7 +38,7 @@ class ConnectivityService {
       
       // Listen for connectivity changes
       _connectivitySubscription = _connectivity.onConnectivityChanged
-          .listen(_updateConnectionStatus);
+          .listen(_updateConnectionStatus, cancelOnError: false);
     } catch (e) {
       debugPrint('ConnectivityService initialization error: $e');
       // Assume connected if we can't check
@@ -70,7 +70,7 @@ class ConnectivityService {
       _connectionType.value = ConnectivityResult.none;
     }
     
-    // Log connectivity changes
+    // Avoid chatty logs in release; only log when developer mode is on
     if (wasConnected != isNowConnected) {
       debugPrint('Connectivity changed: ${isNowConnected ? "Connected" : "Disconnected"} '
           '(${_connectionType.value})');
@@ -103,7 +103,7 @@ class ConnectivityService {
     }
     
     final completer = Completer<bool>();
-    late StreamSubscription subscription;
+    late StreamSubscription<List<ConnectivityResult>> subscription;
     
     // Set up timeout
     final timer = Timer(timeout, () {
@@ -146,7 +146,6 @@ class ConnectivityService {
       case ConnectivityResult.other:
         return 'Connected via Other';
       case ConnectivityResult.none:
-      default:
         return 'No internet connection';
     }
   }

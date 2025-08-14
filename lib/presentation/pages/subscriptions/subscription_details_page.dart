@@ -158,12 +158,14 @@ class SubscriptionDetailsPage extends ConsumerWidget {
     showAppBottomSheet<void>(
       context,
       builder: (ctx) {
+        // Keep controllers outside builder to avoid keyboard focus flicker
         final formKey = GlobalKey<FormState>();
         final planCtrl = TextEditingController(text: sub.planName);
         final amountCtrl = TextEditingController(text: sub.amount.toString());
-        var start = sub.startDate;
-        var end = sub.endDate;
-        return SingleChildScrollView(
+        return StatefulBuilder(
+          builder: (sheetCtx, setSheetState) {
+            // Dates are view-only in Edit per policy
+            return SingleChildScrollView(
           child: Form(
             key: formKey,
             child: Column(
@@ -201,42 +203,59 @@ class SubscriptionDetailsPage extends ConsumerWidget {
                       child: OutlinedButton.icon(
                         onPressed: () async {
                           final picked = await showDatePicker(
-                            context: ctx,
-                            initialDate: start,
+                            context: sheetCtx,
+                            initialDate: sub.startDate,
                             firstDate: DateTime(2000),
                             lastDate: DateTime(2100),
+                            helpText: 'Select new start date',
                           );
                           if (picked != null) {
-                            start = picked;
-                            (ctx as Element).markNeedsBuild();
+                            final newStart = DateTime(picked.year, picked.month, picked.day);
+                            if (!sub.endDate.isAfter(newStart)) {
+                              CustomNotification.show(
+                                sheetCtx,
+                                message: 'Start must be before current end date (${sub.endDate.day}/${sub.endDate.month}/${sub.endDate.year})',
+                                type: NotificationType.warning,
+                              );
+                              return;
+                            }
+                            await ref
+                                .read(subscriptionsNotifierProvider.notifier)
+                                .updateSubscription(
+                                  sub.copyWith(startDate: newStart),
+                                );
+                            // Invalidate specific providers for immediate UI update
+                            ref.invalidate(subscriptionsProvider);
+                            ref.invalidate(subscriptionsByStudentProvider(sub.studentId));
+                            ref.invalidate(subscriptionByIdProvider(sub.id));
+                            if (context.mounted) {
+                              Navigator.of(sheetCtx).pop();
+                              CustomNotification.show(context, message: 'Start date updated', type: NotificationType.success);
+                            }
                           }
                         },
                         icon: const Icon(Icons.date_range),
                         label: Text(
-                          '${start.day}/${start.month}/${start.year}',
+                          '${sub.startDate.day}/${sub.startDate.month}/${sub.startDate.year}',
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () async {
-                          final picked = await showDatePicker(
-                            context: ctx,
-                            initialDate: end,
-                            firstDate: DateTime(2000),
-                            lastDate: DateTime(2100),
-                          );
-                          if (picked != null) {
-                            end = picked;
-                            (ctx as Element).markNeedsBuild();
-                          }
-                        },
+                        onPressed: null,
                         icon: const Icon(Icons.event),
-                        label: Text('${end.day}/${end.month}/${end.year}'),
+                        label: Text('${sub.endDate.day}/${sub.endDate.month}/${sub.endDate.year}'),
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'End date is managed by Renew. Edit lets you change only the start date.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                 ),
                 const SizedBox(height: 16),
                 Align(
@@ -244,27 +263,18 @@ class SubscriptionDetailsPage extends ConsumerWidget {
                   child: ElevatedButton(
                     onPressed: () async {
                       if (!formKey.currentState!.validate()) return;
-                      if (end.isBefore(start)) {
-                        if (ctx.mounted) {
-                          CustomNotification.show(
-                            ctx,
-                            message: 'End date must be after start date',
-                            type: NotificationType.warning,
-                          );
-                        }
-                        return;
-                      }
                       await ref
                           .read(subscriptionsNotifierProvider.notifier)
                           .updateSubscription(
                             sub.copyWith(
                               planName: planCtrl.text.trim(),
                               amount: double.parse(amountCtrl.text.trim()),
-                              startDate: start,
-                              endDate: end,
                             ),
                           );
-                      if (context.mounted) Navigator.of(ctx).pop();
+                      // Ensure list tiles and counters reflect instantly
+                      ref.read(subscriptionsNotifierProvider.notifier).refresh();
+                      ref.invalidate(subscriptionByIdProvider(sub.id));
+                      if (context.mounted) Navigator.of(sheetCtx).pop();
                     },
                     child: const Text('Save'),
                   ),
@@ -272,6 +282,8 @@ class SubscriptionDetailsPage extends ConsumerWidget {
               ],
             ),
           ),
+            );
+          },
         );
       },
     );
@@ -291,10 +303,48 @@ class SubscriptionDetailsPage extends ConsumerWidget {
       lastDate: DateTime(now.year + 10),
     );
     if (picked == null) return;
+    double? renewalAmount;
     try {
+      // Prompt admin for renewal amount (free input)
+      final amountCtrl = TextEditingController(text: '0.00');
+      renewalAmount = await showDialog<double>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Renew Subscription'),
+          content: TextField(
+            controller: amountCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: 'Renewal amount',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(null),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final v = double.tryParse(amountCtrl.text.trim());
+                if (v == null || v < 0) {
+                  CustomNotification.show(
+                    ctx,
+                    message: 'Enter a valid amount',
+                    type: NotificationType.warning,
+                  );
+                  return;
+                }
+                Navigator.of(ctx).pop(v);
+              },
+              child: const Text('Confirm'),
+            ),
+          ],
+        ),
+      );
+      if (renewalAmount == null) return;
       await ref
           .read(subscriptionsNotifierProvider.notifier)
-          .renewSubscription(id, picked, 0);
+          .renewSubscription(id, picked, renewalAmount);
     } catch (e, st) {
       TelemetryService.instance.captureException(
         e,
@@ -331,11 +381,11 @@ class SubscriptionDetailsPage extends ConsumerWidget {
             ],
           ),
         );
-        if (proceed ?? false) {
-          await ref
-              .read(subscriptionsNotifierProvider.notifier)
-              .renewSubscription(id, picked, 0, allowOverlap: true);
-        }
+          if (proceed ?? false) {
+            await ref
+                .read(subscriptionsNotifierProvider.notifier)
+                .renewSubscription(id, picked, renewalAmount!, allowOverlap: true);
+          }
       }
     }
   }

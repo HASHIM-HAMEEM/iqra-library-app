@@ -8,7 +8,9 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 import 'package:library_registration_app/core/utils/permission_service.dart';
+import 'package:library_registration_app/core/utils/responsive_utils.dart';
 import 'package:library_registration_app/presentation/providers/students/students_notifier.dart';
+import 'package:library_registration_app/presentation/providers/database_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 
 
@@ -32,18 +34,9 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
   final _addressController = TextEditingController();
   final _seatNumberController = TextEditingController();
 
-  // Subscription Controllers
-  final _subscriptionPlanController = TextEditingController();
-  final _subscriptionAmountController = TextEditingController();
-
   DateTime? _selectedDate;
-  DateTime? _subscriptionStartDate;
-  DateTime? _subscriptionEndDate;
-  String? _subscriptionPlan;
-  String? _subscriptionStatus = 'Active';
 
   File? _selectedImage;
-  String? _profileImagePath;
 
   bool _isLoading = false;
   String? _emailError;
@@ -52,19 +45,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
   bool _isCheckingEmail = false;
   Timer? _emailDebounce;
 
-  final List<String> _subscriptionPlans = [
-    'Basic',
-    'Standard',
-    'Premium',
-    'Annual',
-  ];
-
-  final List<String> _subscriptionStatuses = [
-    'Active',
-    'Inactive',
-    'Suspended',
-    'Expired',
-  ];
+  // Subscription removed from Add flow: handled in Subscriptions screen after student creation
 
   double _footerTotalHeight(BuildContext context) {
     final safeBottom = MediaQuery.of(context).padding.bottom;
@@ -96,48 +77,26 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
     _phoneController.dispose();
     _addressController.dispose();
     _seatNumberController.dispose();
-    _subscriptionPlanController.dispose();
-    _subscriptionAmountController.dispose();
+    // No subscription controllers in add flow
     _pageController.dispose();
     super.dispose();
   }
 
   Future<void> _selectDate(
-    BuildContext context, {
-    required bool isSubscriptionDate,
-    required bool isStartDate,
-  }) async {
+    BuildContext context,
+  ) async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: isSubscriptionDate
-          ? (isStartDate
-                ? DateTime.now()
-                : (_subscriptionStartDate ?? DateTime.now()))
-          : DateTime.now().subtract(const Duration(days: 365 * 18)),
-      firstDate: isSubscriptionDate ? DateTime(2020) : DateTime(1900),
-      lastDate: isSubscriptionDate ? DateTime(2030) : DateTime.now(),
-      helpText: isSubscriptionDate
-          ? (isStartDate ? 'Select Start Date' : 'Select End Date')
-          : 'Select Date of Birth',
+      initialDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+      helpText: 'Select Date of Birth',
     );
 
     if (picked != null) {
       setState(() {
         _dobError = false;
-        if (isSubscriptionDate) {
-          if (isStartDate) {
-            _subscriptionStartDate = picked;
-            // Reset end date if it's before start date
-            if (_subscriptionEndDate != null &&
-                _subscriptionEndDate!.isBefore(picked)) {
-              _subscriptionEndDate = null;
-            }
-          } else {
-            _subscriptionEndDate = picked;
-          }
-        } else {
-          _selectedDate = picked;
-        }
+        _selectedDate = picked;
       });
     }
   }
@@ -154,7 +113,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
               ListTile(
                 leading: const Icon(Icons.photo_library),
                 title: const Text('Photo Library'),
-                onTap: () async {
+                  onTap: () async {
                   Navigator.of(context).pop();
                   final granted =
                       await PermissionService.ensurePhotoLibraryPermission();
@@ -170,7 +129,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
               ListTile(
                 leading: const Icon(Icons.photo_camera),
                 title: const Text('Camera'),
-                onTap: () async {
+                  onTap: () async {
                   Navigator.of(context).pop();
                   final granted =
                       await PermissionService.ensureCameraPermission();
@@ -191,7 +150,6 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
                     Navigator.of(context).pop();
                     setState(() {
                       _selectedImage = null;
-                      _profileImagePath = null;
                     });
                   },
                 ),
@@ -223,7 +181,6 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
 
       setState(() {
         _selectedImage = savedImage;
-        _profileImagePath = savedPath;
       });
     } catch (e) {
       if (mounted) {
@@ -265,14 +222,38 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
 
   Future<void> _saveStudent() async {
     if (!_formKey.currentState!.validate()) {
-      // Find which page has validation errors and navigate to it
-      if (_selectedDate == null) {
-        unawaited(_pageController.animateToPage(
-          0,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        ));
+      // Build a friendly summary of issues
+      final issues = <String>[];
+      if (_firstNameController.text.trim().isEmpty) {
+        issues.add('First name is required');
       }
+      if (_lastNameController.text.trim().isEmpty) {
+        issues.add('Last name is required');
+      }
+      final emailErr = _validateEmail(_emailController.text);
+      if (emailErr != null) {
+        issues.add(emailErr);
+      }
+      final phoneErr = _validatePhone(_phoneController.text);
+      if (phoneErr != null) {
+        issues.add(phoneErr);
+      }
+      if (_selectedDate == null) {
+        issues.add('Date of birth is required');
+      }
+      if (issues.isNotEmpty) {
+        CustomNotification.show(
+          context,
+          message: 'Please fix the following issues:\n• ${issues.join('\n• ')}',
+          type: NotificationType.error,
+        );
+      }
+      // Navigate to the personal info page for corrections
+      unawaited(_pageController.animateToPage(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      ));
       return;
     }
 
@@ -285,6 +266,8 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
       ));
       return;
     }
+
+    // Subscription fields are removed in Add flow; no validation here
 
     if (_emailError != null) {
       CustomNotification.show(
@@ -321,21 +304,38 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
             seatNumber: _seatNumberController.text.trim().isEmpty
                 ? null
                 : _seatNumberController.text.trim(),
-            profileImagePath: _profileImagePath,
-            subscriptionPlan: _subscriptionPlan,
-            subscriptionStartDate: _subscriptionStartDate,
-            subscriptionEndDate: _subscriptionEndDate,
-            subscriptionAmount:
-                _subscriptionAmountController.text.trim().isEmpty
-                ? null
-                : double.tryParse(_subscriptionAmountController.text.trim()),
-            subscriptionStatus: _subscriptionStatus,
+            profileImagePath: null, // will be set after uploading to storage
+            subscriptionPlan: null,
+            subscriptionStartDate: null,
+            subscriptionEndDate: null,
+            subscriptionAmount: null,
+            subscriptionStatus: null,
           );
+      // If there is a local photo, upload to Supabase Storage and update student row with public URL
+      if (studentId != null && _selectedImage != null) {
+        try {
+          final supabase = ref.read(supabaseServiceProvider);
+          final publicUrl = await supabase.uploadProfileImage(
+            studentId: studentId,
+            file: _selectedImage!,
+          );
+          await supabase.updateStudentProfileImage(studentId, publicUrl);
+        } catch (e) {
+          // Non-fatal: keep going even if image upload fails
+          if (mounted) {
+            CustomNotification.show(
+              context,
+              message: 'Student added, but profile image upload failed: $e',
+              type: NotificationType.warning,
+            );
+          }
+        }
+      }
 
       if (mounted && studentId != null) {
         CustomNotification.show(
           context,
-          message: 'Student added successfully',
+          message: 'Student added successfully. You can add a subscription from the Subscriptions screen.',
           type: NotificationType.success,
         );
         Navigator.of(context).pop();
@@ -403,21 +403,18 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
     return null;
   }
 
-  String? _validateAmount(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return null; // Amount is optional
-    }
-
-    final amount = double.tryParse(value.trim());
-    if (amount == null || amount < 0) {
-      return 'Please enter a valid amount';
-    }
-
-    return null;
-  }
+  // Amount validation removed from Add flow (no amount field here)
 
   void _nextPage() {
-    if (_currentPage < 2) {
+    // Only advance from page 0 -> 1 (there are exactly 2 pages now)
+    if (_currentPage == 0) {
+      final bool ok = _formKey.currentState?.validate() ?? false;
+      if (_selectedDate == null) {
+        setState(() => _dobError = true);
+      }
+      if (!ok || _selectedDate == null) {
+        return;
+      }
       unawaited(_pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -434,67 +431,107 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
     }
   }
 
+  Widget _buildModernHeader(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        IconButton(
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Add Student',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.6,
+                ),
+              ),
+              Text(
+                'Create new student profile',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_isLoading)
+          const Padding(
+            padding: EdgeInsets.all(8),
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          )
+        else
+          TextButton(
+            onPressed: _saveStudent,
+            child: const Text(
+              'Save',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      appBar: AppBar(
-        title: const Text('Add Student'),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
-        elevation: 0,
-        actions: [
-          if (_isLoading)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else
-            TextButton(
-              onPressed: _saveStudent,
-              child: const Text(
-                'Save',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-        ],
-      ),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: Stack(
         children: [
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => FocusScope.of(context).unfocus(),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    Container(
-                      color: Theme.of(context).colorScheme.surface,
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
+              child: CustomScrollView(
+                slivers: [
+                  // Modern Header
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: ResponsiveUtils.getResponsivePadding(context).copyWith(top: 8),
+                      child: _buildModernHeader(context),
+                    ),
+                  ),
+                  
+                  // Form Content
+                  SliverFillRemaining(
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
                         children: [
-                          Expanded(
-                            child: LinearProgressIndicator(
-                              value: (_currentPage + 1) / 3,
-                               backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Theme.of(context).colorScheme.primary,
-                              ),
+                          Container(
+                            color: Theme.of(context).colorScheme.surface,
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: LinearProgressIndicator(
+                                    value: (_currentPage + 1) / 2,
+                                     backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                 Text(
+                                   '${_currentPage + 1} of 2',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          Text(
-                            '${_currentPage + 1} of 3',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                    ),
                     Expanded(
                       child: PageView(
                         controller: _pageController,
@@ -506,12 +543,14 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
                         children: [
                           _buildPersonalInfoPage(),
                           _buildProfilePhotoPage(),
-                          _buildSubscriptionPage(),
                         ],
                       ),
                     ),
-                  ],
-                ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -539,7 +578,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
                       child: ElevatedButton(
                         onPressed: _isLoading
                             ? null
-                            : (_currentPage < 2 ? _nextPage : _saveStudent),
+                            : (_currentPage == 0 ? _nextPage : _saveStudent),
                         child: _isLoading
                             ? const SizedBox(
                                 height: 20,
@@ -548,7 +587,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : Text(_currentPage < 2 ? 'Next' : 'Add Student'),
+                            : Text(_currentPage == 0 ? 'Next' : 'Save Details'),
                       ),
                     ),
                   ],
@@ -584,6 +623,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
           ),
           textCapitalization: TextCapitalization.words,
           scrollPadding: _fieldScrollPadding(context),
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           validator: (value) => _validateRequired(value, 'First name'),
         ),
         const SizedBox(height: 16),
@@ -598,17 +638,14 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
           ),
           textCapitalization: TextCapitalization.words,
           scrollPadding: _fieldScrollPadding(context),
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           validator: (value) => _validateRequired(value, 'Last name'),
         ),
         const SizedBox(height: 16),
 
         // Date of Birth
         InkWell(
-          onTap: () => _selectDate(
-            context,
-            isSubscriptionDate: false,
-            isStartDate: false,
-          ),
+          onTap: () => _selectDate(context),
           child: InputDecorator(
             decoration: const InputDecoration(
               labelText: 'Date of Birth *',
@@ -661,6 +698,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
           ),
           keyboardType: TextInputType.emailAddress,
           scrollPadding: _fieldScrollPadding(context),
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           validator: _validateEmail,
           onChanged: (value) {
             if (_emailError != null) {
@@ -686,6 +724,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
           ),
           keyboardType: TextInputType.phone,
           scrollPadding: _fieldScrollPadding(context),
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           validator: _validatePhone,
         ),
         const SizedBox(height: 16),
@@ -815,139 +854,5 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
     );
   }
 
-  Widget _buildSubscriptionPage() {
-    return ListView(
-      padding: _pagePadding(context),
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      children: [
-        Text(
-          'Subscription Details',
-          style: Theme.of(
-            context,
-          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'All subscription fields are optional',
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade600),
-        ),
-        const SizedBox(height: 24),
-
-        // Subscription Plan
-        DropdownButtonFormField<String>(
-          value: _subscriptionPlan,
-          decoration: const InputDecoration(
-            labelText: 'Subscription Plan',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.card_membership),
-            helperText: 'Optional',
-          ),
-          items: _subscriptionPlans.map((plan) {
-            return DropdownMenuItem(value: plan, child: Text(plan));
-          }).toList(),
-          onChanged: (value) {
-            setState(() {
-              _subscriptionPlan = value;
-            });
-          },
-        ),
-        const SizedBox(height: 16),
-
-        // Subscription Status
-        DropdownButtonFormField<String>(
-          value: _subscriptionStatus,
-          decoration: const InputDecoration(
-            labelText: 'Subscription Status',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.info_outline),
-          ),
-          items: _subscriptionStatuses.map((status) {
-            return DropdownMenuItem(value: status, child: Text(status));
-          }).toList(),
-          onChanged: (value) {
-            setState(() {
-              _subscriptionStatus = value;
-            });
-          },
-        ),
-        const SizedBox(height: 16),
-
-        // Subscription Amount
-        TextFormField(
-          controller: _subscriptionAmountController,
-          decoration: const InputDecoration(
-            labelText: 'Subscription Amount',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.currency_rupee),
-            helperText: 'Optional',
-          ),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          scrollPadding: _fieldScrollPadding(context),
-          validator: _validateAmount,
-        ),
-        const SizedBox(height: 16),
-
-        // Subscription Start Date
-        InkWell(
-          onTap: () =>
-              _selectDate(context, isSubscriptionDate: true, isStartDate: true),
-          child: InputDecorator(
-            decoration: const InputDecoration(
-              labelText: 'Subscription Start Date',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.calendar_today),
-              helperText: 'Optional',
-            ),
-            child: Text(
-              _subscriptionStartDate == null
-                  ? 'Select start date'
-                  : '${_subscriptionStartDate!.day}/${_subscriptionStartDate!.month}/${_subscriptionStartDate!.year}',
-              style: TextStyle(
-                color: _subscriptionStartDate == null
-                    ? Theme.of(context).hintColor
-                    : Theme.of(context).textTheme.bodyLarge?.color,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Subscription End Date
-        InkWell(
-          onTap: _subscriptionStartDate != null
-              ? () => _selectDate(
-                  context,
-                  isSubscriptionDate: true,
-                  isStartDate: false,
-                )
-              : null,
-          child: InputDecorator(
-            decoration: InputDecoration(
-              labelText: 'Subscription End Date',
-              border: const OutlineInputBorder(),
-              prefixIcon: const Icon(Icons.calendar_today),
-              helperText: _subscriptionStartDate == null
-                  ? 'Select start date first'
-                  : 'Optional',
-              enabled: _subscriptionStartDate != null,
-            ),
-            child: Text(
-              _subscriptionEndDate == null
-                  ? 'Select end date'
-                  : '${_subscriptionEndDate!.day}/${_subscriptionEndDate!.month}/${_subscriptionEndDate!.year}',
-              style: TextStyle(
-                color:
-                    _subscriptionEndDate == null ||
-                        _subscriptionStartDate == null
-                    ? Theme.of(context).hintColor
-                    : Theme.of(context).textTheme.bodyLarge?.color,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  // Removed: subscription page; handled after student creation
 }

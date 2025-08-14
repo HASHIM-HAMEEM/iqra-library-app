@@ -1,8 +1,5 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:library_registration_app/core/utils/responsive_utils.dart';
@@ -54,10 +51,17 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
   }
 
   Future<void> _onRefresh() async {
-    // Refresh students data
+    // Reset pagination and refresh data
+    setState(() {
+      _pagedStudents.clear();
+      _currentOffset = 0;
+      _hasMorePages = true;
+      _isLoadingPage = false;
+    });
     await ref.read(studentsNotifierProvider.notifier).refresh();
     ref.invalidate(subscriptionsProvider);
-    
+    await _loadNextPage();
+    if (!mounted) return;
     _showNotification('Students list refreshed');
   }
 
@@ -313,14 +317,6 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
               foregroundColor: theme.colorScheme.onPrimary,
               child: const Icon(Icons.person_add_rounded),
             )
-                .animate(onPlay: (c) => c.repeat(reverse: true))
-                .scale(
-                  begin: const Offset(1, 1),
-                  end: const Offset(1.04, 1.04),
-                  duration: 1400.ms,
-                  curve: Curves.easeInOut,
-                )
-                .fadeIn(duration: 300.ms),
           ),
     );
   }
@@ -600,7 +596,9 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
         delegate: SliverChildBuilderDelegate(
           (context, index) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: _buildModernStudentCard(students[index]),
+            child: RepaintBoundary(
+              child: _buildModernStudentCard(students[index]),
+            ),
           ),
           childCount: students.length,
         ),
@@ -610,7 +608,9 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
     final aspect = ResponsiveUtils.isTablet(context) ? 2.2 : 2.6;
     return SliverGrid(
       delegate: SliverChildBuilderDelegate(
-        (context, index) => _buildModernStudentCard(students[index]),
+        (context, index) => RepaintBoundary(
+          child: _buildModernStudentCard(students[index]),
+        ),
         childCount: students.length,
       ),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -925,28 +925,23 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
   }
 
   Widget _buildStudentAvatar(Student student, ThemeData theme, {double size = 48}) {
-    // Check if student has a profile image path
-    if (student.profileImagePath?.isNotEmpty ?? false) {
-      try {
-        final file = File(student.profileImagePath!);
-        if (file.existsSync()) {
-          return Image.file(
-            file,
+    final path = student.profileImagePath;
+    if (path != null && path.isNotEmpty) {
+      final lower = path.toLowerCase();
+      if (lower.startsWith('http://') || lower.startsWith('https://')) {
+        return ClipOval(
+          child: Image.network(
+            path,
             width: size,
             height: size,
             fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              // Fallback to IQRA logo if image fails to load
-              return _buildIqraLogoPlaceholder(theme);
-            },
-          );
-        }
-      } catch (e) {
-        // If any error occurs, fallback to IQRA logo
+            errorBuilder: (context, error, stackTrace) => _buildIqraLogoPlaceholder(theme),
+          ),
+        );
       }
+      // Avoid sync disk IO during build; fall back to placeholder for local paths
+      // If needed, you can later implement an async resolver with Image.file in a separate widget
     }
-
-    // Fallback to IQRA logo
     return _buildIqraLogoPlaceholder(theme);
   }
 

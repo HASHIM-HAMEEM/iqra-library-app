@@ -1,4 +1,4 @@
-import 'dart:convert';
+// import 'dart:convert';
 
 // Removed Drift imports - using Supabase only
 import 'package:library_registration_app/domain/entities/activity_log.dart';

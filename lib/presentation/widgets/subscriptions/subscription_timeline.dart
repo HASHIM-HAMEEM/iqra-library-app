@@ -105,8 +105,10 @@ class SubscriptionTimeline extends StatelessWidget {
               ),
 
               if (!isLast)
-                Expanded(
-                  child: Container(width: 2, color: theme.colorScheme.outline),
+                Container(
+                  width: 2,
+                  height: 100, // Fixed height instead of Expanded
+                  color: theme.colorScheme.outline,
                 ),
             ],
           ),
@@ -176,7 +178,7 @@ class SubscriptionTimeline extends StatelessWidget {
           // Header with plan name and status
           Row(
             children: [
-              Expanded(
+              Flexible(
                 child: Text(
                   subscription.planName,
                   style: theme.textTheme.titleSmall?.copyWith(
@@ -288,12 +290,25 @@ class SubscriptionTimeline extends StatelessWidget {
 
   Widget _buildProgressBar(ThemeData theme, Subscription subscription) {
     final now = DateTime.now();
-    final totalDays = subscription.endDate
-        .difference(subscription.startDate)
-        .inDays;
-    final elapsedDays = now.difference(subscription.startDate).inDays;
+    // Normalize to day precision and use inclusive range so same-day subscriptions work
+    final startDay = DateTime(
+      subscription.startDate.year,
+      subscription.startDate.month,
+      subscription.startDate.day,
+    );
+    final endDay = DateTime(
+      subscription.endDate.year,
+      subscription.endDate.month,
+      subscription.endDate.day,
+    );
+    final today = DateTime(now.year, now.month, now.day);
+
+    final totalDaysRaw = endDay.difference(startDay).inDays + 1; // inclusive
+    final totalDays = totalDaysRaw <= 0 ? 1 : totalDaysRaw;
+    final elapsedRaw = today.difference(startDay).inDays + 1; // inclusive
+    final elapsedDays = elapsedRaw.clamp(0, totalDays);
     final progress = (elapsedDays / totalDays).clamp(0.0, 1.0);
-    final remainingDays = subscription.endDate.difference(now).inDays;
+    final remainingDays = endDay.difference(today).inDays + 1; // inclusive
 
     Color progressColor;
     if (remainingDays <= 7) {

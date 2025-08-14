@@ -17,9 +17,8 @@ Future<T?> showAppBottomSheet<T>(
     ),
     builder: (ctx) {
       final insets = MediaQuery.of(ctx).viewInsets;
-      return AnimatedPadding(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
+      // Remove animation to avoid IME-induced jank on some devices
+      return Padding(
         padding: EdgeInsets.only(
           left: 16,
           right: 16,

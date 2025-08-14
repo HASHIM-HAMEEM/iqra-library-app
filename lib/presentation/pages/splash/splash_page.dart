@@ -43,23 +43,31 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
     _controller = AnimationController(vsync: this, duration: widget.duration)..forward();
 
     const curve = Curves.easeOutCubic;
-    // Title enters quickly
-    _titleOpacity = CurvedAnimation(parent: _controller, curve: const Interval(0.06, 0.32, curve: curve));
+    // Title enters faster
+    _titleOpacity = CurvedAnimation(parent: _controller, curve: const Interval(0.05, 0.22, curve: curve));
     _titleOffset = Tween<Offset>(begin: const Offset(0, 0.10), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _controller, curve: const Interval(0.06, 0.32, curve: curve)));
+        .animate(CurvedAnimation(parent: _controller, curve: const Interval(0.05, 0.22, curve: curve)));
 
+    // Logo scale faster
     _logoScale = Tween<double>(begin: 0.95, end: 1.0)
-        .animate(CurvedAnimation(parent: _controller, curve: const Interval(0.38, 0.62, curve: curve)));
+        .animate(CurvedAnimation(parent: _controller, curve: const Interval(0.28, 0.42, curve: curve)));
 
-    _lineProgress = CurvedAnimation(parent: _controller, curve: const Interval(0.42, 0.75, curve: curve));
-    _iris = CurvedAnimation(parent: _controller, curve: const Interval(0.76, 1.0, curve: curve));
-    _glow = CurvedAnimation(parent: _controller, curve: const Interval(0.00, 0.50, curve: Curves.easeOut));
-    _gridOpacity = CurvedAnimation(parent: _controller, curve: const Interval(0.06, 0.32, curve: curve));
-    _squaresProgress = CurvedAnimation(parent: _controller, curve: const Interval(0.20, 0.55, curve: curve));
+    // Line progress faster
+    _lineProgress = CurvedAnimation(parent: _controller, curve: const Interval(0.32, 0.50, curve: curve));
+    // Iris reveal faster
+    _iris = CurvedAnimation(parent: _controller, curve: const Interval(0.92, 1.0, curve: curve));
+    // Glow faster
+    _glow = CurvedAnimation(parent: _controller, curve: const Interval(0.00, 0.35, curve: Curves.easeOut));
+    // Grid faster
+    _gridOpacity = CurvedAnimation(parent: _controller, curve: const Interval(0.05, 0.22, curve: curve));
+    // Squares faster
+    _squaresProgress = CurvedAnimation(parent: _controller, curve: const Interval(0.12, 0.38, curve: curve));
+    
+    // Keep FIN logo timing unchanged
     _dotsProgress = CurvedAnimation(parent: _controller, curve: const Interval(0.45, 0.75, curve: curve));
 
     final rnd = math.Random(9);
-    _dotSeeds = List.generate(45, (_) => Offset(rnd.nextDouble(), rnd.nextDouble()));
+    _dotSeeds = List.generate(96, (_) => Offset(rnd.nextDouble(), rnd.nextDouble()));
   }
 
   @override
@@ -113,85 +121,186 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
               ),
             ),
           ),
-          // Center stack
+          // Center stack - Split screen when width allows
           Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FadeTransition(
-                  opacity: _titleOpacity,
-                  child: SlideTransition(
-                    position: _titleOffset,
-                    child: ScaleTransition(
-                      scale: _logoScale,
-                      child: Builder(builder: (context) {
-                        final w = constraints.maxWidth;
-                        final fontSize = (w * 0.12).clamp(28.0, 40.0);
-                        final ls = (fontSize / 12).clamp(2.0, 4.0);
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Concentric minimalist squares
-                            SizedBox(
-                              width: fontSize * 3.2,
-                              height: fontSize * 3.2,
-                              child: CustomPaint(
-                                painter: _LogoSquaresPainter(
-                                  progress: _squaresProgress.value,
-                                  strokeColor: fg,
-                                ),
+            child: Builder(builder: (context) {
+              final w = constraints.maxWidth;
+              final h = constraints.maxHeight;
+              final shouldSplitScreen = w >= 800; // Split on wide screens
+              
+              if (shouldSplitScreen) {
+                // Split screen layout: IQRA on left, fin. on right
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    // Left side: IQRA logo
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FadeTransition(
+                            opacity: _titleOpacity,
+                            child: SlideTransition(
+                              position: _titleOffset,
+                              child: ScaleTransition(
+                                scale: _logoScale,
+                                child: Builder(builder: (context) {
+                                  final fontSize = (w * 0.08).clamp(24.0, 36.0);
+                                  final ls = (fontSize / 12).clamp(1.5, 3.0);
+                                  return Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // Concentric minimalist squares
+                                      SizedBox(
+                                        width: fontSize * 2.8,
+                                        height: fontSize * 2.8,
+                                        child: CustomPaint(
+                                          painter: _LogoSquaresPainter(
+                                            progress: _squaresProgress.value,
+                                            strokeColor: fg,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 20),
+                                      Text(
+                                        'IQRA',
+                                        textAlign: TextAlign.center,
+                                        style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                                                  fontWeight: FontWeight.w800,
+                                                  letterSpacing: ls,
+                                                  color: fg,
+                                                  fontSize: fontSize,
+                                                ) ??
+                                                TextStyle(
+                                                  fontWeight: FontWeight.w800,
+                                                  letterSpacing: ls,
+                                                  color: fg,
+                                                  fontSize: fontSize,
+                                                ),
+                                      ),
+                                    ],
+                                  );
+                                }),
                               ),
                             ),
-                            const SizedBox(height: 28),
-                            Text(
-                              'IQRA',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: ls,
-                                        color: fg,
-                                        fontSize: fontSize,
-                                      ) ??
-                                      TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: ls,
-                                        color: fg,
-                                        fontSize: fontSize,
-                                      ),
+                          ),
+                          const SizedBox(height: 8),
+                          // Underline sweep
+                          SizedBox(
+                            height: 1,
+                            width: math.min(120.0, w * 0.25),
+                            child: CustomPaint(
+                              painter: _HairlinePainter(
+                                progress: _lineProgress.value,
+                                color: fg,
+                              ),
                             ),
-                          ],
-                        );
-                      }),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                // Underline sweep
-                SizedBox(
-                  height: 1,
-                  width: lineWidth,
-                  child: CustomPaint(
-                    painter: _HairlinePainter(
-                      progress: _lineProgress.value,
-                      color: fg,
+                    // Right side: fin. dots
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(height: 60), // Align with IQRA baseline
+                          SizedBox(
+                            width: math.min(200.0, w * 0.25),
+                            height: math.min(80.0, h * 0.12),
+                            child: CustomPaint(
+                              painter: _DotsPainter(
+                                progress: _dotsProgress.value,
+                                seeds: _dotSeeds,
+                                color: fg,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // Floating dots
-                SizedBox(
-                  width: lineWidth,
-                  height: 40,
-                  child: CustomPaint(
-                    painter: _DotsPainter(
-                      progress: _dotsProgress.value,
-                      seeds: _dotSeeds,
-                      color: fg,
+                  ],
+                );
+              } else {
+                // Original stacked layout for smaller screens
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FadeTransition(
+                      opacity: _titleOpacity,
+                      child: SlideTransition(
+                        position: _titleOffset,
+                        child: ScaleTransition(
+                          scale: _logoScale,
+                          child: Builder(builder: (context) {
+                            final fontSize = (w * 0.12).clamp(28.0, 40.0);
+                            final ls = (fontSize / 12).clamp(2.0, 4.0);
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Concentric minimalist squares
+                                SizedBox(
+                                  width: fontSize * 3.2,
+                                  height: fontSize * 3.2,
+                                  child: CustomPaint(
+                                    painter: _LogoSquaresPainter(
+                                      progress: _squaresProgress.value,
+                                      strokeColor: fg,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 28),
+                                Text(
+                                  'IQRA',
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: ls,
+                                            color: fg,
+                                            fontSize: fontSize,
+                                          ) ??
+                                          TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: ls,
+                                            color: fg,
+                                            fontSize: fontSize,
+                                          ),
+                                ),
+                              ],
+                            );
+                          }),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ],
-            ),
+                    const SizedBox(height: 10),
+                    // Underline sweep
+                    SizedBox(
+                      height: 1,
+                      width: lineWidth,
+                      child: CustomPaint(
+                        painter: _HairlinePainter(
+                          progress: _lineProgress.value,
+                          color: fg,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // Floating dots
+                    SizedBox(
+                      width: lineWidth,
+                      height: 40,
+                      child: CustomPaint(
+                        painter: _DotsPainter(
+                          progress: _dotsProgress.value,
+                          seeds: _dotSeeds,
+                          color: fg,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }
+            }),
           ),
 
           // Iris reveal overlay
@@ -344,76 +453,80 @@ class _DotsPainter extends CustomPainter {
   final List<Offset> seeds; // 0..1 normalized positions
   final Color color;
 
-  // Define target positions for "fin." characters
+  // Define target positions for "fin." using a dot-matrix (Nothing-style) grid
+  // Each character uses a 7-row grid with small circular dots
   List<Offset> _getTargetPositions(Size size) {
-    final centerX = size.width / 2;
-    final centerY = size.height / 2;
-    final letterSpacing = size.width * 0.06;
-    final dotSpacing = 2.5;
+    // 7 rows high; columns vary per letter - Fixed patterns for proper readability
+    const List<String> fPattern = <String>[
+      '0111',
+      '0100',
+      '1110',
+      '0100',
+      '0100',
+      '0100',
+      '0100',
+    ];
+    const List<String> iPattern = <String>[
+      '010',
+      '000',
+      '010',
+      '010',
+      '010',
+      '010',
+      '010',
+    ];
+    const List<String> nPattern = <String>[
+      '0000',
+      '0000',
+      '1110',
+      '1001',
+      '1001',
+      '1001',
+      '1001',
+    ];
+    // Stylish dot after "fin"
+    const List<String> dotPattern = <String>[
+      '00',
+      '00',
+      '00',
+      '00',
+      '00',
+      '11',
+      '11',
+    ];
     
-    List<Offset> positions = [];
-    
-    // Letter 'f' - more detailed formation
-    final fX = centerX - letterSpacing * 2.5;
-    positions.addAll([
-      // Vertical line
-      Offset(fX, centerY - dotSpacing * 3),
-      Offset(fX, centerY - dotSpacing * 2),
-      Offset(fX, centerY - dotSpacing),
-      Offset(fX, centerY),
-      Offset(fX, centerY + dotSpacing),
-      Offset(fX, centerY + dotSpacing * 2),
-      // Top horizontal line
-      Offset(fX + dotSpacing, centerY - dotSpacing * 3),
-      Offset(fX + dotSpacing * 2, centerY - dotSpacing * 3),
-      Offset(fX + dotSpacing * 2.5, centerY - dotSpacing * 3),
-      // Middle horizontal line
-      Offset(fX + dotSpacing, centerY - dotSpacing),
-      Offset(fX + dotSpacing * 2, centerY - dotSpacing),
-    ]);
-    
-    // Letter 'i'
-    final iX = centerX - letterSpacing * 0.8;
-    positions.addAll([
-      // Dot above
-      Offset(iX, centerY - dotSpacing * 3.5),
-      // Vertical line
-      Offset(iX, centerY - dotSpacing * 2),
-      Offset(iX, centerY - dotSpacing),
-      Offset(iX, centerY),
-      Offset(iX, centerY + dotSpacing),
-      Offset(iX, centerY + dotSpacing * 2),
-    ]);
-    
-    // Letter 'n'
-    final nX = centerX + letterSpacing * 0.5;
-    positions.addAll([
-      // Left vertical line
-      Offset(nX, centerY - dotSpacing * 2),
-      Offset(nX, centerY - dotSpacing),
-      Offset(nX, centerY),
-      Offset(nX, centerY + dotSpacing),
-      Offset(nX, centerY + dotSpacing * 2),
-      // Connecting curve/line
-      Offset(nX + dotSpacing * 0.7, centerY - dotSpacing * 1.5),
-      Offset(nX + dotSpacing * 1.3, centerY - dotSpacing * 2),
-      // Right vertical line
-      Offset(nX + dotSpacing * 2, centerY - dotSpacing * 2),
-      Offset(nX + dotSpacing * 2, centerY - dotSpacing),
-      Offset(nX + dotSpacing * 2, centerY),
-      Offset(nX + dotSpacing * 2, centerY + dotSpacing),
-      Offset(nX + dotSpacing * 2, centerY + dotSpacing * 2),
-    ]);
-    
-    // Period '.'
-    final periodX = centerX + letterSpacing * 2.2;
-    positions.addAll([
-      Offset(periodX, centerY + dotSpacing * 2),
-      Offset(periodX + 1, centerY + dotSpacing * 2),
-      Offset(periodX, centerY + dotSpacing * 2 + 1),
-      Offset(periodX + 1, centerY + dotSpacing * 2 + 1),
-    ]);
-    
+    // Add 1 blank column between letters for better spacing
+    const List<String> gap1 = <String>['0','0','0','0','0','0','0'];
+    // const List<String> gap2 = <String>['00','00','00','00','00','00','00'];
+
+    // Compose the full word grid across rows: f + gap + i + gap + n + gap + .
+    final int rows = 7;
+    final List<String> full = List<String>.generate(rows, (int r) {
+      return fPattern[r] + gap1[r] + iPattern[r] + gap1[r] + nPattern[r] + gap1[r] + dotPattern[r];
+    });
+
+    final int cols = full.isEmpty ? 0 : full.first.length;
+    if (cols == 0) return <Offset>[];
+
+    // Determine cell step to fit within the available size
+    final double stepW = size.width / cols;
+    final double stepH = size.height / rows;
+    final double step = math.min(stepW, stepH);
+
+    final double usedW = step * cols;
+    final double usedH = step * rows;
+    final double x0 = (size.width - usedW) / 2 + step / 2;
+    final double y0 = (size.height - usedH) / 2 + step / 2;
+
+    final List<Offset> positions = <Offset>[];
+    for (int r = 0; r < rows; r++) {
+      final String row = full[r];
+      for (int c = 0; c < cols; c++) {
+        if (row[c] == '1') {
+          positions.add(Offset(x0 + c * step, y0 + r * step));
+        }
+      }
+    }
     return positions;
   }
 
@@ -427,24 +540,32 @@ class _DotsPainter extends CustomPainter {
     final dotsToUse = math.min(seeds.length, targetPositions.length);
     
     for (int i = 0; i < dotsToUse; i++) {
-      final s = seeds[i];
-      final target = targetPositions[i];
-      final appearT = (i / dotsToUse) * 0.2;
-      final t = ((progress - appearT) / 0.8).clamp(0.0, 1.0);
+      final Offset s = seeds[i];
+      final Offset target = targetPositions[i];
+      final double appearT = (i / dotsToUse) * 0.18; // subtle stagger
+      final double t = ((progress - appearT) / 0.82).clamp(0.0, 1.0);
       if (t <= 0) continue;
-      
-      // Use easing for smoother animation
-      final easedT = Curves.easeOutCubic.transform(t);
-      
-      // Interpolate between start and target position
-      final startX = s.dx * size.width;
-      final startY = s.dy * size.height;
-      final x = startX + (target.dx - startX) * easedT;
-      final y = startY + (target.dy - startY) * easedT;
-      
-      // Smaller, more precise dots
-      final r = 1.0 + 0.8 * easedT;
-      final alpha = 0.4 + 0.6 * easedT;
+
+      final double easedT = Curves.easeOutCubic.transform(t);
+
+      // Interpolate from random start to target grid
+      final double startX = s.dx * size.width;
+      final double startY = s.dy * size.height;
+      final double x = startX + (target.dx - startX) * easedT;
+      final double y = startY + (target.dy - startY) * easedT;
+
+      // Small, crisp dots like Nothing's style with subtle entrance scale and glow
+      final double baseR = math.max(0.8, (size.height / 7) * 0.20);
+      final double r = baseR * (0.7 + 0.3 * easedT);
+      final double alpha = (0.25 + 0.75 * easedT).clamp(0.0, 1.0);
+
+      // Glow behind dot
+      final Paint glow = Paint()
+        ..color = color.withValues(alpha: alpha * 0.2)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      canvas.drawCircle(Offset(x, y), r * 1.8, glow);
+
+      // Main dot
       canvas.drawCircle(Offset(x, y), r, paint..color = color.withValues(alpha: alpha));
     }
   }

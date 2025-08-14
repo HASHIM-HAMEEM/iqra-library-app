@@ -38,8 +38,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 final splashHoldProvider = FutureProvider<void>((ref) async {
   // Wait for app initialization
   await ref.watch(appInitProvider.future);
-  // Additional splash screen delay
-  await Future<void>.delayed(const Duration(milliseconds: 1200));
+  // Additional splash screen delay - increased to allow FIN logo animation to complete
+  await Future<void>.delayed(const Duration(milliseconds: 2000));
 });
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,17 +52,15 @@ void main() async {
   } catch (e, st) {
     TelemetryService.instance.captureException(e, st, feature: 'display_mode');
   }
-  // Initialize Supabase if config provided
-  if (AppConfig.supabaseUrl.isNotEmpty && AppConfig.supabaseAnonKey.isNotEmpty) {
-    try {
-      await Supabase.initialize(
-        url: AppConfig.supabaseUrl,
-        anonKey: AppConfig.supabaseAnonKey,
-        debug: AppConfig.developerMode,
-      );
-    } catch (e, st) {
-      TelemetryService.instance.captureException(e, st, feature: 'supabase_init');
-    }
+  // Initialize Supabase unconditionally using AppConfig defaults (embed or dart-define)
+  try {
+    await Supabase.initialize(
+      url: AppConfig.supabaseUrl,
+      anonKey: AppConfig.supabaseAnonKey,
+      debug: AppConfig.developerMode,
+    );
+  } catch (e, st) {
+    TelemetryService.instance.captureException(e, st, feature: 'supabase_init');
   }
   
   // Initialize connectivity service
@@ -85,6 +83,17 @@ void main() async {
      );
    };
   runApp(const ProviderScope(child: LibraryRegistrationApp()));
+  // Ensure connectivity begins monitoring before the first auth attempts
+  // (already awaited initialize above). Also re-validate any persisted session if present.
+  try {
+    final hasSession = Supabase.instance.client.auth.currentSession != null;
+    if (hasSession) {
+      // Fire-and-forget, swallow errors to avoid crash on cold start
+      Supabase.instance.client.auth
+          .refreshSession()
+          .then((_) {}, onError: (_) {});
+    }
+  } catch (_) {}
  }
 
 class LibraryRegistrationApp extends ConsumerWidget {

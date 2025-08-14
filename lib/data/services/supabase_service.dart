@@ -1,5 +1,7 @@
  
 import 'package:dio/dio.dart';
+import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:library_registration_app/core/services/connectivity_service.dart';
@@ -179,6 +181,41 @@ class SupabaseService {
       _enabled ? _client.auth.onAuthStateChange : const Stream.empty();
 
   // Students CRUD
+  Future<String> uploadProfileImage({
+    required String studentId,
+    required File file,
+  }) async {
+    if (!_enabled) {
+      throw const SupabaseServiceException('Supabase is disabled');
+    }
+    return _executeWithRetry(
+      () async {
+        final String ext = p.extension(file.path).replaceFirst('.', '').toLowerCase();
+        final String fileName = '${DateTime.now().millisecondsSinceEpoch}.$ext';
+        final String storagePath = 'students/$studentId/$fileName';
+        await _client.storage
+            .from('profile-images')
+            .upload(storagePath, file, fileOptions: const FileOptions(upsert: true, cacheControl: '3600'));
+        final String publicUrl = _client.storage.from('profile-images').getPublicUrl(storagePath);
+        return publicUrl;
+      },
+      operationName: 'uploadProfileImage',
+    );
+  }
+
+  Future<void> updateStudentProfileImage(String studentId, String? publicUrl) async {
+    if (!_enabled) return;
+    if (studentId.trim().isEmpty) {
+      throw const ValidationException('Student ID cannot be empty');
+    }
+    return _executeWithRetry(
+      () => _client
+          .from('students')
+          .update({'profile_image_path': publicUrl, 'updated_at': DateTime.now().toIso8601String()})
+          .eq('id', studentId),
+      operationName: 'updateStudentProfileImage',
+    );
+  }
   Future<List<Student>> getAllStudents() async {
     if (!_enabled) return <Student>[];
     return _executeWithRetry(
@@ -585,7 +622,14 @@ class SupabaseService {
     return _executeWithRetry(
       () => _client
           .from('subscriptions')
-          .update(subscription.toJson())
+          .update({
+            'plan_name': subscription.planName,
+            'start_date': subscription.startDate.toUtc().toIso8601String(),
+            'end_date': subscription.endDate.toUtc().toIso8601String(),
+            'amount': subscription.amount,
+            'status': subscription.status.name,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
           .eq('id', subscription.id),
       operationName: 'updateSubscription',
     );
@@ -912,12 +956,14 @@ class SupabaseService {
     if (!_enabled) return 0.0;
     return _executeWithRetry(
       () async {
+        // Treat revenue as sum of subscription amounts created within the range.
+        // This avoids missing records where start_date/end_date fall outside the range.
         final response = await _client
             .from('subscriptions')
-            .select('amount')
-            .gte('start_date', startDate.toIso8601String())
-            .lte('end_date', endDate.toIso8601String());
-        
+            .select('amount, created_at')
+            .gte('created_at', startDate.toUtc().toIso8601String())
+            .lte('created_at', endDate.toUtc().toIso8601String());
+
         double total = 0.0;
         for (final row in response as List) {
           total += (row['amount'] as num).toDouble();

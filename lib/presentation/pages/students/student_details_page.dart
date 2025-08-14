@@ -1,18 +1,19 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:io';
 import 'package:intl/intl.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/core/utils/error_mapper.dart';
+import 'package:library_registration_app/core/utils/responsive_utils.dart';
 import 'package:library_registration_app/core/utils/telemetry_service.dart';
 import 'package:library_registration_app/presentation/providers/activity_logs/activity_logs_provider.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
 import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_provider.dart';
 import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_notifier.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
+// cached_network_image removed; using Image.network with errorBuilder
 
 class StudentDetailsPage extends ConsumerWidget {
 
@@ -26,22 +27,6 @@ class StudentDetailsPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      appBar: AppBar(
-        title: const Text('Student Details'),
-        actions: [
-          studentAsync.when(
-            data: (student) => IconButton(
-              tooltip: 'Edit',
-              onPressed: student == null
-                  ? null
-                  : () => context.go('/students/edit/${student.id}'),
-              icon: const Icon(Icons.edit_outlined),
-            ),
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
-          ),
-        ],
-      ),
       body: studentAsync.when(
         data: (student) {
           if (student == null) return _buildNotFound(context, ref);
@@ -58,39 +43,130 @@ class StudentDetailsPage extends ConsumerWidget {
                 );
               await ref.read(studentByIdProvider(studentId).future);
             },
-            child: SingleChildScrollView(
+            child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: _maxWidthFor(context)),
+              slivers: [
+                // Modern Header
+                SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildHeader(context, student),
-                        const SizedBox(height: 16),
-                        _buildIdentitySection(context, student),
-                        const SizedBox(height: 12),
-                        _buildContactSection(context, student),
-                        const SizedBox(height: 12),
-                        _buildLibrarySection(context, ref, student),
-                        const SizedBox(height: 12),
-                        _buildMetaSection(context, student),
-                        const SizedBox(height: 12),
-                        _buildLastActivitySection(context, ref, student),
-                        const SizedBox(height: 24),
-                      ],
+                    padding: ResponsiveUtils.getResponsivePadding(context).copyWith(top: 8),
+                    child: _buildModernHeader(context, student),
+                  ),
+                ),
+                
+                // Content
+                SliverToBoxAdapter(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: _maxWidthFor(context)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: _buildResponsiveSections(context, ref, student),
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
           );
         },
         loading: () => _buildLoadingSkeleton(context),
         error: (e, _) => _buildErrorState(context, ref, e),
       ),
+    );
+  }
+
+  Widget _buildModernHeader(BuildContext context, Student student) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        IconButton(
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Student Details',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.6,
+                ),
+              ),
+              Text(
+                student.fullName,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          onPressed: () => context.go('/students/edit/${student.id}'),
+          icon: const Icon(Icons.edit_outlined),
+          tooltip: 'Edit',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildResponsiveSections(BuildContext context, WidgetRef ref, Student student) {
+    final header = _buildHeader(context, student);
+    final sections = <Widget>[
+      _buildIdentitySection(context, student),
+      _buildContactSection(context, student),
+      _buildLibrarySection(context, ref, student),
+      _buildMetaSection(context, student),
+      _buildLastActivitySection(context, ref, student),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double maxW = constraints.maxWidth;
+        // Two columns for widths >= 900
+        final bool twoCols = maxW >= 900;
+        if (!twoCols) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              header,
+              const SizedBox(height: 16),
+              for (int i = 0; i < sections.length; i++) ...[
+                sections[i],
+                if (i != sections.length - 1) const SizedBox(height: 12),
+              ],
+              const SizedBox(height: 24),
+            ],
+          );
+        }
+        final double gap = 16;
+        final double cardW = (maxW - gap) / 2;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            header,
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: [
+                for (final s in sections)
+                  SizedBox(
+                    width: cardW,
+                    child: s,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 24),
+          ],
+        );
+      },
     );
   }
 
@@ -149,7 +225,11 @@ class StudentDetailsPage extends ConsumerWidget {
     try {
       await ref
           .read(subscriptionsNotifierProvider.notifier)
-          .renewSubscription(sub.id, picked, amount);
+          .renewSubscription(
+            sub.id,
+            DateTime(picked.year, picked.month, picked.day, 23, 59, 59, 999),
+            amount,
+          );
       if (context.mounted) {
         CustomNotification.show(
           context,
@@ -254,22 +334,43 @@ class StudentDetailsPage extends ConsumerWidget {
 
   Widget _buildAvatar(ThemeData theme, Student student) {
     final path = student.profileImagePath;
-    final file = (path != null) ? File(path) : null;
-    final hasFile = file != null && file.existsSync();
+    Widget? img;
+    if (path != null && path.isNotEmpty) {
+      final lower = path.toLowerCase();
+      if (lower.startsWith('http://') || lower.startsWith('https://')) {
+        img = ClipOval(
+          child: Image.network(
+            path,
+            width: 72,
+            height: 72,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _fallbackInitials(theme, student),
+          ),
+        );
+      } else {
+        try {
+          final file = File(path);
+          if (file.existsSync()) {
+            img = Image.file(file, width: 72, height: 72, fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _fallbackInitials(theme, student));
+          }
+        } catch (_) {}
+      }
+    }
     return CircleAvatar(
       radius: 36,
       backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
-      child: hasFile
-          ? ClipOval(
-              child: Image.file(file, width: 72, height: 72, fit: BoxFit.cover),
-            )
-          : Text(
-              student.initials,
-              style: theme.textTheme.titleLarge?.copyWith(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+      child: img ?? _fallbackInitials(theme, student),
+    );
+  }
+
+  Widget _fallbackInitials(ThemeData theme, Student student) {
+    return Text(
+      student.initials,
+      style: theme.textTheme.titleLarge?.copyWith(
+        color: theme.colorScheme.primary,
+        fontWeight: FontWeight.w700,
+      ),
     );
   }
 
@@ -505,38 +606,52 @@ class StudentDetailsPage extends ConsumerWidget {
     IconData? leadingIcon,
   }) {
     final theme = Theme.of(context);
-    return Container(
+    final cs = theme.colorScheme;
+    return Container
+    (
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.1),
-        ),
+        border: Border.all(color: cs.outlineVariant, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              if (leadingIcon != null) ...[
-                Icon(
-                  leadingIcon,
-                  size: 18,
-                  color: theme.colorScheme.onSurfaceVariant,
+              if (leadingIcon != null)
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: cs.primary.withValues(alpha: 0.12),
+                  ),
+                  child: Icon(leadingIcon, size: 16, color: cs.primary),
                 ),
-                const SizedBox(width: 8),
-              ],
+              if (leadingIcon != null) const SizedBox(width: 10),
               Text(
                 title,
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
+          Divider(height: 1, thickness: 1, color: cs.outline.withValues(alpha: 0.3)),
+          const SizedBox(height: 10),
           ...children,
         ],
       ),
@@ -552,15 +667,15 @@ class StudentDetailsPage extends ConsumerWidget {
     bool multiline = false,
   }) {
     final theme = Theme.of(context);
-    final text =
-        valueWidget ??
-        SelectableText(
-          value ?? '—',
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: theme.colorScheme.onSurface,
-            height: multiline ? 1.3 : 1.2,
-          ),
-        );
+    final cs = theme.colorScheme;
+    final text = valueWidget ?? SelectableText(
+      value ?? '—',
+      style: theme.textTheme.bodyMedium?.copyWith(
+        color: cs.onSurface,
+        height: multiline ? 1.35 : 1.25,
+        fontWeight: FontWeight.w500,
+      ),
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -568,7 +683,15 @@ class StudentDetailsPage extends ConsumerWidget {
             ? CrossAxisAlignment.start
             : CrossAxisAlignment.center,
         children: [
-          Icon(icon, size: 18, color: theme.colorScheme.onSurfaceVariant),
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: cs.secondaryContainer.withValues(alpha: 0.35),
+            ),
+            child: Icon(icon, size: 14, color: cs.secondary),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -576,9 +699,10 @@ class StudentDetailsPage extends ConsumerWidget {
               children: [
                 Text(
                   label,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: cs.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
+                    letterSpacing: 0.1,
                   ),
                 ),
                 const SizedBox(height: 2),

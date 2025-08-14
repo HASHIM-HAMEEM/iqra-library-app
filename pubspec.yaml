@@ -14,17 +14,12 @@ dependencies:
   flutter:
     sdk: flutter
 
-  archive: ^3.4.9
   connectivity_plus: ^6.0.5
   crypto: ^3.0.3
-  csv: ^5.0.2
   cupertino_icons: ^1.0.8
   dio: ^5.4.0
   equatable: ^2.0.5
   excel: ^4.0.6
-  ffi: ^2.1.0
-  file_picker: ^10.2.4
-  file_selector: ^1.0.3
   flutter_animate: ^4.3.0
   flutter_displaymode: ^0.6.0
   flutter_riverpod: ^2.4.9
@@ -33,10 +28,8 @@ dependencies:
   google_fonts: ^6.1.0
   image_picker: ^1.0.4
   intl: ^0.19.0
-  json_annotation: any
   local_auth: ^2.1.7
   local_auth_android: any
-  lottie: ^2.7.0
   path: ^1.8.3
   path_provider: ^2.1.2
   permission_handler: ^11.1.0

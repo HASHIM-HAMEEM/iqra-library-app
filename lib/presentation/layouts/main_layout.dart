@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:library_registration_app/core/utils/responsive_utils.dart';
 import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MainLayout extends ConsumerStatefulWidget {
 
@@ -19,7 +20,33 @@ class MainLayout extends ConsumerStatefulWidget {
   ConsumerState<MainLayout> createState() => _MainLayoutState();
 }
 
-class _MainLayoutState extends ConsumerState<MainLayout> {
+class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      try {
+        if (Supabase.instance.client.auth.currentSession != null) {
+          Supabase.instance.client.auth
+              .refreshSession()
+              .then((_) {}, onError: (_) {});
+        }
+      } catch (_) {}
+      ref.read(authProvider.notifier).validateSession();
+    }
+  }
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -103,54 +130,53 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                         alignment: Alignment.center,
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(14),
-                          child: BackdropFilter(
-                            filter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                          child: RepaintBoundary(
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.surface.withValues(alpha: 0.7),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
-                                ),
-                              ),
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    _buildNavItem(
-                                      context,
-                                      'Dashboard',
-                                      '/dashboard',
-                                      Icons.dashboard_outlined,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    _buildNavItem(
-                                      context,
-                                      'Students',
-                                      '/students',
-                                      Icons.people_outlined,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    _buildNavItem(
-                                      context,
-                                      'Subscriptions',
-                                      '/subscriptions',
-                                      Icons.card_membership_outlined,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    _buildNavItem(
-                                      context,
-                                      'Recent Activity',
-                                      '/activity',
-                                      Icons.access_time_outlined,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
+                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                               decoration: BoxDecoration(
+                                color: theme.colorScheme.surface.withValues(alpha: 0.75),
+                                 borderRadius: BorderRadius.circular(14),
+                                 border: Border.all(
+                                   color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
+                                 ),
+                               ),
+                               child: SingleChildScrollView(
+                                 scrollDirection: Axis.horizontal,
+                                 child: Row(
+                                   mainAxisAlignment: MainAxisAlignment.center,
+                                   children: [
+                                     _buildNavItem(
+                                       context,
+                                       'Dashboard',
+                                       '/dashboard',
+                                       Icons.dashboard_outlined,
+                                     ),
+                                     const SizedBox(width: 6),
+                                     _buildNavItem(
+                                       context,
+                                       'Students',
+                                       '/students',
+                                       Icons.people_outlined,
+                                     ),
+                                     const SizedBox(width: 6),
+                                     _buildNavItem(
+                                       context,
+                                       'Subscriptions',
+                                       '/subscriptions',
+                                       Icons.card_membership_outlined,
+                                     ),
+                                     const SizedBox(width: 6),
+                                     _buildNavItem(
+                                       context,
+                                       'Recent Activity',
+                                       '/activity',
+                                       Icons.access_time_outlined,
+                                     ),
+                                   ],
+                                 ),
+                               ),
+                             ),
+                           ),
                         ),
                       ),
                     )
@@ -241,8 +267,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
         topRight: Radius.circular(16),
         bottomRight: Radius.circular(16),
       ),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 7, sigmaY: 7),
+      child: RepaintBoundary(
         child: Container(
           width: 260,
           decoration: BoxDecoration(
@@ -291,14 +316,45 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
             Icons.settings_outlined,
           ),
           const SizedBox(height: 8),
-          _buildSideNavItem(
-            context,
-            'Data Migration',
-            '/migration',
-            Icons.cloud_upload_outlined,
+          // Replace Data Migration with Export Data
+          Visibility(
+          visible: !(ResponsiveUtils.isLandscape(context) && !ResponsiveUtils.isDesktop(context)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                hoverColor: theme.colorScheme.primary.withValues(alpha: 0.08),
+                onTap: () => _navigateToRoute(context, '/settings'),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.download_outlined, size: 22, color: theme.colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Export Data',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-          const Spacer(),
-          const SizedBox(height: 32),
+           const Spacer(),
+           const SizedBox(height: 32),
         ],
           ),
         ),
@@ -408,8 +464,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(30),
-          child: BackdropFilter(
-            filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: RepaintBoundary(
             child: Container(
               height: 64,
               decoration: BoxDecoration(
@@ -573,3 +628,4 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
     context.go(route);
   }
 }
+// Fixed by removing the unused _showGlobalExportSheet method

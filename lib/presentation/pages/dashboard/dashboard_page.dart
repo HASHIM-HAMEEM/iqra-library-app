@@ -1,11 +1,11 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'dart:ui' as ui;
+// import 'dart:ui' as ui;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:library_registration_app/core/utils/responsive_utils.dart';
-import 'package:library_registration_app/domain/entities/subscription.dart';
+// import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
 import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/compact_stat_tile.dart';
@@ -90,7 +90,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final studentsCount = ref.watch(studentsCountProvider);
     final activeSubscriptionsCount = ref.watch(activeSubscriptionsCountProvider);
     final range = _getRangeDates();
-    final totalRevenue = ref.watch(revenueByDateRangeProvider((startDate: range.startDate, endDate: range.endDate)));
+    // Recompute provider key when range changes by selected chip
+    final totalRevenue = ref.watch(
+      revenueByDateRangeProvider((startDate: range.startDate, endDate: range.endDate)),
+    );
     
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -151,19 +154,26 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               padding: ResponsiveUtils.getResponsivePadding(context),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                child: RepaintBoundary(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(minHeight: 150),
                     child: Container(
-      decoration: BoxDecoration(
-                        color: theme.colorScheme.surface.withValues(alpha: 0.75),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
+                      decoration: BoxDecoration(
+                        // Subtle gradient to simulate depth without runtime blur
+                        gradient: LinearGradient(
+                          colors: [
+                            theme.colorScheme.surface.withValues(alpha: 0.88),
+                            theme.colorScheme.surface.withValues(alpha: 0.72),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
                           color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
                         ),
                       ),
-                padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(12),
                       child: ResponsiveUtils.isMobile(context)
                           ? SizedBox(
                               height: 166,
@@ -229,6 +239,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     fontWeight: FontWeight.w500,
                 ),
               ),
+                const SizedBox(height: 6),
+                _buildLoggedInUser(theme),
             ],
           ),
           ),
@@ -269,7 +281,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Profile'),
-            content: const Text('What would you like to do?'),
+            content: _buildProfileDialogContent(theme),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
@@ -324,6 +336,45 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildLoggedInUser(ThemeData theme) {
+    final auth = ref.watch(authProvider);
+    final email = auth.user?.email ?? auth.lastKnownEmail;
+    if (email == null || email.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Row(
+      children: [
+        Icon(Icons.verified_user_outlined, size: 16, color: theme.colorScheme.primary),
+        const SizedBox(width: 6),
+        Text(
+          'Admin: $email',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProfileDialogContent(ThemeData theme) {
+    final auth = ref.watch(authProvider);
+    final email = auth.user?.email ?? auth.lastKnownEmail ?? 'unknown';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.person_outline, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text('Admin: $email', style: theme.textTheme.bodyMedium),
+          ],
+        ),
+      ],
     );
   }
 
@@ -480,12 +531,14 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         itemCount: actions.length,
         itemBuilder: (context, index) {
           final action = actions[index];
-          return QuickActionCard(
-            title: action['title']! as String,
-            subtitle: action['subtitle']! as String,
-            icon: action['icon']! as IconData,
-            color: action['color']! as Color,
-            onTap: action['onTap']! as VoidCallback,
+          return RepaintBoundary(
+            child: QuickActionCard(
+              title: action['title']! as String,
+              subtitle: action['subtitle']! as String,
+              icon: action['icon']! as IconData,
+              color: action['color']! as Color,
+              onTap: action['onTap']! as VoidCallback,
+            ),
           );
         },
       );

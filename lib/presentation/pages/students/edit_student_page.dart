@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:library_registration_app/core/utils/permission_service.dart';
+import 'package:library_registration_app/core/utils/responsive_utils.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/presentation/providers/students/students_notifier.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
-import 'package:path_provider/path_provider.dart';
+// import 'package:path_provider/path_provider.dart';
+import 'package:library_registration_app/presentation/providers/database_provider.dart';
 
 class EditStudentPage extends ConsumerStatefulWidget {
 
@@ -103,16 +105,37 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
     }
   }
 
+  bool _isUrl(String? path) {
+    if (path == null) return false;
+    final lower = path.toLowerCase();
+    return lower.startsWith('http://') || lower.startsWith('https://');
+  }
+
   bool _hasFormChanges() {
+    if (_hasChanges) return true; // quick path if any listener flagged changes
     final student = _loadedStudent;
     if (student == null) return false;
-    return _firstNameController.text.trim() != student.firstName ||
+    final personalChanged =
+        _firstNameController.text.trim() != student.firstName ||
         _lastNameController.text.trim() != student.lastName ||
         _emailController.text.trim() != student.email ||
         _phoneController.text.trim() != (student.phone ?? '') ||
         _addressController.text.trim() != (student.address ?? '') ||
         _seatNumberController.text.trim() != (student.seatNumber ?? '') ||
         _selectedDate != student.dateOfBirth;
+
+    final subscriptionChanged =
+        _subscriptionPlan != student.subscriptionPlan ||
+        _subscriptionStatus != student.subscriptionStatus ||
+        _subscriptionStartDate != student.subscriptionStartDate ||
+        _subscriptionEndDate != student.subscriptionEndDate ||
+        _subscriptionAmountController.text.trim() !=
+            (student.subscriptionAmount?.toString() ?? '');
+
+    final imageChanged = _selectedImage != null ||
+        (_profileImagePath ?? '') != (student.profileImagePath ?? '');
+
+    return personalChanged || subscriptionChanged || imageChanged;
   }
 
   Future<void> _selectDate({
@@ -122,10 +145,10 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
     final picked = await showDatePicker(
       context: context,
       initialDate: isSubscriptionStart
-          ? _subscriptionStartDate ?? DateTime.now()
+          ? (_subscriptionStartDate ?? _selectedDate)
           : isSubscriptionEnd
-          ? _subscriptionEndDate ?? DateTime.now()
-          : _selectedDate,
+              ? (_subscriptionEndDate ?? (_subscriptionStartDate ?? _selectedDate))
+              : _selectedDate,
       firstDate: DateTime(1900),
       lastDate: DateTime(2100),
       helpText: isSubscriptionStart
@@ -137,9 +160,9 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
     if (picked != null) {
       setState(() {
         if (isSubscriptionStart) {
-          _subscriptionStartDate = picked;
+          _subscriptionStartDate = DateTime(picked.year, picked.month, picked.day);
         } else if (isSubscriptionEnd) {
-          _subscriptionEndDate = picked;
+          _subscriptionEndDate = DateTime(picked.year, picked.month, picked.day, 23, 59, 59, 999);
         } else {
           _selectedDate = picked;
         }
@@ -169,10 +192,16 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
 
   Future<String?> _saveImage(File imageFile) async {
     try {
-      final appDir = await getApplicationDocumentsDirectory();
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final savedImage = await imageFile.copy('${appDir.path}/$fileName');
-      return savedImage.path;
+      // Upload to Supabase storage so it's visible across devices
+      final supabase = ref.read(supabaseServiceProvider);
+      final student = _loadedStudent;
+      if (student == null) return null;
+      final publicUrl = await supabase.uploadProfileImage(
+        studentId: student.id,
+        file: imageFile,
+      );
+      await supabase.updateStudentProfileImage(student.id, publicUrl);
+      return publicUrl;
     } catch (e) {
       return null;
     }
@@ -230,6 +259,63 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
     }
   }
 
+  Widget _buildModernHeader(BuildContext context, Student student) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        IconButton(
+          onPressed: () async {
+            final canPop = await _onWillPop();
+            if (canPop && context.mounted) {
+              Navigator.of(context).pop();
+            }
+          },
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Edit Student',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.6,
+                ),
+              ),
+              Text(
+                student.fullName,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_isLoading)
+          const Padding(
+            padding: EdgeInsets.all(8),
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          )
+        else
+          TextButton(
+            onPressed: _updateStudent,
+            child: const Text(
+              'Save',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+      ],
+    );
+  }
+
   Future<void> _updateStudent() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -261,7 +347,7 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
       final student = _loadedStudent!;
       var finalImagePath = _profileImagePath;
 
-      // Save new image if selected
+      // Save new image if selected (upload to storage and store public URL)
       if (_selectedImage != null) {
         finalImagePath = await _saveImage(_selectedImage!);
       }
@@ -396,31 +482,7 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
          }
        },
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            ['Edit Student', 'Edit Student', 'Edit Student'][_currentPage],
-          ),
-          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-          actions: [
-            if (_isLoading)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-            else
-              TextButton(
-                onPressed: _updateStudent,
-                child: const Text(
-                  'Save',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-          ],
-        ),
+        backgroundColor: Theme.of(context).colorScheme.surface,
         body: studentAsync.when(
           data: (Student? student) {
             if (student == null) {
@@ -445,33 +507,43 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
               _profileImagePath = student.profileImagePath;
             }
 
-            return Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  // Page indicator
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
+            return Column(
+              children: [
+                // Modern Header
+                Padding(
+                  padding: ResponsiveUtils.getResponsivePadding(context).copyWith(top: 8),
+                  child: _buildModernHeader(context, student),
+                ),
+                
+                // Form Content
+                Expanded(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
                       children: [
-                        for (int i = 0; i < 3; i++)
-                          Expanded(
-                            child: Container(
-                              height: 4,
-                              margin: EdgeInsets.only(right: i < 2 ? 8 : 0),
-                              decoration: BoxDecoration(
-                                color: i <= _currentPage
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Colors.grey.shade300,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
+                        // Page indicator
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              for (int i = 0; i < 3; i++)
+                                Expanded(
+                                  child: Container(
+                                    height: 4,
+                                    margin: EdgeInsets.only(right: i < 2 ? 8 : 0),
+                                    decoration: BoxDecoration(
+                                      color: i <= _currentPage
+                                          ? Theme.of(context).colorScheme.primary
+                                          : Colors.grey.shade300,
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
-                      ],
-                    ),
-                  ),
+                        ),
 
-                  // Page content
+                  // Page content should expand within bounded Column
                   Expanded(
                     child: PageView(
                       controller: _pageController,
@@ -488,13 +560,14 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
                     ),
                   ),
 
-                  // Navigation buttons
+                  // Navigation buttons (no Expanded inside Column anymore)
                   Container(
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
                         if (_currentPage > 0)
-                          Expanded(
+                          Flexible(
+                            fit: FlexFit.loose,
                             child: OutlinedButton(
                               onPressed: _previousPage,
                               child: const Text('Previous'),
@@ -502,23 +575,29 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
                           ),
                         if (_currentPage > 0) const SizedBox(width: 16),
                         if (_currentPage < 2)
-                          Expanded(
+                          Flexible(
+                            fit: FlexFit.loose,
                             child: ElevatedButton(
-                              onPressed: _nextPage,
+                              onPressed: () {
+                                if (_currentPage == 0) {
+                                  final ok = _formKey.currentState?.validate() ?? false;
+                                  if (!ok) return;
+                                }
+                                _nextPage();
+                              },
                               child: const Text('Next'),
                             ),
                           ),
                         if (_currentPage == 2)
-                          Expanded(
+                          Flexible(
+                            fit: FlexFit.loose,
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _updateStudent,
                               child: _isLoading
                                   ? const SizedBox(
                                       height: 20,
                                       width: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
+                                      child: CircularProgressIndicator(strokeWidth: 2),
                                     )
                                   : const Text('Update Student'),
                             ),
@@ -526,8 +605,11 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
                       ],
                     ),
                   ),
-                ],
-              ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             );
           },
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -706,43 +788,62 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
               CircleAvatar(
                 radius: 80,
                 backgroundColor: Theme.of(context).colorScheme.primary,
-                child: _selectedImage != null
-                    ? ClipOval(
-                        child: Image.file(
-                          _selectedImage!,
-                          width: 160,
-                          height: 160,
-                          fit: BoxFit.cover,
-                        ),
-                      )
-                    : _profileImagePath != null
-                    ? ClipOval(
-                        child: Image.file(
-                          File(_profileImagePath!),
-                          width: 160,
-                          height: 160,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Text(
-                              _loadedStudent?.initials ?? '',
-                              style: TextStyle(
-                                color:
-                                    Theme.of(context).colorScheme.onPrimary,
-                                fontSize: 36,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            );
-                          },
-                        ),
-                      )
-                    : Text(
-                        _loadedStudent?.initials ?? '',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onPrimary,
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
+                child: Builder(builder: (context) {
+                  if (_selectedImage != null) {
+                    return ClipOval(
+                      child: Image.file(
+                        _selectedImage!,
+                        width: 160,
+                        height: 160,
+                        fit: BoxFit.cover,
+                      ),
+                    );
+                  }
+                  if (_profileImagePath != null && _isUrl(_profileImagePath)) {
+                    return ClipOval(
+                      child: Image.network(
+                        _profileImagePath!,
+                        width: 160,
+                        height: 160,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Text(
+                          _loadedStudent?.initials ?? '',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onPrimary,
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
+                    );
+                  }
+                  if (_profileImagePath != null) {
+                    return ClipOval(
+                      child: Image.file(
+                        File(_profileImagePath!),
+                        width: 160,
+                        height: 160,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Text(
+                          _loadedStudent?.initials ?? '',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onPrimary,
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  return Text(
+                    _loadedStudent?.initials ?? '',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimary,
+                      fontSize: 36,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  );
+                }),
               ),
               Positioned(
                 bottom: 0,

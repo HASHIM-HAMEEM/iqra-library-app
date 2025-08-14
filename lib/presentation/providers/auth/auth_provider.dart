@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+// import 'package:library_registration_app/core/services/connectivity_service.dart';
 // import 'package:library_registration_app/core/config/app_config.dart';
 import 'package:library_registration_app/data/services/app_settings_service.dart';
 import 'package:library_registration_app/data/services/supabase_service.dart';
@@ -19,6 +20,7 @@ class AuthState {
     this.failedAttempts = 0,
     this.lockoutUntil,
     this.requiresReauth = false,
+    this.lastKnownEmail,
   });
   final bool isAuthenticated;
   final bool isLoading;
@@ -29,6 +31,7 @@ class AuthState {
   final int failedAttempts;
   final DateTime? lockoutUntil;
   final bool requiresReauth;
+  final String? lastKnownEmail;
 
   AuthState copyWith({
     bool? isAuthenticated,
@@ -40,6 +43,7 @@ class AuthState {
     int? failedAttempts,
     DateTime? lockoutUntil,
     bool? requiresReauth,
+    String? lastKnownEmail,
   }) {
     return AuthState(
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
@@ -52,6 +56,7 @@ class AuthState {
       failedAttempts: failedAttempts ?? this.failedAttempts,
       lockoutUntil: lockoutUntil,
       requiresReauth: requiresReauth ?? this.requiresReauth,
+      lastKnownEmail: lastKnownEmail ?? this.lastKnownEmail,
     );
   }
 
@@ -178,15 +183,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
           isAuthenticated: true,
           user: user,
           lastAuthTime: now,
+          lastKnownEmail: user.email,
         );
         // Save auth time to local storage
-        _appSettingsService.setStringSetting(
-          'last_auth_time',
-          now.toIso8601String(),
-          description: 'Last successful authentication time',
-        ).catchError((e) {
-          // Ignore storage errors
-        });
+        () async {
+          try {
+            await _appSettingsService.setStringSetting(
+              'last_auth_time',
+              now.toIso8601String(),
+              description: 'Last successful authentication time',
+            );
+            if ((user.email ?? '').isNotEmpty) {
+              await _appSettingsService.setStringSetting(
+                'last_admin_email',
+                user.email ?? '',
+                description: 'Last signed in admin email',
+              );
+            }
+          } catch (_) {}
+        }();
       } else {
         // User is not authenticated
         state = state.copyWith(
@@ -269,23 +284,41 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return false;
       }
 
-      // Validate connection before attempting authentication
-      if (!await _supabaseService.validateConnection()) {
-        state = state.copyWith(
-          isLoading: false,
-          error: 'Unable to connect to authentication service. Please check your internet connection.',
-        );
-        return false;
+      // Directly attempt authentication with a short retry on transient network errors
+      const int maxAttempts = 13;
+      int attempt = 0;
+      while (true) {
+        try {
+          await _supabaseService.signInWithPassword(email.trim(), password);
+          break; // success
+        } catch (e) {
+          attempt++;
+          final String lower = e.toString().toLowerCase();
+          final bool isTransientNetwork =
+              lower.contains('socket') || lower.contains('network') || lower.contains('timeout');
+          if (!isTransientNetwork || attempt >= maxAttempts) {
+            rethrow;
+          }
+          // Exponential backoff: 300ms, 900ms
+          final delayMs = 300 * attempt * attempt;
+          await Future<void>.delayed(Duration(milliseconds: delayMs));
+        }
       }
-
-      // Use Supabase to authenticate
-      await _supabaseService.signInWithPassword(email.trim(), password);
       
       // Authentication successful - clear failed attempts
       await _clearFailedAttempts();
       // Mark that a real credential sign-in occurred. Used to gate biometrics visibility.
       await _appSettingsService.setBoolSetting('has_signed_in_once', true,
           description: 'Admin has completed at least one credential login');
+      // Persist last known admin email for offline biometric display
+      try {
+        await _appSettingsService.setStringSetting(
+          'last_admin_email',
+          email.trim(),
+          description: 'Last signed in admin email',
+        );
+      } catch (_) {}
+      state = state.copyWith(lastKnownEmail: email.trim());
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
@@ -316,8 +349,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         }
       } else if (e.toString().toLowerCase().contains('network') || 
                  e.toString().toLowerCase().contains('socket') ||
-                 e.toString().toLowerCase().contains('connection')) {
-        errorMessage = 'Network error. Please check your internet connection and try again.';
+                 e.toString().toLowerCase().contains('connection') ||
+                 e.toString().toLowerCase().contains('timeout')) {
+        errorMessage = 'Couldn\'t reach the authentication service. Please try again.';
       } else {
         errorMessage = 'Authentication failed. Please check your credentials and try again.';
       }
@@ -378,16 +412,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // No valid Supabase session. If offline biometric is allowed, unlock locally.
       if (allowOffline) {
         final now = DateTime.now();
-        await _appSettingsService.setStringSetting(
-          'last_auth_time',
-          now.toIso8601String(),
-          description: 'Last successful authentication time',
-        );
+        try {
+          await _appSettingsService.setStringSetting(
+            'last_auth_time',
+            now.toIso8601String(),
+            description: 'Last successful authentication time',
+          );
+        } catch (_) {}
+        String? lastEmail;
+        try {
+          lastEmail = await _appSettingsService.getStringSetting('last_admin_email');
+        } catch (_) {}
         await _clearFailedAttempts();
         state = state.copyWith(
           isAuthenticated: true,
           isLoading: false,
           lastAuthTime: now,
+          lastKnownEmail: lastEmail,
           // user remains null; app may require reauth for server ops
           requiresReauth: true,
         );
@@ -418,15 +459,27 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> logout() async {
+  Future<void> logout({bool hard = false}) async {
     try {
-      await _supabaseService.signOut();
+      if (hard) {
+        await _supabaseService.signOut();
+      }
       await _clearSession();
-      state = const AuthState();
+      // Treat logout as an app lock by default (keep Supabase session tokens)
+      state = state.copyWith(
+        isAuthenticated: false,
+        user: null,
+        requiresReauth: true,
+        error: null,
+      );
     } catch (e) {
-      // Even if sign out fails, clear local state
       await _clearSession();
-      state = const AuthState();
+      state = state.copyWith(
+        isAuthenticated: false,
+        user: null,
+        requiresReauth: true,
+        error: null,
+      );
     }
   }
 
@@ -436,6 +489,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       // Error clearing session, continue anyway
     }
+
+    // Do NOT delete 'last_admin_email' here. It must persist to display
+    // the admin identity after biometric unlock without a live session.
   }
 
   void clearError() {

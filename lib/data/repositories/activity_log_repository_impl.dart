@@ -1,13 +1,13 @@
-import 'package:library_registration_app/data/models/activity_log_model.dart';
+// import 'package:library_registration_app/data/models/activity_log_model.dart';
 import 'package:library_registration_app/data/services/supabase_service.dart';
 import 'package:library_registration_app/domain/entities/activity_log.dart';
 import 'package:library_registration_app/domain/repositories/activity_log_repository.dart';
-import 'package:uuid/uuid.dart';
+// import 'package:uuid/uuid.dart';
 
 class ActivityLogRepositoryImpl implements ActivityLogRepository {
   ActivityLogRepositoryImpl(this._supabase);
   final SupabaseService _supabase;
-  final Uuid _uuid = const Uuid();
+  // final Uuid _uuid = const Uuid();
 
   @override
   Future<List<ActivityLog>> getAllActivityLogs() async {

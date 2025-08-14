@@ -6,6 +6,7 @@ import 'package:library_registration_app/domain/repositories/activity_log_reposi
 import 'package:library_registration_app/domain/repositories/student_repository.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
 import 'package:library_registration_app/data/services/supabase_service.dart';
+import 'package:uuid/uuid.dart';
 
 class StudentsNotifier extends StateNotifier<AsyncValue<List<Student>>> {
   StudentsNotifier(this._studentRepository, this._activityLogRepository, this._supabaseService)
@@ -199,7 +200,7 @@ class StudentsNotifier extends StateNotifier<AsyncValue<List<Student>>> {
   }) async {
     try {
       final activityLog = ActivityLog(
-        id: '',
+        id: const Uuid().v4(),
         activityType: type,
         description: description,
         entityId: entityId,

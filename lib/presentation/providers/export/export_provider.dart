@@ -101,6 +101,80 @@ class ExportNotifier extends _$ExportNotifier {
     }
   }
 
+  Future<void> exportDataCsv(ExportType type) async {
+    try {
+      state = state.copyWith(status: ExportStatus.loading, progress: 0.0);
+
+      final exportService = ref.read(exportServiceProvider);
+      String filePath;
+
+      switch (type) {
+        case ExportType.all:
+          filePath = await _exportAllCsv(exportService);
+          break;
+        case ExportType.students:
+          filePath = await _exportStudentsCsv(exportService);
+          break;
+        case ExportType.subscriptions:
+          filePath = await _exportSubscriptionsCsv(exportService);
+          break;
+        case ExportType.activityLogs:
+          filePath = await _exportActivityLogsCsv(exportService);
+          break;
+      }
+
+      state = state.copyWith(
+        status: ExportStatus.success,
+        filePath: filePath,
+        progress: 1.0,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        status: ExportStatus.error,
+        errorMessage: e.toString(),
+        progress: 0.0,
+      );
+    }
+  }
+
+  Future<String> _exportAllCsv(ExportService exportService) async {
+    state = state.copyWith(progress: 0.15);
+    final students = await ref.read(studentsProvider.future);
+    state = state.copyWith(progress: 0.35);
+    final subs = await ref.read(subscriptionsProvider.future);
+    state = state.copyWith(progress: 0.60);
+    final logs = await ref.read(activityLogsProvider.future);
+    state = state.copyWith(progress: 0.80);
+    final path = await exportService.exportAllDataAsCsvZip(
+      students: students,
+      subscriptions: subs,
+      activityLogs: logs,
+    );
+    state = state.copyWith(progress: 0.95);
+    return path;
+  }
+
+  Future<String> _exportStudentsCsv(ExportService exportService) async {
+    state = state.copyWith(progress: 0.25);
+    final students = await ref.read(studentsProvider.future);
+    state = state.copyWith(progress: 0.75);
+    return exportService.exportStudentsCsv(students);
+  }
+
+  Future<String> _exportSubscriptionsCsv(ExportService exportService) async {
+    state = state.copyWith(progress: 0.25);
+    final subs = await ref.read(subscriptionsProvider.future);
+    state = state.copyWith(progress: 0.75);
+    return exportService.exportSubscriptionsCsv(subs);
+  }
+
+  Future<String> _exportActivityLogsCsv(ExportService exportService) async {
+    state = state.copyWith(progress: 0.25);
+    final logs = await ref.read(activityLogsProvider.future);
+    state = state.copyWith(progress: 0.75);
+    return exportService.exportActivityLogsCsv(logs);
+  }
+
   Future<String> _exportAllData(ExportService exportService) async {
     // Update progress
     state = state.copyWith(progress: 0.1);
@@ -199,7 +273,7 @@ Future<Map<String, int>> exportDataCounts(ExportDataCountsRef ref) async {
     'students': students.length,
     'subscriptions': subscriptions.length,
     'activityLogs': activityLogs.length,
-    'activeSubscriptions': subscriptions.where((s) => s.status == 'active').length,
-    'expiredSubscriptions': subscriptions.where((s) => s.status == 'expired').length,
+    'activeSubscriptions': subscriptions.where((s) => s.status == SubscriptionStatus.active).length,
+    'expiredSubscriptions': subscriptions.where((s) => s.status == SubscriptionStatus.expired).length,
   };
 }
