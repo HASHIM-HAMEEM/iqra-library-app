@@ -1,8 +1,9 @@
-import 'dart:io';
+// import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import 'package:library_registration_app/domain/entities/subscription.dart';
+import 'package:library_registration_app/presentation/widgets/common/async_avatar.dart';
 
 class SubscriptionCard extends StatelessWidget {
   const SubscriptionCard({
@@ -161,54 +162,15 @@ class SubscriptionCard extends StatelessWidget {
   }
 
   Widget _buildAvatar(ThemeData theme, {double size = 36}) {
-    final path = studentAvatarPath;
-    if (path != null && path.isNotEmpty) {
-      final lower = path.toLowerCase();
-      if (lower.startsWith('http://') || lower.startsWith('https://')) {
-        return ClipOval(
-          child: Image.network(
-            path,
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _initialsAvatar(theme, size),
-          ),
-        );
-      }
-      try {
-        final file = File(path);
-        if (file.existsSync()) {
-          return ClipOval(
-            child: Image.file(
-              file,
-              width: size,
-              height: size,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _initialsAvatar(theme, size),
-            ),
-          );
-        }
-      } catch (_) {}
-    }
-    return _initialsAvatar(theme, size);
-  }
-
-  Widget _initialsAvatar(ThemeData theme, double size) {
-    final initials = (studentInitials != null && studentInitials!.isNotEmpty)
-        ? studentInitials!
-        : (studentName?.isNotEmpty == true
-            ? studentName!.trim().split(RegExp(r"\s+")).map((e) => e.isNotEmpty ? e[0].toUpperCase() : '').take(2).join()
-            : '?');
-    return CircleAvatar(
-      radius: size / 2,
-      backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
-      child: Text(
-        initials,
-        style: theme.textTheme.labelLarge?.copyWith(
-          color: theme.colorScheme.primary,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+    return AsyncAvatar(
+      imagePath: studentAvatarPath,
+      initials: (studentInitials != null && studentInitials!.isNotEmpty)
+          ? studentInitials!
+          : (studentName?.isNotEmpty == true
+              ? studentName!.trim().split(RegExp(r"\s+")).map((e) => e.isNotEmpty ? e[0].toUpperCase() : '').take(2).join()
+              : '?'),
+      size: size,
+      fallbackIcon: Icons.person_outline,
     );
   }
 

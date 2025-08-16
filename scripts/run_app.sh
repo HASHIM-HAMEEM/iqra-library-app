@@ -5,12 +5,10 @@
 
 echo "🚀 Starting Iqra Library App with Supabase configuration..."
 
-# Check if .env file exists
-if [ ! -f ".env" ]; then
-    echo "❌ Error: .env file not found!"
-    echo "Please copy .env.example to .env and configure your Supabase credentials:"
-    echo "cp .env.example .env"
-    exit 1
+# Optionally load .env for local development (not for production builds)
+if [ -f ".env" ]; then
+    echo "📋 Loading environment variables from .env file..."
+    export $(grep -v '^#' .env | xargs -0 2>/dev/null || true)
 fi
 
 # Check if flutter is available
@@ -19,25 +17,12 @@ if ! command -v flutter &> /dev/null; then
     exit 1
 fi
 
-# Extract environment variables from .env file
-if [ -f ".env" ]; then
-    echo "📋 Loading environment variables from .env file..."
-    
-    # Read SUPABASE_URL and SUPABASE_ANON_KEY from .env
-    SUPABASE_URL=$(grep '^SUPABASE_URL=' .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
-    SUPABASE_ANON_KEY=$(grep '^SUPABASE_ANON_KEY=' .env | cut -d '=' -f2- | tr -d '"' | tr -d "'")
-    
-    if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-        echo "❌ Error: SUPABASE_URL or SUPABASE_ANON_KEY not found in .env file"
-        echo "Please ensure your .env file contains:"
-        echo "SUPABASE_URL=your_supabase_url"
-        echo "SUPABASE_ANON_KEY=your_supabase_anon_key"
-        exit 1
-    fi
-    
-    echo "✅ Supabase URL: ${SUPABASE_URL:0:30}..."
-    echo "✅ Supabase Key: ${SUPABASE_ANON_KEY:0:30}..."
-fi
+# Validate required environment variables
+: "${SUPABASE_URL:?SUPABASE_URL is required}"
+: "${SUPABASE_ANON_KEY:?SUPABASE_ANON_KEY is required}"
+
+echo "✅ Supabase URL: ${SUPABASE_URL:0:30}..."
+# Do not print keys in logs
 
 # Check for device/emulator
 echo "📱 Checking for available devices..."

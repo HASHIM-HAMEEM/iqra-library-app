@@ -12,6 +12,7 @@ import 'package:library_registration_app/presentation/providers/students/student
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 // import 'package:path_provider/path_provider.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
+import 'package:library_registration_app/presentation/widgets/common/async_avatar.dart';
 
 class EditStudentPage extends ConsumerStatefulWidget {
 
@@ -799,49 +800,11 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
                       ),
                     );
                   }
-                  if (_profileImagePath != null && _isUrl(_profileImagePath)) {
-                    return ClipOval(
-                      child: Image.network(
-                        _profileImagePath!,
-                        width: 160,
-                        height: 160,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Text(
-                          _loadedStudent?.initials ?? '',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onPrimary,
-                            fontSize: 36,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-                  if (_profileImagePath != null) {
-                    return ClipOval(
-                      child: Image.file(
-                        File(_profileImagePath!),
-                        width: 160,
-                        height: 160,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Text(
-                          _loadedStudent?.initials ?? '',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onPrimary,
-                            fontSize: 36,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-                  return Text(
-                    _loadedStudent?.initials ?? '',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onPrimary,
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  return AsyncAvatar(
+                    imagePath: _profileImagePath,
+                    initials: _loadedStudent?.initials ?? '?',
+                    size: 160,
+                    fallbackIcon: Icons.person_outline,
                   );
                 }),
               ),

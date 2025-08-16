@@ -13,7 +13,7 @@ import 'package:library_registration_app/core/theme/app_theme.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
 import 'package:library_registration_app/presentation/providers/ui/ui_state_provider.dart';
 import 'package:library_registration_app/presentation/pages/splash/splash_page.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+// Removed supabase_flutter import - using plain supabase package
 
  final appInitProvider = FutureProvider<void>((ref) async {
   final settingsService = ref.read(appSettingsDaoProvider);
@@ -53,16 +53,7 @@ void main() async {
   } catch (e, st) {
     TelemetryService.instance.captureException(e, st, feature: 'display_mode');
   }
-  // Initialize Supabase unconditionally using AppConfig defaults (embed or dart-define)
-  try {
-    await Supabase.initialize(
-      url: AppConfig.supabaseUrl,
-      anonKey: AppConfig.supabaseAnonKey,
-      debug: AppConfig.developerMode,
-    );
-  } catch (e, st) {
-    TelemetryService.instance.captureException(e, st, feature: 'supabase_init');
-  }
+  // Supabase initialization removed - using plain supabase package with direct client creation
   
   // Initialize connectivity service
   try {
@@ -84,17 +75,7 @@ void main() async {
      );
    };
   runApp(const ProviderScope(child: LibraryRegistrationApp()));
-  // Ensure connectivity begins monitoring before the first auth attempts
-  // (already awaited initialize above). Also re-validate any persisted session if present.
-  try {
-    final hasSession = Supabase.instance.client.auth.currentSession != null;
-    if (hasSession) {
-      // Fire-and-forget, swallow errors to avoid crash on cold start
-      Supabase.instance.client.auth
-          .refreshSession()
-          .then((_) {}, onError: (_) {});
-    }
-  } catch (_) {}
+  // Session refresh removed - handled by individual SupabaseClient instances
  }
 
 class LibraryRegistrationApp extends ConsumerWidget {

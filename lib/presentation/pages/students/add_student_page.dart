@@ -12,6 +12,7 @@ import 'package:library_registration_app/core/utils/responsive_utils.dart';
 import 'package:library_registration_app/presentation/providers/students/students_notifier.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
+import 'package:library_registration_app/presentation/widgets/common/async_avatar.dart';
 
 
 class AddStudentPage extends ConsumerStatefulWidget {
@@ -778,22 +779,32 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
             children: [
               Stack(
                 children: [
-                  CircleAvatar(
-                    radius: 80,
-                    backgroundColor: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.1),
-                    backgroundImage: _selectedImage != null
-                        ? FileImage(_selectedImage!)
-                        : null,
-                    child: _selectedImage == null
-                        ? Icon(
-                            Icons.person,
-                            size: 80,
-                            color: Theme.of(context).colorScheme.primary,
-                          )
-                        : null,
-                  ),
+                  // Show selected image immediately if present
+                  if (_selectedImage != null)
+                    ClipOval(
+                      child: Image.file(
+                        _selectedImage!,
+                        width: 160,
+                        height: 160,
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  else
+                    AsyncAvatar(
+                      imagePath: null, // new student; no stored path yet
+                      initials: (
+                        (_firstNameController.text.trim().isNotEmpty || _lastNameController.text.trim().isNotEmpty)
+                          ? (_firstNameController.text.trim() + ' ' + _lastNameController.text.trim())
+                              .trim()
+                              .split(RegExp(r"\s+"))
+                              .map((e) => e.isNotEmpty ? e[0].toUpperCase() : '')
+                              .take(2)
+                              .join()
+                          : '?'
+                      ),
+                      size: 160,
+                      fallbackIcon: Icons.person,
+                    ),
                   Positioned(
                     bottom: 0,
                     right: 0,

@@ -48,15 +48,15 @@ class AppConfig {
   static const bool enableDataExport = true;
   static const bool enableAutoBackup = true;
 
-  // Supabase Configuration (set via build-time env or .dart-define)
-  // For production APKs distributed outside stores, embed your project values here as defaults
-  // (RLS must be enabled on Supabase for security). You can still override via --dart-define.
+  // Supabase Configuration (MUST be set via CI/CD or runtime injection)
+  // SECURITY: Never hardcode production credentials in source code
+  // These must be provided via --dart-define during build or environment variables
   static const String supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: 'https://rqghiwjhizmlvdagicnw.supabase.co',
+    defaultValue: '', // Empty default requires explicit configuration
   );
   static const String supabaseAnonKey = String.fromEnvironment(
-    'SUPABASE_ANON_KEY',
-    defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJxZ2hpd2poaXptbHZkYWdpY253Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTEwMjUsImV4cCI6MjA3MDU4NzAyNX0.zm7SWW-6d_STzZ97L5D-bWdJLmAdgsX_yZV_C7ArjY4',
+    'SUPABASE_ANON_KEY', 
+    defaultValue: '', // Empty default requires explicit configuration
   );
 }

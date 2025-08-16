@@ -10,6 +10,7 @@ import 'package:library_registration_app/presentation/providers/students/student
 import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
+import 'package:library_registration_app/presentation/widgets/common/async_avatar.dart';
 
 class StudentsPage extends ConsumerStatefulWidget {
   const StudentsPage({super.key});
@@ -925,24 +926,14 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
   }
 
   Widget _buildStudentAvatar(Student student, ThemeData theme, {double size = 48}) {
-    final path = student.profileImagePath;
-    if (path != null && path.isNotEmpty) {
-      final lower = path.toLowerCase();
-      if (lower.startsWith('http://') || lower.startsWith('https://')) {
-        return ClipOval(
-          child: Image.network(
-            path,
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => _buildIqraLogoPlaceholder(theme),
-          ),
-        );
-      }
-      // Avoid sync disk IO during build; fall back to placeholder for local paths
-      // If needed, you can later implement an async resolver with Image.file in a separate widget
-    }
-    return _buildIqraLogoPlaceholder(theme);
+    return ClipOval(
+      child: AsyncAvatar(
+        imagePath: student.profileImagePath,
+        initials: student.initials,
+        size: size,
+        fallbackIcon: Icons.school_outlined,
+      ),
+    );
   }
 
   Widget _buildIqraLogoPlaceholder(ThemeData theme) {

@@ -5,6 +5,8 @@ import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/domain/entities/activity_log.dart';
 
+
+
 /// Test configuration and utilities for the Iqra Library App
 class TestConfig {
   static const String testEmail = 'test@example.com';
@@ -115,6 +117,7 @@ class TestUtils {
         url: TestConfig.supabaseUrl,
         anonKey: TestConfig.supabaseAnonKey,
       );
+      
       return Supabase.instance.client;
     } catch (e) {
       print('Failed to initialize Supabase for testing: $e');

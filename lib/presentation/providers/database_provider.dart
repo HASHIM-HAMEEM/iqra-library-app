@@ -51,15 +51,9 @@ final supabaseServiceProvider = Provider<SupabaseService>((ref) {
     return SupabaseService(client: disabledClient, enabled: false);
   }
 
-  try {
-    // Prefer the initialized global client (shares persisted session, auth state)
-    final SupabaseClient shared = Supabase.instance.client;
-    return SupabaseService(client: shared, enabled: true);
-  } catch (_) {
-    // Fallback: construct directly from config if global instance isn't available
-    final fallback = SupabaseClient(AppConfig.supabaseUrl, AppConfig.supabaseAnonKey);
-    return SupabaseService(client: fallback, enabled: true);
-  }
+  // Create a direct Supabase client using the plain supabase package
+  final client = SupabaseClient(AppConfig.supabaseUrl, AppConfig.supabaseAnonKey);
+  return SupabaseService(client: client, enabled: true);
 });
 
 // Removed migration service provider - no longer needed with Supabase-only implementation

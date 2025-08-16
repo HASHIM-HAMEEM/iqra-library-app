@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'dart:io';
 import 'package:intl/intl.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
@@ -14,6 +13,7 @@ import 'package:library_registration_app/presentation/providers/subscriptions/su
 import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_notifier.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 // cached_network_image removed; using Image.network with errorBuilder
+import 'package:library_registration_app/presentation/widgets/common/async_avatar.dart';
 
 class StudentDetailsPage extends ConsumerWidget {
 
@@ -71,7 +71,7 @@ class StudentDetailsPage extends ConsumerWidget {
           );
         },
         loading: () => _buildLoadingSkeleton(context),
-        error: (e, _) => _buildErrorState(context, ref, e),
+        error: (e, _) => _buildErrorState(context, ref, e, studentId),
       ),
     );
   }
@@ -107,6 +107,7 @@ class StudentDetailsPage extends ConsumerWidget {
             ],
           ),
         ),
+
         IconButton(
           onPressed: () => context.go('/students/edit/${student.id}'),
           icon: const Icon(Icons.edit_outlined),
@@ -115,6 +116,7 @@ class StudentDetailsPage extends ConsumerWidget {
       ],
     );
   }
+}
 
   Widget _buildResponsiveSections(BuildContext context, WidgetRef ref, Student student) {
     final header = _buildHeader(context, student);
@@ -305,7 +307,7 @@ class StudentDetailsPage extends ConsumerWidget {
     final theme = Theme.of(context);
     return Row(
       children: [
-        _buildAvatar(theme, student),
+        _buildAvatar(context, theme, student),
         const SizedBox(width: 16),
         Expanded(
           child: Column(
@@ -332,35 +334,27 @@ class StudentDetailsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildAvatar(ThemeData theme, Student student) {
-    final path = student.profileImagePath;
-    Widget? img;
-    if (path != null && path.isNotEmpty) {
-      final lower = path.toLowerCase();
-      if (lower.startsWith('http://') || lower.startsWith('https://')) {
-        img = ClipOval(
-          child: Image.network(
-            path,
-            width: 72,
-            height: 72,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _fallbackInitials(theme, student),
-          ),
-        );
-      } else {
-        try {
-          final file = File(path);
-          if (file.existsSync()) {
-            img = Image.file(file, width: 72, height: 72, fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _fallbackInitials(theme, student));
-          }
-        } catch (_) {}
-      }
-    }
-    return CircleAvatar(
-      radius: 36,
-      backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
-      child: img ?? _fallbackInitials(theme, student),
+  Widget _buildAvatar(BuildContext context, ThemeData theme, Student student) {
+    return GestureDetector(
+      onTap: () => _showProfilePreview(context, student),
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: theme.colorScheme.primary.withOpacity(0.2),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: AsyncAvatar(
+          imagePath: student.profileImagePath,
+          initials: student.initials,
+          size: 72,
+          fallbackIcon: Icons.person_outline,
+        ),
+      ),
     );
   }
 
@@ -810,7 +804,7 @@ class StudentDetailsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildErrorState(BuildContext context, WidgetRef ref, Object error) {
+  Widget _buildErrorState(BuildContext context, WidgetRef ref, Object error, String studentId) {
     final theme = Theme.of(context);
     return Center(
       child: Padding(
@@ -892,4 +886,143 @@ class StudentDetailsPage extends ConsumerWidget {
       ),
     );
   }
-}
+
+  void _showProfilePreview(BuildContext context, Student student) {
+    final theme = Theme.of(context);
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: _buildProfilePreviewContent(ctx, theme, student),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildProfilePreviewContent(BuildContext context, ThemeData theme, Student s) {
+  final cs = theme.colorScheme;
+  return Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      // Header
+      Row(
+        children: [
+          Icon(Icons.person_outline, color: cs.primary),
+          const SizedBox(width: 8),
+          Text(
+            'Profile Preview',
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const Spacer(),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.close),
+            tooltip: 'Close',
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      // Card-like profile content
+      Container(
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.outlineVariant, width: 1),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            AsyncAvatar(
+              imagePath: s.profileImagePath,
+              initials: s.initials,
+              size: 120,
+              fallbackIcon: Icons.person_outline,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              s.fullName,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              s.email,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 16,
+              runSpacing: 8,
+              children: [
+                if ((s.phone ?? '').isNotEmpty)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.phone_outlined, size: 16, color: cs.primary),
+                      const SizedBox(width: 6),
+                      Text(s.phone ?? '-', style: theme.textTheme.bodyMedium),
+                    ],
+                  ),
+                if ((s.address ?? '').isNotEmpty)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.home_outlined, size: 16, color: cs.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        s.address ?? '-',
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                if ((s.seatNumber ?? '').isNotEmpty)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.event_seat_outlined, size: 16, color: cs.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Seat ${s.seatNumber}',
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+

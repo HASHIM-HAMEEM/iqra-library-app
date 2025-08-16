@@ -214,10 +214,18 @@ void main() {
         // Should not throw
         await disabledService.signOut();
       });
+
+      test('signInWithPassword throws AuthException when disabled', () async {
+        final disabledService = SupabaseService(client: mockClient, enabled: false);
+        expect(
+          () => disabledService.signInWithPassword('test@test.com', 'password'),
+          throwsA(isA<AuthException>()),
+        );
+      });
     });
 
     group('Real-time Operations', () {
-      test('subscribeToStudents throws when disabled', () {
+      test('subscribeToStudents throws StateError when disabled', () {
         final disabledService = SupabaseService(client: mockClient, enabled: false);
         expect(
           () => disabledService.subscribeToStudents((students) {}),
@@ -225,7 +233,7 @@ void main() {
         );
       });
 
-      test('subscribeToSubscriptions throws when disabled', () {
+      test('subscribeToSubscriptions throws StateError when disabled', () {
         final disabledService = SupabaseService(client: mockClient, enabled: false);
         expect(
           () => disabledService.subscribeToSubscriptions((subscriptions) {}),

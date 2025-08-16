@@ -12,8 +12,8 @@
 DO $$
 DECLARE
     new_user_id UUID := gen_random_uuid(); -- Generate a random UUID for the new user
-    admin_email TEXT := 'mohsinfarooqi9906@gmail.com'; -- Admin email
-    admin_password TEXT := 'Mohsin@iqra#313'; -- Admin password
+    admin_email TEXT := '${ADMIN_EMAIL}'; -- Admin email (set via environment variable)
+    admin_password TEXT := '${ADMIN_PASSWORD}'; -- Admin password (set via environment variable)
     encrypted_password TEXT;
 BEGIN
     -- Check if user already exists
@@ -115,7 +115,7 @@ SELECT
     created_at,
     role
 FROM auth.users 
-WHERE email = 'mohsinfarooqi9906@gmail.com'; -- Admin email
+WHERE email = '${ADMIN_EMAIL}'; -- Admin email (set via environment variable)
 
 -- Optional: Check app settings for the new user
 SELECT 
@@ -124,13 +124,14 @@ SELECT
     value,
     description
 FROM public.app_settings 
-WHERE user_id = (SELECT id FROM auth.users WHERE email = 'mohsinfarooqi9906@gmail.com'); -- Admin email
+WHERE user_id = (SELECT id FROM auth.users WHERE email = '${ADMIN_EMAIL}'); -- Admin email (set via environment variable)
 
 /*
 INSTRUCTIONS:
-1. Email: mohsinfarooqi9906@gmail.com
-2. Password: Mohsin@iqra#313
-3. Run this script in the Supabase SQL Editor
+1. Set ADMIN_EMAIL environment variable with your desired admin email
+2. Set ADMIN_PASSWORD environment variable with your desired admin password
+3. Replace ${ADMIN_EMAIL} and ${ADMIN_PASSWORD} placeholders before running
+4. Run this script in the Supabase SQL Editor
 4. The new admin user will have full access to all application features
 5. The user can log in using the email and password you specified
 6. After first login, consider changing the password through the application

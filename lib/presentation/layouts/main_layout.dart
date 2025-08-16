@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:library_registration_app/core/utils/responsive_utils.dart';
 import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+
 
 class MainLayout extends ConsumerStatefulWidget {
 
@@ -38,10 +38,9 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       try {
-        if (Supabase.instance.client.auth.currentSession != null) {
-          Supabase.instance.client.auth
-              .refreshSession()
-              .then((_) {}, onError: (_) {});
+        final authNotifier = ref.read(authProvider.notifier);
+        if (authNotifier.currentSession != null) {
+          authNotifier.refreshSession();
         }
       } catch (_) {}
       ref.read(authProvider.notifier).validateSession();

@@ -424,7 +424,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
             DateTime.fromMillisecondsSinceEpoch(session!.expiresAt! * 1000).isBefore(DateTime.now());
         if (isExpired || session == null) {
           try {
-            await Supabase.instance.client.auth.refreshSession();
+            await _supabaseService.refreshSession();
             user = _supabaseService.currentUser;
             session = _supabaseService.currentSession;
           } catch (_) {
@@ -612,6 +612,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
     } catch (e) {
       // If validation fails, logout for security
+      await logout();
+    }
+  }
+
+  /// Get current Supabase session
+  Session? get currentSession => _supabaseService.currentSession;
+
+  /// Refresh the current Supabase session
+  Future<void> refreshSession() async {
+    try {
+      await _supabaseService.refreshSession();
+    } catch (e) {
+      // If refresh fails, force logout for security
       await logout();
     }
   }

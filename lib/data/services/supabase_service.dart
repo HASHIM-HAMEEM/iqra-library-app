@@ -47,8 +47,13 @@ class SupabaseService {
   Future<bool> validateConnection() async {
     if (!_enabled) return false;
     try {
-      // Simple query to test connection
-      await _client.from('students').select('id').limit(1);
+      // Use a simple query that should work for both authenticated and anonymous users
+      // Try to access a table that has proper RLS policies
+      await _executeWithRetry(
+        () => _client.from('students').select('id').limit(1),
+        operationName: 'validateConnection',
+        maxRetries: 1, // Don't retry validation
+      );
       return true;
     } catch (e) {
       debugPrint('SupabaseService: Connection validation failed: $e');
@@ -98,11 +103,24 @@ class SupabaseService {
         }
         
         if (e is PostgrestException) {
+          // Add detailed debugging for PostgrestException
+          debugPrint('PostgrestException details:');
+          debugPrint('  - message: "${e.message}"');
+          debugPrint('  - code: "${e.code}"');
+          debugPrint('  - details: "${e.details}"');
+          debugPrint('  - hint: "${e.hint}"');
+          debugPrint('  - toString(): "${e.toString()}"');
+          
           // Don't retry for client errors (4xx)
-          if (e.code != null && e.code!.startsWith('4')) {
+          if (e.code != null && (e.code == '400' || e.code!.startsWith('4'))) {
             throw ValidationException(
-              'Invalid request during $operationName: ${e.message}',
-              details: {'code': e.code, 'hint': e.hint},
+              'Invalid request during $operationName: ${e.message.isEmpty ? "Unknown error" : e.message}',
+              details: {
+                'code': e.code, 
+                'hint': e.hint,
+                'details': e.details,
+                'fullError': e.toString(),
+              },
             );
           }
         }
@@ -190,11 +208,16 @@ class SupabaseService {
     await _client.auth.signOut();
   }
 
+  Future<void> refreshSession() async {
+    if (!_enabled) return;
+    await _client.auth.refreshSession();
+  }
+
   Session? get currentSession => _enabled ? _client.auth.currentSession : null;
   User? get currentUser => _enabled ? _client.auth.currentUser : null;
   
   Stream<AuthState> get authStateChanges =>
-      _enabled ? _client.auth.onAuthStateChange : const Stream.empty();
+      _enabled ? _client.auth.onAuthStateChange : const Stream<AuthState>.empty();
 
   // Students CRUD
   Future<String> uploadProfileImage({
@@ -208,18 +231,18 @@ class SupabaseService {
       () async {
         final String ext = p.extension(file.path).replaceFirst('.', '').toLowerCase();
         final String fileName = '${DateTime.now().millisecondsSinceEpoch}.$ext';
-        final String storagePath = 'students/$studentId/$fileName';
+        final String storagePath = '$studentId/$fileName';
         await _client.storage
             .from('profile-images')
             .upload(storagePath, file, fileOptions: const FileOptions(upsert: true, cacheControl: '3600'));
-        final String publicUrl = _client.storage.from('profile-images').getPublicUrl(storagePath);
-        return publicUrl;
+        // Return storage path instead of public URL
+        return storagePath;
       },
       operationName: 'uploadProfileImage',
     );
   }
 
-  Future<void> updateStudentProfileImage(String studentId, String? publicUrl) async {
+  Future<void> updateStudentProfileImage(String studentId, String? storagePath) async {
     if (!_enabled) return;
     if (studentId.trim().isEmpty) {
       throw const ValidationException('Student ID cannot be empty');
@@ -227,10 +250,36 @@ class SupabaseService {
     return _executeWithRetry(
       () => _client
           .from('students')
-          .update({'profile_image_path': publicUrl, 'updated_at': DateTime.now().toIso8601String()})
+          .update({'profile_image_path': storagePath, 'updated_at': DateTime.now().toIso8601String()})
           .eq('id', studentId),
       operationName: 'updateStudentProfileImage',
     );
+  }
+
+  /// Get a signed URL for a storage path in the profile-images bucket
+  Future<String?> getProfileImageSignedUrl(String? storagePath) async {
+    if (!_enabled || storagePath == null || storagePath.isEmpty) return null;
+    
+    try {
+      return _executeWithRetry(
+        () async {
+          final signedUrl = await _client.storage
+              .from('profile-images')
+              .createSignedUrl(storagePath, 3600); // 1 hour expiry
+          return signedUrl;
+        },
+        operationName: 'getProfileImageSignedUrl',
+      );
+    } catch (e) {
+      debugPrint('Failed to get signed URL for $storagePath: $e');
+      return null;
+    }
+  }
+
+  /// Helper method to check if a path is a storage path (not a URL)
+  bool isStoragePath(String? path) {
+    if (path == null || path.isEmpty) return false;
+    return !path.toLowerCase().startsWith('http://') && !path.toLowerCase().startsWith('https://');
   }
   Future<List<Student>> getAllStudents() async {
     if (!_enabled) return <Student>[];
@@ -922,7 +971,7 @@ class SupabaseService {
             'end_date': newEndDate.toIso8601String(),
             'amount': amount,
             'status': 'active',
-            'updated_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
           })
           .eq('id', id),
       operationName: 'renewSubscription',
