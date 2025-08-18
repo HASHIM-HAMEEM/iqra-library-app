@@ -184,10 +184,10 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
                         children: [
                       Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error),
                           const SizedBox(height: 16),
-                      Text('Error loading subscriptions', style: theme.textTheme.headlineSmall),
+                      Text('Unable to load subscriptions', style: theme.textTheme.headlineSmall),
                           const SizedBox(height: 8),
                           Text(
-                            error.toString(),
+                            'Please check your connection and try again.',
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),

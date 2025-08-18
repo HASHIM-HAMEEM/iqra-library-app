@@ -752,7 +752,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
             ),
             const SizedBox(height: 24),
             Text(
-              'Error loading students',
+              'Unable to load students',
               style: theme.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w700,
                 color: theme.colorScheme.error,
@@ -760,7 +760,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              error.toString(),
+              'Please check your connection and try again.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),

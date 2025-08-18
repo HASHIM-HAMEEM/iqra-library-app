@@ -191,7 +191,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         _buildListTile(
                           icon: Icons.timer_outlined,
                           title: 'Session Timeout',
-                          subtitle: '$_sessionTimeout minutes',
+                          subtitle: _formatTimeoutLabel(_sessionTimeout),
                           onTap: _showSessionSheet,
                         ),
                          _buildDivider(theme),
@@ -588,9 +588,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
 
 
+  String _formatTimeoutLabel(int minutes) {
+    if (minutes >= 60 && minutes % 60 == 0) {
+      final hours = minutes ~/ 60;
+      return '$hours ${hours == 1 ? 'hour' : 'hours'}';
+    }
+    return '$minutes minutes';
+  }
+
   void _showSessionSheet() {
     final theme = Theme.of(context);
-    const options = [15, 30, 60];
+    const options = [30, 60, 120];
     showAppBottomSheet<void>(
       context,
       builder: (ctx) {
@@ -614,7 +622,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   _saveSessionTimeout(minutes);
                 },
                 title: Text(
-                  '$minutes minutes',
+                  _formatTimeoutLabel(minutes),
                   style: theme.textTheme.bodyLarge,
                 ),
                 trailing: selected

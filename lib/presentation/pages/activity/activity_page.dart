@@ -341,7 +341,7 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
           Icon(Icons.error_outline, size: 48, color: theme.colorScheme.error),
           const SizedBox(height: 12),
           Text(
-            'Failed to load activity',
+            'Unable to load activity logs',
             style: theme.textTheme.titleMedium?.copyWith(
               color: theme.colorScheme.error,
               fontWeight: FontWeight.w600,
@@ -349,7 +349,7 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            error.toString(),
+            'Please check your connection and try again.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),

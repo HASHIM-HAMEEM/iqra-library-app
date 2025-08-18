@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:library_registration_app/core/utils/responsive_utils.dart';
 import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
+import 'dart:async';
 
 
 class MainLayout extends ConsumerStatefulWidget {
@@ -21,15 +22,23 @@ class MainLayout extends ConsumerStatefulWidget {
 }
 
 class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObserver {
+  Timer? _sessionValidationTimer;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Periodically validate session while app is running
+    _sessionValidationTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      try {
+        ref.read(authProvider.notifier).validateSession();
+      } catch (_) {}
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _sessionValidationTimer?.cancel();
     super.dispose();
   }
 
