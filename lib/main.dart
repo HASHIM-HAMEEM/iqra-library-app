@@ -1,9 +1,28 @@
+/// IQRA Library Registration App - Main Entry Point
+///
+/// A modern, offline-first Flutter application for library administrators
+/// to manage student registrations, subscriptions, and library operations.
+///
+/// Features:
+/// - Student management with profile pictures and personal information
+/// - Subscription tracking and management
+/// - Activity logging and reporting
+/// - Offline-first architecture with Supabase backend
+/// - Image compression and optimization
+/// - Real-time synchronization
+/// - Modern Material Design UI
+///
+/// Author: IQRA Library Team
+/// Version: 1.0.0
+/// Built with Flutter & Supabase
+
 import 'package:flutter/material.dart';
 // Release builds: avoid importing ui we don't need
 import 'package:flutter/services.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform, kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:library_registration_app/core/config/app_config.dart';
 import 'package:library_registration_app/core/services/connectivity_service.dart';
 import 'package:library_registration_app/core/utils/telemetry_service.dart';
@@ -13,7 +32,6 @@ import 'package:library_registration_app/core/theme/app_theme.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
 import 'package:library_registration_app/presentation/providers/ui/ui_state_provider.dart';
 import 'package:library_registration_app/presentation/pages/splash/splash_page.dart';
-// Removed supabase_flutter import - using plain supabase package
 
  final appInitProvider = FutureProvider<void>((ref) async {
   final settingsService = ref.read(appSettingsDaoProvider);
@@ -53,7 +71,21 @@ void main() async {
   } catch (e, st) {
     TelemetryService.instance.captureException(e, st, feature: 'display_mode');
   }
-  // Supabase initialization removed - using plain supabase package with direct client creation
+  // Initialize Supabase with session persistence
+  try {
+    await Supabase.initialize(
+      url: AppConfig.supabaseUrl,
+      anonKey: AppConfig.supabaseAnonKey,
+      authOptions: const FlutterAuthClientOptions(
+        authFlowType: AuthFlowType.implicit, // Better for mobile apps
+      ),
+      realtimeClientOptions: const RealtimeClientOptions(
+        eventsPerSecond: 10,
+      ),
+    );
+  } catch (e, st) {
+    TelemetryService.instance.captureException(e, st, feature: 'supabase_init');
+  }
   
   // Initialize connectivity service
   try {

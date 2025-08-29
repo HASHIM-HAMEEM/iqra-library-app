@@ -5,6 +5,8 @@ import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:library_registration_app/core/services/connectivity_service.dart';
+import 'package:library_registration_app/core/services/cache_service.dart';
+import 'package:library_registration_app/core/services/image_compression_service.dart';
  
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
@@ -33,12 +35,14 @@ class ValidationException extends SupabaseServiceException {
 }
 
 class SupabaseService {
-  SupabaseService({required SupabaseClient client, bool enabled = true})
+  SupabaseService({required SupabaseClient client, bool enabled = true, CacheService? cache})
       : _client = client,
-        _enabled = enabled;
+        _enabled = enabled,
+        _cache = cache ?? CacheService();
 
   final SupabaseClient _client;
   final bool _enabled;
+  final CacheService _cache;
   
   /// Check if Supabase is properly initialized
   bool get isInitialized => _enabled;
@@ -206,6 +210,8 @@ class SupabaseService {
   Future<void> signOut() async {
     if (!_enabled) return;
     await _client.auth.signOut();
+    // Clear all cached data on logout
+    try { await _cache.clearAll(); } catch (_) {}
   }
 
   Future<void> refreshSession() async {
@@ -229,12 +235,37 @@ class SupabaseService {
     }
     return _executeWithRetry(
       () async {
-        final String ext = p.extension(file.path).replaceFirst('.', '').toLowerCase();
+        // Compress the image before uploading
+        File imageToUpload;
+        try {
+          imageToUpload = await ImageCompressionService.compressImage(file);
+        } catch (e) {
+          // Check if this is our custom ImageTooLargeException
+          if (e is ImageTooLargeException) {
+            throw ValidationException(
+              'Profile image is too large. Please choose a smaller image (max ${ImageCompressionService.maxFileSizeMB}MB). ${e.message}',
+              details: {'originalError': e.toString(), 'fileSize': e.actualSizeBytes},
+            );
+          }
+          // If compression fails for any other reason, try with original file
+          // but still check size
+          final isValidSize = await ImageCompressionService.validateImageSize(file);
+          if (!isValidSize) {
+            final fileSize = await file.length();
+            throw ValidationException(
+              'Profile image is too large. Please choose a smaller image (max ${ImageCompressionService.maxFileSizeMB}MB). Current size: ${ImageCompressionService.formatFileSize(fileSize)}',
+              details: {'fileSize': fileSize, 'maxSize': ImageCompressionService.maxFileSizeBytes},
+            );
+          }
+          imageToUpload = file;
+        }
+
+        final String ext = p.extension(imageToUpload.path).replaceFirst('.', '').toLowerCase();
         final String fileName = '${DateTime.now().millisecondsSinceEpoch}.$ext';
         final String storagePath = '$studentId/$fileName';
         await _client.storage
             .from('profile-images')
-            .upload(storagePath, file, fileOptions: const FileOptions(upsert: true, cacheControl: '3600'));
+            .upload(storagePath, imageToUpload, fileOptions: const FileOptions(upsert: true, cacheControl: '3600'));
         // Return storage path instead of public URL
         return storagePath;
       },
@@ -283,19 +314,40 @@ class SupabaseService {
   }
   Future<List<Student>> getAllStudents() async {
     if (!_enabled) return <Student>[];
+    // Try cache first (stale-while-revalidate)
+    final cached = await _cache.getList<Student>(
+      key: 'students_all',
+      maxAge: const Duration(minutes: 10),
+      fromJson: (m) => Student.fromJson(m),
+    );
+    if (cached != null && cached.isNotEmpty) {
+      () async {
+        try {
+          final fresh = await _fetchAllStudents();
+          await _cache.setList<Student>(key: 'students_all', data: fresh, toJson: (s) => s.toJson());
+        } catch (_) {}
+      }();
+      return cached;
+    }
+    final fresh = await _fetchAllStudents();
+    await _cache.setList<Student>(key: 'students_all', data: fresh, toJson: (s) => s.toJson());
+    return fresh;
+  }
+
+  Future<List<Student>> _fetchAllStudents() async {
     return _executeWithRetry(
       () async {
-      final response = await _client
-          .from('students')
-          .select()
-          .eq('is_deleted', false)
-          .order('created_at', ascending: false);
-      
-      return (response as List)
+        final response = await _client
+            .from('students')
+            .select()
+            .eq('is_deleted', false)
+            .order('created_at', ascending: false);
+
+        return (response as List)
             .map((json) {
               try {
                 return Student.fromJson(json as Map<String, dynamic>);
-    } catch (e) {
+              } catch (e) {
                 throw ValidationException(
                   'Failed to parse student data',
                   details: {'studentData': json, 'parseError': e.toString()},
@@ -313,27 +365,51 @@ class SupabaseService {
     if (id.trim().isEmpty) {
       throw const ValidationException('Student ID cannot be empty');
     }
-    
-    return _executeWithRetry(
-      () async {
-    try {
-      final response = await _client
-          .from('students')
-          .select()
-          .eq('id', id)
-          .single();
-      
-      return Student.fromJson(response);
-        } on PostgrestException catch (e) {
-          if (e.code == 'PGRST116') {
-            // No student found
-      return null;
-    }
-          rethrow;
-        }
-      },
-      operationName: 'getStudentById',
+    final String key = 'student_$id';
+    final cached = await _cache.getItem<Student>(
+      key: key,
+      maxAge: const Duration(minutes: 15),
+      fromJson: (m) => Student.fromJson(m),
     );
+    if (cached != null) {
+      () async {
+        try {
+          final fresh = await _executeWithRetry(
+            () async {
+              final response = await _client
+                  .from('students')
+                  .select()
+                  .eq('id', id)
+                  .single();
+              return Student.fromJson(response);
+            },
+            operationName: 'getStudentById',
+          );
+          await _cache.setItem<Student>(key: key, data: fresh, toJson: (s) => s.toJson());
+        } catch (_) {}
+      }();
+      return cached;
+    }
+    try {
+      final fresh = await _executeWithRetry(
+        () async {
+          final response = await _client
+              .from('students')
+              .select()
+              .eq('id', id)
+              .single();
+          return Student.fromJson(response);
+        },
+        operationName: 'getStudentById',
+      );
+      await _cache.setItem<Student>(key: key, data: fresh, toJson: (s) => s.toJson());
+      return fresh;
+    } on PostgrestException catch (e) {
+      if (e.code == 'PGRST116') {
+        return null;
+      }
+      rethrow;
+    }
   }
 
   Future<void> createStudent(Student student) async {
@@ -356,21 +432,25 @@ class SupabaseService {
       print('SupabaseService: Failed to get auth context: $e');
     }
     
-    return _executeWithRetry(
+    final result = await _executeWithRetry(
       () => _client.from('students').insert(student.toJson()),
       operationName: 'createStudent',
     );
+    _invalidateStudentCaches();
+    return result;
   }
 
   Future<void> updateStudent(Student student) async {
     if (!_enabled) return;
-    return _executeWithRetry(
+    final result = await _executeWithRetry(
       () => _client
           .from('students')
           .update(student.toJson())
           .eq('id', student.id),
       operationName: 'updateStudent',
     );
+    _invalidateStudentCaches();
+    return result;
   }
 
   Future<void> deleteStudent(String id, {bool hard = false}) async {
@@ -379,7 +459,7 @@ class SupabaseService {
       throw const ValidationException('Student ID cannot be empty');
     }
     
-    return _executeWithRetry(
+    final result = await _executeWithRetry(
       () async {
       if (hard) {
           await _client.from('students').delete().eq('id', id);
@@ -395,31 +475,96 @@ class SupabaseService {
       },
       operationName: 'deleteStudent',
     );
+    _invalidateStudentCaches();
+    return result;
+  }
+
+  void _invalidateStudentCaches() {
+    _cache.clearByPrefix('students_');
+  }
+
+  void _invalidateSubscriptionCaches() {
+    _cache.clearByPrefix('subscriptions_');
   }
 
   Future<List<Student>> getActiveStudents() async {
     if (!_enabled) return <Student>[];
-    return _executeWithRetry(
+    final cached = await _cache.getList<Student>(
+      key: 'students_active',
+      maxAge: const Duration(minutes: 5),
+      fromJson: (m) => Student.fromJson(m),
+    );
+    if (cached != null) {
+      () async {
+        try {
+          final fresh = await _executeWithRetry(
+            () async {
+              final response = await _client
+                  .from('students')
+                  .select()
+                  .eq('is_deleted', false)
+                  .order('created_at', ascending: false);
+              return (response as List)
+                  .map((json) => Student.fromJson(json as Map<String, dynamic>))
+                  .toList();
+            },
+            operationName: 'getActiveStudents',
+          );
+          await _cache.setList<Student>(key: 'students_active', data: fresh, toJson: (s) => s.toJson());
+        } catch (_) {}
+      }();
+      return cached;
+    }
+    final fresh = await _executeWithRetry(
       () async {
         final response = await _client
             .from('students')
             .select()
             .eq('is_deleted', false)
             .order('created_at', ascending: false);
-        
         return (response as List)
             .map((json) => Student.fromJson(json as Map<String, dynamic>))
             .toList();
       },
       operationName: 'getActiveStudents',
     );
+    await _cache.setList<Student>(key: 'students_active', data: fresh, toJson: (s) => s.toJson());
+    return fresh;
   }
 
   Future<List<Student>> searchStudents(String query) async {
     if (!_enabled) return <Student>[];
     if (query.trim().isEmpty) return <Student>[];
     
-    return _executeWithRetry(
+    final String key = 'students_search_${query.toLowerCase()}';
+    final cached = await _cache.getList<Student>(
+      key: key,
+      maxAge: const Duration(minutes: 2),
+      fromJson: (m) => Student.fromJson(m),
+    );
+    if (cached != null) {
+      () async {
+        try {
+          final fresh = await _executeWithRetry(
+            () async {
+              final response = await _client
+                  .from('students')
+                  .select('id, first_name, last_name, email, phone, address, profile_image_path, seat_number, created_at, updated_at, date_of_birth, is_deleted')
+                  .eq('is_deleted', false)
+                  .or('first_name.ilike.%$query%,last_name.ilike.%$query%,email.ilike.%$query%,phone.ilike.%$query%')
+                  .order('created_at', ascending: false);
+              return (response as List)
+                  .map((json) => Student.fromJson(json as Map<String, dynamic>))
+                  .toList();
+            },
+            operationName: 'searchStudents',
+          );
+          await _cache.setList<Student>(key: key, data: fresh, toJson: (s) => s.toJson());
+        } catch (_) {}
+      }();
+      return cached;
+    }
+    final fresh = await _executeWithRetry(
       () async {
         final response = await _client
             .from('students')
@@ -427,18 +572,47 @@ class SupabaseService {
             .eq('is_deleted', false)
             .or('first_name.ilike.%$query%,last_name.ilike.%$query%,email.ilike.%$query%,phone.ilike.%$query%')
             .order('created_at', ascending: false);
-        
         return (response as List)
             .map((json) => Student.fromJson(json as Map<String, dynamic>))
             .toList();
       },
       operationName: 'searchStudents',
     );
+    await _cache.setList<Student>(key: key, data: fresh, toJson: (s) => s.toJson());
+    return fresh;
   }
 
   Future<List<Student>> getStudentsPaginated(int offset, int limit) async {
     if (!_enabled) return <Student>[];
-    return _executeWithRetry(
+    final String key = 'students_page_${offset}_$limit';
+    final cached = await _cache.getList<Student>(
+      key: key,
+      maxAge: const Duration(minutes: 3),
+      fromJson: (m) => Student.fromJson(m),
+    );
+    if (cached != null) {
+      () async {
+        try {
+          final fresh = await _executeWithRetry(
+            () async {
+              final response = await _client
+                  .from('students')
+                  .select('id, first_name, last_name, email, phone, address, profile_image_path, seat_number, created_at, updated_at, date_of_birth, is_deleted')
+                  .eq('is_deleted', false)
+                  .order('created_at', ascending: false)
+                  .range(offset, offset + limit - 1);
+              return (response as List)
+                  .map((json) => Student.fromJson(json as Map<String, dynamic>))
+                  .toList();
+            },
+            operationName: 'getStudentsPaginated',
+          );
+          await _cache.setList<Student>(key: key, data: fresh, toJson: (s) => s.toJson());
+        } catch (_) {}
+      }();
+      return cached;
+    }
+    final fresh = await _executeWithRetry(
       () async {
         final response = await _client
             .from('students')
@@ -446,18 +620,48 @@ class SupabaseService {
             .eq('is_deleted', false)
             .order('created_at', ascending: false)
             .range(offset, offset + limit - 1);
-        
         return (response as List)
             .map((json) => Student.fromJson(json as Map<String, dynamic>))
             .toList();
       },
       operationName: 'getStudentsPaginated',
     );
+    await _cache.setList<Student>(key: key, data: fresh, toJson: (s) => s.toJson());
+    return fresh;
   }
 
   Future<int> getStudentsCount() async {
     if (!_enabled) return 0;
-    return _executeWithRetry(
+    const String key = 'students_count';
+    final cached = await _cache.getItem<int>(
+      key: key,
+      maxAge: const Duration(minutes: 2),
+      fromJson: (m) => (m['value'] as num).toInt(),
+    );
+    if (cached != null) {
+      () async {
+        try {
+          final fresh = await _executeWithRetry(
+            () async {
+              final response = await _client
+                  .from('students')
+                  .select('id')
+                  .eq('is_deleted', false)
+                  .count();
+              return response.count;
+            },
+            operationName: 'getStudentsCount',
+          );
+          await _cache.setItem<int>(
+            key: key,
+            data: fresh,
+            toJson: (v) => {'value': v},
+          );
+        } catch (_) {}
+      }();
+      return cached;
+    }
+    final fresh = await _executeWithRetry(
       () async {
         final response = await _client
             .from('students')
@@ -468,6 +672,8 @@ class SupabaseService {
       },
       operationName: 'getStudentsCount',
     );
+    await _cache.setItem<int>(key: key, data: fresh, toJson: (v) => {'value': v});
+    return fresh;
   }
 
   Future<bool> isEmailExists(String email, {String? excludeId}) async {
@@ -598,20 +804,38 @@ class SupabaseService {
   // Subscriptions CRUD
   Future<List<Subscription>> getAllSubscriptions() async {
     if (!_enabled) return <Subscription>[];
+    final cached = await _cache.getList<Subscription>(
+      key: 'subscriptions_all',
+      maxAge: const Duration(minutes: 5),
+      fromJson: (m) => Subscription.fromJson(m),
+    );
+    if (cached != null && cached.isNotEmpty) {
+      () async {
+        try {
+          final fresh = await _fetchAllSubscriptions();
+          await _cache.setList<Subscription>(key: 'subscriptions_all', data: fresh, toJson: (s) => s.toJson());
+        } catch (_) {}
+      }();
+      return cached;
+    }
+    final fresh = await _fetchAllSubscriptions();
+    await _cache.setList<Subscription>(key: 'subscriptions_all', data: fresh, toJson: (s) => s.toJson());
+    return fresh;
+  }
+
+  Future<List<Subscription>> _fetchAllSubscriptions() async {
     return _executeWithRetry(
       () async {
-      final response = await _client
-          .from('subscriptions')
-           .select('id, student_id, plan_name, start_date, end_date, amount, status, created_at, updated_at')
-          .order('created_at', ascending: false);
-      
-        
-      
-      return (response as List)
+        final response = await _client
+            .from('subscriptions')
+            .select('id, student_id, plan_name, start_date, end_date, amount, status, created_at, updated_at')
+            .order('created_at', ascending: false);
+
+        return (response as List)
             .map((json) {
               try {
                 return Subscription.fromJson(json as Map<String, dynamic>);
-    } catch (e) {
+              } catch (e) {
                 throw ValidationException(
                   'Failed to parse subscription data',
                   details: {'subscriptionData': json, 'parseError': e.toString()},
@@ -661,10 +885,12 @@ class SupabaseService {
     if (!_enabled) return;
     _validateSubscription(subscription);
     
-    return _executeWithRetry(
+    final result = await _executeWithRetry(
       () => _client.from('subscriptions').insert(subscription.toJson()),
       operationName: 'createSubscription',
     );
+    _invalidateSubscriptionCaches();
+    return result;
   }
   
   /// Validate subscription data before operations
@@ -684,7 +910,7 @@ class SupabaseService {
     if (!_enabled) return;
     _validateSubscription(subscription);
     
-    return _executeWithRetry(
+    final result = await _executeWithRetry(
       () => _client
           .from('subscriptions')
           .update({
@@ -698,6 +924,8 @@ class SupabaseService {
           .eq('id', subscription.id),
       operationName: 'updateSubscription',
     );
+    _invalidateSubscriptionCaches();
+    return result;
   }
 
   Future<void> deleteSubscription(String id, {bool hard = false}) async {
@@ -706,18 +934,48 @@ class SupabaseService {
       throw const ValidationException('Subscription ID cannot be empty');
     }
     
-    return _executeWithRetry(
+    final result = await _executeWithRetry(
       () async {
         // Perform a hard delete since subscriptions table has no is_deleted column
         await _client.from('subscriptions').delete().eq('id', id);
       },
       operationName: 'deleteSubscription',
     );
+    _invalidateSubscriptionCaches();
+    return result;
   }
 
   Future<List<Subscription>> getActiveSubscriptions() async {
     if (!_enabled) return <Subscription>[];
-    return _executeWithRetry(
+    const String key = 'subscriptions_active';
+    final cached = await _cache.getList<Subscription>(
+      key: key,
+      maxAge: const Duration(minutes: 3),
+      fromJson: (m) => Subscription.fromJson(m),
+    );
+    if (cached != null) {
+      () async {
+        try {
+          final fresh = await _executeWithRetry(
+            () async {
+              final now = DateTime.now();
+              final response = await _client
+                  .from('subscriptions')
+                  .select('id, student_id, plan_name, end_date, amount, status, created_at')
+                  .gte('end_date', now.toIso8601String())
+                  .order('created_at', ascending: false);
+              return (response as List)
+                  .map((json) => Subscription.fromJson(json as Map<String, dynamic>))
+                  .toList();
+            },
+            operationName: 'getActiveSubscriptions',
+          );
+          await _cache.setList<Subscription>(key: key, data: fresh, toJson: (s) => s.toJson());
+        } catch (_) {}
+      }();
+      return cached;
+    }
+    final fresh = await _executeWithRetry(
       () async {
         final now = DateTime.now();
         final response = await _client
@@ -725,18 +983,47 @@ class SupabaseService {
             .select('id, student_id, plan_name, end_date, amount, status, created_at')
             .gte('end_date', now.toIso8601String())
             .order('created_at', ascending: false);
-        
         return (response as List)
             .map((json) => Subscription.fromJson(json as Map<String, dynamic>))
             .toList();
       },
       operationName: 'getActiveSubscriptions',
     );
+    await _cache.setList<Subscription>(key: key, data: fresh, toJson: (s) => s.toJson());
+    return fresh;
   }
 
   Future<List<Subscription>> getExpiredSubscriptions() async {
     if (!_enabled) return <Subscription>[];
-    return _executeWithRetry(
+    const String key = 'subscriptions_expired';
+    final cached = await _cache.getList<Subscription>(
+      key: key,
+      maxAge: const Duration(minutes: 5),
+      fromJson: (m) => Subscription.fromJson(m),
+    );
+    if (cached != null) {
+      () async {
+        try {
+          final fresh = await _executeWithRetry(
+            () async {
+              final now = DateTime.now();
+              final response = await _client
+                  .from('subscriptions')
+                  .select('id, student_id, plan_name, end_date, amount, status, created_at')
+                  .lt('end_date', now.toIso8601String())
+                  .order('end_date', ascending: false);
+              return (response as List)
+                  .map((json) => Subscription.fromJson(json as Map<String, dynamic>))
+                  .toList();
+            },
+            operationName: 'getExpiredSubscriptions',
+          );
+          await _cache.setList<Subscription>(key: key, data: fresh, toJson: (s) => s.toJson());
+        } catch (_) {}
+      }();
+      return cached;
+    }
+    final fresh = await _executeWithRetry(
       () async {
         final now = DateTime.now();
         final response = await _client
@@ -744,13 +1031,14 @@ class SupabaseService {
             .select('id, student_id, plan_name, end_date, amount, status, created_at')
             .lt('end_date', now.toIso8601String())
             .order('end_date', ascending: false);
-        
         return (response as List)
             .map((json) => Subscription.fromJson(json as Map<String, dynamic>))
             .toList();
       },
       operationName: 'getExpiredSubscriptions',
     );
+    await _cache.setList<Subscription>(key: key, data: fresh, toJson: (s) => s.toJson());
+    return fresh;
   }
 
   Future<List<Subscription>> getSubscriptionsByStatus(String status) async {
@@ -855,25 +1143,77 @@ class SupabaseService {
 
   Future<List<Subscription>> getSubscriptionsPaginated(int offset, int limit) async {
     if (!_enabled) return <Subscription>[];
-    return _executeWithRetry(
+    final String key = 'subscriptions_page_${offset}_$limit';
+    final cached = await _cache.getList<Subscription>(
+      key: key,
+      maxAge: const Duration(minutes: 3),
+      fromJson: (m) => Subscription.fromJson(m),
+    );
+    if (cached != null) {
+      () async {
+        try {
+          final fresh = await _executeWithRetry(
+            () async {
+              final response = await _client
+                  .from('subscriptions')
+                  .select('id, student_id, plan_name, start_date, end_date, amount, status, created_at, updated_at')
+                  .order('created_at', ascending: false)
+                  .range(offset, offset + limit - 1);
+              return (response as List)
+                  .map((json) => Subscription.fromJson(json as Map<String, dynamic>))
+                  .toList();
+            },
+            operationName: 'getSubscriptionsPaginated',
+          );
+          await _cache.setList<Subscription>(key: key, data: fresh, toJson: (s) => s.toJson());
+        } catch (_) {}
+      }();
+      return cached;
+    }
+    final fresh = await _executeWithRetry(
       () async {
         final response = await _client
             .from('subscriptions')
             .select('id, student_id, plan_name, start_date, end_date, amount, status, created_at, updated_at')
             .order('created_at', ascending: false)
             .range(offset, offset + limit - 1);
-        
         return (response as List)
             .map((json) => Subscription.fromJson(json as Map<String, dynamic>))
             .toList();
       },
       operationName: 'getSubscriptionsPaginated',
     );
+    await _cache.setList<Subscription>(key: key, data: fresh, toJson: (s) => s.toJson());
+    return fresh;
   }
 
   Future<int> getSubscriptionsCount() async {
     if (!_enabled) return 0;
-    return _executeWithRetry(
+    const String key = 'subscriptions_count';
+    final cached = await _cache.getItem<int>(
+      key: key,
+      maxAge: const Duration(minutes: 2),
+      fromJson: (m) => (m['value'] as num).toInt(),
+    );
+    if (cached != null) {
+      () async {
+        try {
+          final fresh = await _executeWithRetry(
+            () async {
+              final response = await _client
+                  .from('subscriptions')
+                  .select('id')
+                  .count();
+              return response.count;
+            },
+            operationName: 'getSubscriptionsCount',
+          );
+          await _cache.setItem<int>(key: key, data: fresh, toJson: (v) => {'value': v});
+        } catch (_) {}
+      }();
+      return cached;
+    }
+    final fresh = await _executeWithRetry(
       () async {
         final response = await _client
             .from('subscriptions')
@@ -883,6 +1223,8 @@ class SupabaseService {
       },
       operationName: 'getSubscriptionsCount',
     );
+    await _cache.setItem<int>(key: key, data: fresh, toJson: (v) => {'value': v});
+    return fresh;
   }
 
   Future<void> restoreSubscription(String id) async {
@@ -946,7 +1288,7 @@ class SupabaseService {
       throw const ValidationException('Subscription ID cannot be empty');
     }
     
-    return _executeWithRetry(
+    final result = await _executeWithRetry(
       () => _client
           .from('subscriptions')
           .update({
@@ -956,6 +1298,8 @@ class SupabaseService {
           .eq('id', id),
       operationName: 'cancelSubscription',
     );
+    _invalidateSubscriptionCaches();
+    return result;
   }
 
   Future<void> renewSubscription(String id, DateTime newEndDate, double amount) async {
@@ -964,7 +1308,7 @@ class SupabaseService {
       throw const ValidationException('Subscription ID cannot be empty');
     }
     
-    return _executeWithRetry(
+    final result = await _executeWithRetry(
       () => _client
           .from('subscriptions')
           .update({
@@ -976,6 +1320,8 @@ class SupabaseService {
           .eq('id', id),
       operationName: 'renewSubscription',
     );
+    _invalidateSubscriptionCaches();
+    return result;
   }
 
   Future<int> getActiveSubscriptionsCount() async {

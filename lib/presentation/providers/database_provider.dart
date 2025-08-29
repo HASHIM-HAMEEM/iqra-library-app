@@ -3,6 +3,7 @@ import 'package:library_registration_app/data/repositories/activity_log_reposito
 import 'package:library_registration_app/data/repositories/student_repository_impl.dart';
 import 'package:library_registration_app/data/repositories/subscription_repository_impl.dart';
 import 'package:library_registration_app/core/config/app_config.dart';
+import 'package:library_registration_app/core/services/cache_service.dart';
 import 'package:library_registration_app/data/services/supabase_service.dart';
 import 'package:library_registration_app/data/services/app_settings_service.dart';
 import 'package:library_registration_app/domain/repositories/activity_log_repository.dart';
@@ -41,7 +42,7 @@ final activityLogRepositoryProvider = Provider<ActivityLogRepository>((ref) {
 
 // Supabase service provider
 final supabaseServiceProvider = Provider<SupabaseService>((ref) {
-  // Use a single, shared Supabase client across the app
+  // Use the initialized Supabase instance with session persistence
   final bool hasConfig =
       AppConfig.supabaseUrl.isNotEmpty && AppConfig.supabaseAnonKey.isNotEmpty;
 
@@ -51,9 +52,15 @@ final supabaseServiceProvider = Provider<SupabaseService>((ref) {
     return SupabaseService(client: disabledClient, enabled: false);
   }
 
-  // Create a direct Supabase client using the plain supabase package
-  final client = SupabaseClient(AppConfig.supabaseUrl, AppConfig.supabaseAnonKey);
-  return SupabaseService(client: client, enabled: true);
+  // Use the initialized Supabase client with session persistence
+  try {
+    final client = Supabase.instance.client;
+    return SupabaseService(client: client, enabled: true, cache: CacheService());
+  } catch (e) {
+    // Fallback to direct client creation if initialization failed
+    final client = SupabaseClient(AppConfig.supabaseUrl, AppConfig.supabaseAnonKey);
+    return SupabaseService(client: client, enabled: true, cache: CacheService());
+  }
 });
 
 // Removed migration service provider - no longer needed with Supabase-only implementation

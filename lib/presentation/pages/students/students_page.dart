@@ -789,6 +789,10 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
   Widget _buildModernStudentCard(Student student) {
     final theme = Theme.of(context);
 
+    // Get subscription status for this student
+    final hasActiveSubscription = _activeStatusCache[student.id] == true;
+    final hasExpiredSubscription = _expiredStatusCache[student.id] == true;
+
     return Card(
       elevation: 2,
       shadowColor:
@@ -843,6 +847,12 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildSubscriptionStatusBadge(
+                            hasActiveSubscription,
+                            hasExpiredSubscription,
+                            theme,
                           ),
                         ],
                       ),
@@ -925,6 +935,50 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
     );
   }
 
+  Widget _buildSubscriptionStatusBadge(
+    bool hasActiveSubscription,
+    bool hasExpiredSubscription,
+    ThemeData theme,
+  ) {
+    String statusText;
+    Color backgroundColor;
+    Color textColor;
+
+    if (hasActiveSubscription) {
+      statusText = 'Active';
+      backgroundColor = theme.colorScheme.primary.withValues(alpha: 0.1);
+      textColor = theme.colorScheme.primary;
+    } else if (hasExpiredSubscription) {
+      statusText = 'Expired';
+      backgroundColor = theme.colorScheme.error.withValues(alpha: 0.1);
+      textColor = theme.colorScheme.error;
+    } else {
+      statusText = 'No Sub';
+      backgroundColor = theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.1);
+      textColor = theme.colorScheme.onSurfaceVariant;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: textColor.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: Text(
+        statusText,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: textColor,
+          fontWeight: FontWeight.w600,
+          fontSize: 10,
+        ),
+      ),
+    );
+  }
+
   Widget _buildStudentAvatar(Student student, ThemeData theme, {double size = 48}) {
     return ClipOval(
       child: AsyncAvatar(
@@ -936,18 +990,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
     );
   }
 
-  Widget _buildIqraLogoPlaceholder(ThemeData theme) {
-    return ColoredBox(
-      color: theme.colorScheme.primaryContainer,
-      child: Center(
-        child: Icon(
-          Icons.school_outlined, // Using school icon as IQRA logo placeholder
-          size: 30,
-          color: theme.colorScheme.onPrimaryContainer,
-        ),
-      ),
-    );
-  }
+
 
   void _showDeleteConfirmation(Student student) {
     showAppBottomSheet<void>(

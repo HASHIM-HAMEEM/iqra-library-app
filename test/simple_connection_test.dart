@@ -17,7 +17,7 @@ void main() {
 
       print('Testing Basic Supabase Connection...');
       print('URL: $supabaseUrl');
-      print('Anon Key: ${supabaseAnonKey.substring(0, 20)}...');
+      print('Anon Key: ${supabaseAnonKey.isNotEmpty ? '${supabaseAnonKey.substring(0, 20)}...' : 'Not set'}');
 
       if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
         fail('SUPABASE_URL or SUPABASE_ANON_KEY not set');
@@ -56,11 +56,11 @@ void main() {
             .from('students')
             .select('id')
             .limit(1);
-        
+
         print('Query response: $response');
         print('✓ Basic query completed successfully');
       } catch (e) {
-        print('Query failed: $e');
+        print('Query failed: $e (This is expected if database tables are not set up yet)');
         print('Error type: ${e.runtimeType}');
         if (e is PostgrestException) {
           print('PostgrestException details:');
@@ -69,7 +69,9 @@ void main() {
           print('  Details: ${e.details}');
           print('  Hint: ${e.hint}');
         }
-        // Don't fail the test, just log the error for analysis
+        // For APK building, we just need to ensure the connection works
+        // Table existence is a separate deployment concern
+        print('⚠️  Database tables may not be set up yet. This is expected for new deployments.');
       }
     });
   });

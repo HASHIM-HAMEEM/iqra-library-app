@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'package:library_registration_app/core/utils/permission_service.dart';
 import 'package:library_registration_app/core/utils/responsive_utils.dart';
+import 'package:library_registration_app/core/services/image_compression_service.dart';
 import 'package:library_registration_app/presentation/providers/students/students_notifier.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
@@ -40,6 +41,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
   File? _selectedImage;
 
   bool _isLoading = false;
+  bool _isCompressingImage = false;
   String? _emailError;
   int _currentPage = 0;
   bool _dobError = false;
@@ -162,6 +164,8 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
   }
 
   Future<void> _saveImage(XFile image) async {
+    setState(() => _isCompressingImage = true);
+
     try {
       final appDir = await getApplicationDocumentsDirectory();
       final fileName =
@@ -178,18 +182,67 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
         await profileDir.create(recursive: true);
       }
 
-      final savedImage = await File(image.path).copy(savedPath);
+      // Copy original image first
+      final tempImage = await File(image.path).copy(savedPath);
+
+      // Compress the image
+      File compressedImage;
+      try {
+        compressedImage = await ImageCompressionService.compressImage(tempImage);
+      } catch (e) {
+        // Check if this is our custom ImageTooLargeException
+        if (e is ImageTooLargeException) {
+          if (mounted) {
+            CustomNotification.show(
+              context,
+              message: 'Image is too large (max ${ImageCompressionService.maxFileSizeMB}MB). ${e.message}',
+              type: NotificationType.error,
+            );
+          }
+          return;
+        }
+        // If compression fails, try to use original but still validate size
+        final isValidSize = await ImageCompressionService.validateImageSize(tempImage);
+        if (!isValidSize) {
+          final fileSize = await tempImage.length();
+          if (mounted) {
+            CustomNotification.show(
+              context,
+              message: 'Image is too large (max ${ImageCompressionService.maxFileSizeMB}MB). Current size: ${ImageCompressionService.formatFileSize(fileSize)}',
+              type: NotificationType.error,
+            );
+          }
+          return;
+        }
+        compressedImage = tempImage;
+      }
+
+      // Show compression success message if image was actually compressed
+      final originalSize = await tempImage.length();
+      final compressedSize = await compressedImage.length();
+      if (originalSize != compressedSize && mounted) {
+        final savings = ((originalSize - compressedSize) / originalSize * 100).round();
+        CustomNotification.show(
+          context,
+          message: 'Image optimized! Size reduced by $savings% (${ImageCompressionService.formatFileSize(originalSize)} → ${ImageCompressionService.formatFileSize(compressedSize)})',
+          type: NotificationType.success,
+        );
+      }
 
       setState(() {
-        _selectedImage = savedImage;
+        _selectedImage = compressedImage;
       });
     } catch (e) {
       if (mounted) {
         CustomNotification.show(
           context,
-          message: 'Error saving image: $e',
+          message: 'Error processing image: $e',
           type: NotificationType.error,
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCompressingImage = false);
       }
     }
   }
@@ -777,54 +830,74 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
         Center(
           child: Column(
             children: [
-              Stack(
-                children: [
-                  // Show selected image immediately if present
-                  if (_selectedImage != null)
-                    ClipOval(
-                      child: Image.file(
-                        _selectedImage!,
-                        width: 160,
-                        height: 160,
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                  else
-                    AsyncAvatar(
-                      imagePath: null, // new student; no stored path yet
-                      initials: (
-                        (_firstNameController.text.trim().isNotEmpty || _lastNameController.text.trim().isNotEmpty)
-                          ? (_firstNameController.text.trim() + ' ' + _lastNameController.text.trim())
-                              .trim()
-                              .split(RegExp(r"\s+"))
-                              .map((e) => e.isNotEmpty ? e[0].toUpperCase() : '')
-                              .take(2)
-                              .join()
-                          : '?'
-                      ),
-                      size: 160,
-                      fallbackIcon: Icons.person,
-                    ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: Icon(
-                          Icons.camera_alt,
-                          color: Theme.of(context).colorScheme.onPrimary,
-                          size: 24,
+                              Stack(
+                  children: [
+                    // Show selected image immediately if present
+                    if (_selectedImage != null)
+                      ClipOval(
+                        child: Image.file(
+                          _selectedImage!,
+                          width: 160,
+                          height: 160,
+                          fit: BoxFit.cover,
                         ),
-                        onPressed: _pickImage,
+                      )
+                    else
+                      AsyncAvatar(
+                        imagePath: null, // new student; no stored path yet
+                        initials: (
+                          (_firstNameController.text.trim().isNotEmpty || _lastNameController.text.trim().isNotEmpty)
+                            ? (_firstNameController.text.trim() + ' ' + _lastNameController.text.trim())
+                                .trim()
+                                .split(RegExp(r"\s+"))
+                                .map((e) => e.isNotEmpty ? e[0].toUpperCase() : '')
+                                .take(2)
+                                .join()
+                            : '?'
+                        ),
+                        size: 160,
+                        fallbackIcon: Icons.person,
+                      ),
+                    // Loading overlay for image compression
+                    if (_isCompressingImage)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: Icon(
+                            Icons.camera_alt,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                            size: 24,
+                          ),
+                          onPressed: _isCompressingImage ? null : _pickImage,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
               const SizedBox(height: 24),
 
               Text(

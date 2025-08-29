@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -51,6 +52,9 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
 
   String? _overlapBannerMessage;
 
+  // Search debouncing
+  Timer? _searchDebounceTimer;
+
   @override
   void initState() {
     super.initState();
@@ -61,6 +65,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchDebounceTimer?.cancel();
     super.dispose();
   }
 
@@ -70,6 +75,13 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
     if (position.pixels >= position.maxScrollExtent - 400) {
       _loadNextPage();
     }
+  }
+
+  void _onSearchChanged(String query) {
+    _searchDebounceTimer?.cancel();
+    _searchDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+      setState(() => _searchQuery = query);
+    });
   }
 
   Future<void> _loadNextPage() async {
@@ -103,6 +115,10 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
       _paged.clear();
       _offset = 0;
       _hasMore = true;
+      // Reset filters when refreshing
+      _selectedStatus = null;
+      _searchQuery = '';
+      _overlapBannerMessage = null;
     });
     await _loadNextPage();
     if (!mounted) return;
@@ -140,10 +156,14 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
                     selectedStatus: _selectedStatus,
                     searchQuery: _searchQuery,
                     onStatusChanged: (status) {
-                    setState(() => _selectedStatus = status);
+                      setState(() => _selectedStatus = status);
                     },
-                    onSearchChanged: (query) {
-                    setState(() => _searchQuery = query);
+                    onSearchChanged: _onSearchChanged,
+                    onClearFilters: () {
+                      setState(() {
+                        _selectedStatus = null;
+                        _searchQuery = '';
+                      });
                     },
               ),
                   ),
@@ -152,10 +172,24 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
           subscriptionsAsync.when(
             data: (subscriptions) => studentsAsync.when(
               data: (students) {
-                  final source = _paged.isEmpty ? subscriptions : _paged;
+                  final hasActiveFilters = _selectedStatus != null || _searchQuery.isNotEmpty;
+                  // When filters/search are active, always use the full stream list to avoid
+                  // missing results that are not in the current paginated window.
+                  final source = hasActiveFilters ? subscriptions : (_paged.isEmpty ? subscriptions : _paged);
                   final filtered = _filterSubscriptions(source, students);
+
+                  // Debug: Log filtering results
+                  if (_selectedStatus != null) {
+                    final expiredCount = filtered.where((s) => s.isExpired).length;
+                    final activeCount = filtered.where((s) => s.status == SubscriptionStatus.active && !s.isExpired).length;
+                    print('Filtering by ${_selectedStatus}: Found ${filtered.length} items (Expired: $expiredCount, Active: $activeCount)');
+                  }
+
                   if (filtered.isEmpty) {
-                  return SliverToBoxAdapter(child: _buildEmptyState(theme));
+                    if (_selectedStatus != null || _searchQuery.isNotEmpty) {
+                      return SliverToBoxAdapter(child: _buildNoFilteredResultsState(theme));
+                    }
+                    return SliverToBoxAdapter(child: _buildEmptyState(theme));
                       }
                 final idToStudent = {for (final s in students) s.id: s};
                       return _isTimelineView
@@ -246,21 +280,50 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
 
   List<Subscription> _filterSubscriptions(List<Subscription> subscriptions, List<Student> students) {
     var filtered = subscriptions;
+
+    // Create student lookup map for efficient access
+    final idToStudent = {for (final s in students) s.id: s};
+
+    // Apply status filter first
     if (_selectedStatus != null) {
-      filtered = filtered.where((s) => s.status == _selectedStatus).toList();
-    }
-    if (_searchQuery.isNotEmpty) {
-      final q = _searchQuery.toLowerCase();
-      final idToStudent = {for (final s in students) s.id: s};
       filtered = filtered.where((s) {
-        final student = idToStudent[s.studentId];
-        final inStudent = student != null &&
-            (student.fullName.toLowerCase().contains(q) ||
-                student.email.toLowerCase().contains(q) ||
-                (student.seatNumber?.toLowerCase().contains(q) ?? false));
-        return s.planName.toLowerCase().contains(q) || inStudent;
+        switch (_selectedStatus!) {
+          case SubscriptionStatus.active:
+            // Active if status is active AND not expired
+            return s.status == SubscriptionStatus.active && !s.isExpired;
+          case SubscriptionStatus.expired:
+            // Expired if either status is expired OR end date has passed
+            return s.status == SubscriptionStatus.expired || s.isExpired;
+          case SubscriptionStatus.pending:
+            return s.status == SubscriptionStatus.pending;
+          case SubscriptionStatus.cancelled:
+            return s.status == SubscriptionStatus.cancelled;
+        }
       }).toList();
     }
+
+    // Apply search filter
+    if (_searchQuery.isNotEmpty && _searchQuery.trim().isNotEmpty) {
+      final query = _searchQuery.trim().toLowerCase();
+      filtered = filtered.where((subscription) {
+        // Search in subscription fields
+        final planMatch = subscription.planName.toLowerCase().contains(query);
+        final amountMatch = subscription.amount.toString().contains(query);
+        final idMatch = subscription.id.toLowerCase().contains(query);
+
+        // Search in student fields
+        final student = idToStudent[subscription.studentId];
+        if (student == null) return planMatch || amountMatch || idMatch;
+
+        final studentMatch = student.fullName.toLowerCase().contains(query) ||
+                            student.email.toLowerCase().contains(query) ||
+                            (student.phone?.toLowerCase().contains(query) ?? false) ||
+                            (student.seatNumber?.toLowerCase().contains(query) ?? false);
+
+        return planMatch || amountMatch || idMatch || studentMatch;
+      }).toList();
+    }
+
     return filtered;
   }
 
@@ -364,6 +427,67 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
           ),
         ],
       ),
+      ),
+    );
+  }
+
+  Widget _buildNoFilteredResultsState(ThemeData theme) {
+    String filterDescription = '';
+    if (_selectedStatus != null) {
+      filterDescription = 'status: ${_getStatusDisplayName(_selectedStatus!)}';
+    }
+    if (_searchQuery.isNotEmpty) {
+      if (filterDescription.isNotEmpty) filterDescription += ' and ';
+      filterDescription += 'search: "${_searchQuery}"';
+    }
+
+    return Padding(
+      padding: ResponsiveUtils.getResponsivePadding(context),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.outline.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.filter_list_off, size: 64, color: theme.colorScheme.outline),
+            ),
+            const SizedBox(height: 24),
+            Text('No subscriptions match your filters',
+                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(
+              'Try adjusting your filters or search terms',
+              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              textAlign: TextAlign.center,
+            ),
+            if (filterDescription.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Current filter: $filterDescription',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: () {
+                setState(() {
+                  _selectedStatus = null;
+                  _searchQuery = '';
+                });
+              },
+              icon: const Icon(Icons.clear_all),
+              label: const Text('Clear Filters'),
+            ),
+          ],
+        ),
       ),
     );
   }

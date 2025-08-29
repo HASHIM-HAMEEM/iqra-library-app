@@ -14,6 +14,7 @@ import 'package:library_registration_app/presentation/providers/subscriptions/su
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 // cached_network_image removed; using Image.network with errorBuilder
 import 'package:library_registration_app/presentation/widgets/common/async_avatar.dart';
+import 'package:library_registration_app/presentation/pages/students/profile_photo_view_page.dart';
 
 class StudentDetailsPage extends ConsumerWidget {
 
@@ -335,38 +336,53 @@ class StudentDetailsPage extends ConsumerWidget {
   }
 
   Widget _buildAvatar(BuildContext context, ThemeData theme, Student student) {
+    final String heroTag = 'student_photo_${student.id}';
     return GestureDetector(
-      onTap: () => _showProfilePreview(context, student),
-      child: Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: theme.colorScheme.primary.withOpacity(0.2),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: AsyncAvatar(
-          imagePath: student.profileImagePath,
-          initials: student.initials,
-          size: 72,
-          fallbackIcon: Icons.person_outline,
+      onTap: () {
+        Navigator.of(context).push(
+          PageRouteBuilder<void>(
+            transitionDuration: const Duration(milliseconds: 260),
+            reverseTransitionDuration: const Duration(milliseconds: 220),
+            opaque: false,
+            pageBuilder: (ctx, anim, sec) {
+              return FadeTransition(
+                opacity: CurvedAnimation(parent: anim, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic),
+                child: ProfilePhotoViewPage(
+                  imagePath: student.profileImagePath,
+                  fallbackInitials: student.initials,
+                  heroTag: heroTag,
+                  title: student.fullName,
+                ),
+              );
+            },
+          ),
+        );
+      },
+      child: Hero(
+        tag: heroTag,
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: theme.colorScheme.primary.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: AsyncAvatar(
+            imagePath: student.profileImagePath,
+            initials: student.initials,
+            size: 72,
+            fallbackIcon: Icons.person_outline,
+          ),
         ),
       ),
     );
   }
 
-  Widget _fallbackInitials(ThemeData theme, Student student) {
-    return Text(
-      student.initials,
-      style: theme.textTheme.titleLarge?.copyWith(
-        color: theme.colorScheme.primary,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-  }
+  
 
   Widget _buildIdentitySection(BuildContext context, Student s) {
     final df = DateFormat.yMMMMd();
@@ -887,142 +903,5 @@ class StudentDetailsPage extends ConsumerWidget {
     );
   }
 
-  void _showProfilePreview(BuildContext context, Student student) {
-    final theme = Theme.of(context);
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) {
-        return Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: _buildProfilePreviewContent(ctx, theme, student),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildProfilePreviewContent(BuildContext context, ThemeData theme, Student s) {
-  final cs = theme.colorScheme;
-  return Column(
-    mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      // Header
-      Row(
-        children: [
-          Icon(Icons.person_outline, color: cs.primary),
-          const SizedBox(width: 8),
-          Text(
-            'Profile Preview',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const Spacer(),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.close),
-            tooltip: 'Close',
-          ),
-        ],
-      ),
-      const SizedBox(height: 12),
-      // Card-like profile content
-      Container(
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHighest.withValues(alpha: 0.35),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cs.outlineVariant, width: 1),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            AsyncAvatar(
-              imagePath: s.profileImagePath,
-              initials: s.initials,
-              size: 120,
-              fallbackIcon: Icons.person_outline,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              s.fullName,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.2,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              s.email,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: cs.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 16,
-              runSpacing: 8,
-              children: [
-                if ((s.phone ?? '').isNotEmpty)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.phone_outlined, size: 16, color: cs.primary),
-                      const SizedBox(width: 6),
-                      Text(s.phone ?? '-', style: theme.textTheme.bodyMedium),
-                    ],
-                  ),
-                if ((s.address ?? '').isNotEmpty)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.home_outlined, size: 16, color: cs.primary),
-                      const SizedBox(width: 6),
-                      Text(
-                        s.address ?? '-',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                if ((s.seatNumber ?? '').isNotEmpty)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.event_seat_outlined, size: 16, color: cs.primary),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Seat ${s.seatNumber}',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            TextButton(
-              onPressed: () => Navigator.of(context).maybePop(),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
+  
 

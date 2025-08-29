@@ -15,7 +15,7 @@ class AuthState {
     this.isLoading = false,
     this.error,
     this.lastAuthTime,
-    this.sessionTimeoutMinutes = 30,
+    this.sessionTimeoutMinutes = 525600, // 1 year - effectively indefinite
     this.user,
     this.failedAttempts = 0,
     this.lockoutUntil,
@@ -94,7 +94,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   // Security constants
   static const int _maxFailedAttempts = 13;
   static const Duration _lockoutDuration = Duration(minutes: 15);
-  static const Duration _sessionWarningThreshold = Duration(minutes: 5);
+  static const Duration _sessionWarningThreshold = Duration(hours: 2);
 
   Future<void> _loadSessionTimeout() async {
     try {
@@ -103,9 +103,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       if (timeout != null) {
         state = state.copyWith(sessionTimeoutMinutes: timeout);
+      } else {
+        // Set default to 1 year if not configured
+        state = state.copyWith(sessionTimeoutMinutes: 525600);
       }
     } catch (e) {
       // Use default timeout if error
+      state = state.copyWith(sessionTimeoutMinutes: 525600);
     }
   }
 
@@ -248,8 +252,31 @@ class AuthNotifier extends StateNotifier<AuthState> {
         }
         
         final tempState = state.copyWith(lastAuthTime: lastAuthTime);
-        // Only auto-authenticate if we have a recent, valid auth timestamp
-        if (lastAuthTime != null && !tempState.isSessionExpired) {
+
+        // If we have a valid Supabase session, trust it more than our local timestamp
+        final supabaseSession = _supabaseService.currentSession;
+        final hasValidSupabaseSession = supabaseSession != null &&
+            supabaseSession.user != null &&
+            (supabaseSession.expiresAt == null ||
+             DateTime.fromMillisecondsSinceEpoch(supabaseSession.expiresAt! * 1000).isAfter(DateTime.now()));
+
+        if (hasValidSupabaseSession) {
+          // Trust the Supabase session over local timestamp
+          state = state.copyWith(
+            isAuthenticated: true,
+            user: user,
+            lastAuthTime: DateTime.now(), // Update timestamp since session is valid
+            requiresReauth: false,
+            lastKnownEmail: user.email,
+          );
+          // Update stored timestamp
+          await _appSettingsService.setStringSetting(
+            'last_auth_time',
+            DateTime.now().toIso8601String(),
+            description: 'Last successful authentication time',
+          );
+        } else if (lastAuthTime != null && !tempState.isSessionExpired) {
+          // Fallback to timestamp-based validation
           state = state.copyWith(
             isAuthenticated: true,
             user: user,
@@ -582,6 +609,26 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Clear re-authentication requirement after successful auth
   void clearReauthRequirement() {
     state = state.copyWith(requiresReauth: false);
+  }
+
+  /// Disable session timeout (set to 1 year)
+  Future<void> disableSessionTimeout() async {
+    state = state.copyWith(sessionTimeoutMinutes: 525600); // 1 year in minutes
+    await _appSettingsService.setIntSetting(
+      'session_timeout_minutes',
+      525600,
+      description: 'Session timeout disabled (1 year)',
+    );
+  }
+
+  /// Enable session timeout with specified minutes (default 24 hours)
+  Future<void> enableSessionTimeout({int minutes = 1440}) async {
+    state = state.copyWith(sessionTimeoutMinutes: minutes);
+    await _appSettingsService.setIntSetting(
+      'session_timeout_minutes',
+      minutes,
+      description: 'Session timeout set to $minutes minutes',
+    );
   }
 
   /// Check session validity and auto-logout if expired

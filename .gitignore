@@ -47,17 +47,49 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# APK files
+*.apk
+*.aab
+app-*.apk
+
 # Environment variables and secrets
 .env
 *.env
 .env.local
 .env.production
+.env.development
 
 # Database files
 *.db
 *.sqlite
 *.sqlite3
+library_registration.db
+
+# Supabase keys and configuration (if not using environment variables)
+supabase/config.toml
+supabase/.temp/
+
+# Test coverage reports
+coverage/
+*.lcov
 
 # Node modules for scripts
 node_modules/
 package-lock.json
+yarn.lock
+
+# IDE specific files
+.vscode/settings.json
+.idea/workspace.xml
+*.suo
+*.user
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+.cache/

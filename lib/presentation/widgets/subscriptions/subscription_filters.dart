@@ -9,6 +9,7 @@ class SubscriptionFilters extends StatelessWidget {
     required this.searchQuery,
     required this.onStatusChanged,
     required this.onSearchChanged,
+    this.onClearFilters,
     super.key,
   });
 
@@ -16,6 +17,7 @@ class SubscriptionFilters extends StatelessWidget {
   final String searchQuery;
   final ValueChanged<SubscriptionStatus?> onStatusChanged;
   final ValueChanged<String> onSearchChanged;
+  final VoidCallback? onClearFilters;
 
   @override
   Widget build(BuildContext context) {
@@ -39,8 +41,10 @@ class SubscriptionFilters extends StatelessWidget {
       desktop: Row(
         children: [
           Expanded(flex: 2, child: _buildSearchField(theme)),
-          const SizedBox(width: 24),
+          const SizedBox(width: 16),
           Expanded(flex: 3, child: _buildStatusFilters(theme)),
+          const SizedBox(width: 16),
+          _buildClearFiltersButton(theme),
         ],
       ),
     );
@@ -50,38 +54,93 @@ class SubscriptionFilters extends StatelessWidget {
     return TextField(
       onChanged: onSearchChanged,
       decoration: InputDecoration(
-        hintText: 'Search by plan name or student ID...',
-        prefixIcon: const Icon(Icons.search),
+        hintText: 'Search by plan, student name, email, phone, seat number, amount, or ID...',
+        prefixIcon: Icon(
+          Icons.search,
+          color: searchQuery.isNotEmpty ? theme.colorScheme.primary : null,
+        ),
         suffixIcon: searchQuery.isNotEmpty
             ? IconButton(
-                icon: const Icon(Icons.clear),
+                icon: Icon(
+                  Icons.clear,
+                  color: theme.colorScheme.primary,
+                ),
                 onPressed: () => onSearchChanged(''),
               )
             : null,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        filled: true,
-        fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
-          alpha: 0.3,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: searchQuery.isNotEmpty ? theme.colorScheme.primary : theme.colorScheme.outline,
+            width: searchQuery.isNotEmpty ? 2 : 1,
+          ),
         ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: theme.colorScheme.primary,
+            width: 2,
+          ),
+        ),
+        filled: true,
+        fillColor: searchQuery.isNotEmpty
+            ? theme.colorScheme.primary.withValues(alpha: 0.05)
+            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
       ),
     );
   }
 
   Widget _buildStatusFilters(ThemeData theme) {
+    final hasActiveFilters = selectedStatus != null || searchQuery.isNotEmpty;
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          _buildStatusChip(theme, 'All', null, selectedStatus == null),
+          Stack(
+            children: [
+              _buildStatusChip(theme, 'All', null, selectedStatus == null),
+              if (hasActiveFilters && selectedStatus == null)
+                Positioned(
+                  right: 4,
+                  top: 4,
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(width: 8),
           ...SubscriptionStatus.values.map(
             (status) => Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: _buildStatusChip(
-                theme,
-                _getStatusDisplayName(status),
-                status,
-                selectedStatus == status,
+              child: Stack(
+                children: [
+                  _buildStatusChip(
+                    theme,
+                    _getStatusDisplayName(status),
+                    status,
+                    selectedStatus == status,
+                  ),
+                  if (selectedStatus == status)
+                    Positioned(
+                      right: 4,
+                      top: 4,
+                      child: Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -146,6 +205,33 @@ class SubscriptionFilters extends StatelessWidget {
       side: BorderSide(color: borderColor),
       showCheckmark: false,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    );
+  }
+
+  Widget _buildClearFiltersButton(ThemeData theme) {
+    final hasActiveFilters = selectedStatus != null || searchQuery.isNotEmpty;
+
+    if (!hasActiveFilters) {
+      return const SizedBox.shrink();
+    }
+
+    return AnimatedOpacity(
+      opacity: hasActiveFilters ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 200),
+      child: OutlinedButton.icon(
+        onPressed: hasActiveFilters ? () {
+          onStatusChanged(null);
+          onSearchChanged('');
+          onClearFilters?.call();
+        } : null,
+        icon: const Icon(Icons.clear_all, size: 18),
+        label: Text(hasActiveFilters ? 'Clear Filters' : 'Clear'),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          side: BorderSide(color: theme.colorScheme.outline),
+          foregroundColor: theme.colorScheme.primary,
+        ),
+      ),
     );
   }
 

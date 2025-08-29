@@ -6,11 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:library_registration_app/core/utils/permission_service.dart';
 import 'package:library_registration_app/core/utils/responsive_utils.dart';
+import 'package:library_registration_app/core/services/image_compression_service.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/presentation/providers/students/students_notifier.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
-// import 'package:path_provider/path_provider.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/async_avatar.dart';
 
@@ -40,6 +42,7 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
   String? _subscriptionPlan;
   String? _subscriptionStatus;
   bool _isLoading = false;
+  bool _isCompressingImage = false;
   String? _emailError;
   bool _hasChanges = false;
   File? _selectedImage;
@@ -174,20 +177,146 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final granted = await PermissionService.ensurePhotoLibraryPermission();
-    if (!granted) return;
-    final image = await picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 800,
-      maxHeight: 800,
-      imageQuality: 85,
-    );
 
-    if (image != null) {
+    unawaited(showModalBottomSheet<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Photo Library'),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  final granted =
+                      await PermissionService.ensurePhotoLibraryPermission();
+                  if (!granted) return;
+                  final image = await picker.pickImage(
+                    source: ImageSource.gallery,
+                  );
+                  if (image != null) {
+                    await _processSelectedImage(image);
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Camera'),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  final granted =
+                      await PermissionService.ensureCameraPermission();
+                  if (!granted) return;
+                  final image = await picker.pickImage(
+                    source: ImageSource.camera,
+                  );
+                  if (image != null) {
+                    await _processSelectedImage(image);
+                  }
+                },
+              ),
+              if (_selectedImage != null)
+                ListTile(
+                  leading: const Icon(Icons.delete),
+                  title: const Text('Remove Photo'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    setState(() {
+                      _selectedImage = null;
+                      _hasChanges = true;
+                    });
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    ));
+  }
+
+  Future<void> _processSelectedImage(XFile image) async {
+    setState(() => _isCompressingImage = true);
+
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_${path.basename(image.path)}';
+      final savedPath = path.join(
+        appDir.path,
+        'profile_images',
+        fileName,
+      );
+
+      // Create directory if it doesn't exist
+      final profileDir = Directory(path.dirname(savedPath));
+      if (!await profileDir.exists()) {
+        await profileDir.create(recursive: true);
+      }
+
+      // Copy original image first
+      final tempImage = await File(image.path).copy(savedPath);
+
+      // Compress the image
+      File compressedImage;
+      try {
+        compressedImage = await ImageCompressionService.compressImage(tempImage);
+      } catch (e) {
+        // Check if this is our custom ImageTooLargeException
+        if (e is ImageTooLargeException) {
+          if (mounted) {
+            CustomNotification.show(
+              context,
+              message: 'Image is too large (max ${ImageCompressionService.maxFileSizeMB}MB). ${e.message}',
+              type: NotificationType.error,
+            );
+          }
+          return;
+        }
+        // If compression fails, try to use original but still validate size
+        final isValidSize = await ImageCompressionService.validateImageSize(tempImage);
+        if (!isValidSize) {
+          final fileSize = await tempImage.length();
+          if (mounted) {
+            CustomNotification.show(
+              context,
+              message: 'Image is too large (max ${ImageCompressionService.maxFileSizeMB}MB). Current size: ${ImageCompressionService.formatFileSize(fileSize)}',
+              type: NotificationType.error,
+            );
+          }
+          return;
+        }
+        compressedImage = tempImage;
+      }
+
+      // Show compression success message if image was actually compressed
+      final originalSize = await tempImage.length();
+      final compressedSize = await compressedImage.length();
+      if (originalSize != compressedSize && mounted) {
+        final savings = ((originalSize - compressedSize) / originalSize * 100).round();
+        CustomNotification.show(
+          context,
+          message: 'Image optimized! Size reduced by $savings% (${ImageCompressionService.formatFileSize(originalSize)} → ${ImageCompressionService.formatFileSize(compressedSize)})',
+          type: NotificationType.success,
+        );
+      }
+
       setState(() {
-        _selectedImage = File(image.path);
+        _selectedImage = compressedImage;
         _hasChanges = true;
       });
+    } catch (e) {
+      if (mounted) {
+        CustomNotification.show(
+          context,
+          message: 'Error processing image: $e',
+          type: NotificationType.error,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCompressingImage = false);
+      }
     }
   }
 
@@ -808,6 +937,26 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
                   );
                 }),
               ),
+              // Loading overlay for image compression
+              if (_isCompressingImage)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Center(
+                      child: SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               Positioned(
                 bottom: 0,
                 right: 0,
@@ -826,7 +975,7 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
                       color: Theme.of(context).colorScheme.onPrimary,
                       size: 24,
                     ),
-                    onPressed: _pickImage,
+                    onPressed: _isCompressingImage ? null : _pickImage,
                   ),
                 ),
               ),
