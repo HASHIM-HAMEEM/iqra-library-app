@@ -2,9 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:library_registration_app/core/utils/error_mapper.dart';
 import 'package:library_registration_app/core/utils/responsive_utils.dart';
-import 'package:library_registration_app/core/utils/telemetry_service.dart';
+
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
@@ -12,6 +11,7 @@ import 'package:library_registration_app/presentation/providers/subscriptions/su
 import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
+import 'package:library_registration_app/presentation/widgets/common/modern_text_field.dart';
 import 'package:library_registration_app/presentation/widgets/common/primary_button.dart';
 import 'package:library_registration_app/presentation/widgets/common/typeahead_student_field.dart';
 import 'package:library_registration_app/presentation/widgets/subscriptions/subscription_card.dart';
@@ -50,9 +50,6 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
   int _offset = 0;
   final int _pageSize = 50;
 
-  String? _overlapBannerMessage;
-
-  // Search debouncing
   Timer? _searchDebounceTimer;
 
   @override
@@ -88,8 +85,9 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
     if (_isLoadingPage || !_hasMore) return;
     setState(() => _isLoadingPage = true);
     try {
-      final next = await ref
-          .read(pagedSubscriptionsProvider((offset: _offset, limit: _pageSize)).future);
+      final next = await ref.read(
+        pagedSubscriptionsProvider((offset: _offset, limit: _pageSize)).future,
+      );
       if (!mounted) return;
       setState(() {
         _paged.addAll(next);
@@ -115,18 +113,13 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
       _paged.clear();
       _offset = 0;
       _hasMore = true;
-      // Reset filters when refreshing
       _selectedStatus = null;
       _searchQuery = '';
-      _overlapBannerMessage = null;
     });
     await _loadNextPage();
-    if (!mounted) return;
-    CustomNotification.show(
-      context,
-      message: 'Subscriptions refreshed',
-      type: NotificationType.success,
-    );
+    if (mounted) {
+      CustomNotification.show(context, message: 'Subscriptions refreshed');
+    }
   }
 
   @override
@@ -134,165 +127,242 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
     final theme = Theme.of(context);
     final subscriptionsAsync = ref.watch(subscriptionsProvider);
     final studentsAsync = ref.watch(allStudentsProvider);
-    
+
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      body: RefreshIndicator(
-        onRefresh: _onRefresh,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          controller: _scrollController,
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-                padding: ResponsiveUtils.getResponsivePadding(context).copyWith(top: 8),
-              child: _buildModernHeader(theme),
+      body: Stack(
+        children: [
+          // Gradient Background
+          Positioned(
+            top: -100,
+            right: -100,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: theme.colorScheme.secondary.withValues(alpha: 0.05),
+                boxShadow: [
+                  BoxShadow(
+                    color: theme.colorScheme.secondary.withValues(alpha: 0.05),
+                    blurRadius: 100,
+                    spreadRadius: 20,
+                  ),
+                ],
+              ),
             ),
           ),
-          SliverToBoxAdapter(
-            child: Padding(
-                padding: ResponsiveUtils.getResponsivePadding(context).copyWith(top: 16),
-                  child: SubscriptionFilters(
-                    selectedStatus: _selectedStatus,
-                    searchQuery: _searchQuery,
-                    onStatusChanged: (status) {
-                      setState(() => _selectedStatus = status);
-                    },
-                    onSearchChanged: _onSearchChanged,
-                    onClearFilters: () {
-                      setState(() {
-                        _selectedStatus = null;
-                        _searchQuery = '';
-                      });
-                    },
-              ),
+          RefreshIndicator(
+            onRefresh: _onRefresh,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              controller: _scrollController,
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: ResponsiveUtils.getResponsivePadding(
+                      context,
+                    ).copyWith(top: 8),
+                    child: _buildModernHeader(theme),
                   ),
                 ),
-            SliverToBoxAdapter(child: SizedBox(height: 8)),
-          subscriptionsAsync.when(
-            data: (subscriptions) => studentsAsync.when(
-              data: (students) {
-                  final hasActiveFilters = _selectedStatus != null || _searchQuery.isNotEmpty;
-                  // When filters/search are active, always use the full stream list to avoid
-                  // missing results that are not in the current paginated window.
-                  final source = hasActiveFilters ? subscriptions : (_paged.isEmpty ? subscriptions : _paged);
-                  final filtered = _filterSubscriptions(source, students);
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: ResponsiveUtils.getResponsivePadding(
+                      context,
+                    ).copyWith(top: 16),
+                    child: SubscriptionFilters(
+                      selectedStatus: _selectedStatus,
+                      searchQuery: _searchQuery,
+                      onStatusChanged: (status) =>
+                          setState(() => _selectedStatus = status),
+                      onSearchChanged: _onSearchChanged,
+                      onClearFilters: () {
+                        setState(() {
+                          _selectedStatus = null;
+                          _searchQuery = '';
+                        });
+                      },
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                subscriptionsAsync.when(
+                  data: (subscriptions) => studentsAsync.when(
+                    data: (students) {
+                      final hasActiveFilters =
+                          _selectedStatus != null || _searchQuery.isNotEmpty;
+                      final source = hasActiveFilters
+                          ? subscriptions
+                          : (_paged.isEmpty ? subscriptions : _paged);
+                      final filtered = _filterSubscriptions(source, students);
 
-                  // Debug: Log filtering results
-                  if (_selectedStatus != null) {
-                    final expiredCount = filtered.where((s) => s.isExpired).length;
-                    final activeCount = filtered.where((s) => s.status == SubscriptionStatus.active && !s.isExpired).length;
-                    print('Filtering by ${_selectedStatus}: Found ${filtered.length} items (Expired: $expiredCount, Active: $activeCount)');
-                  }
-
-                  if (filtered.isEmpty) {
-                    if (_selectedStatus != null || _searchQuery.isNotEmpty) {
-                      return SliverToBoxAdapter(child: _buildNoFilteredResultsState(theme));
-                    }
-                    return SliverToBoxAdapter(child: _buildEmptyState(theme));
+                      if (filtered.isEmpty) {
+                        if (_selectedStatus != null ||
+                            _searchQuery.isNotEmpty) {
+                          return SliverToBoxAdapter(
+                            child: _buildNoFilteredResultsState(theme),
+                          );
+                        }
+                        return SliverToBoxAdapter(
+                          child: _buildEmptyState(theme),
+                        );
                       }
-                final idToStudent = {for (final s in students) s.id: s};
+                      final idToStudent = {for (final s in students) s.id: s};
                       return _isTimelineView
-                    ? SliverToBoxAdapter(
-                        child: SubscriptionTimeline(
-                            subscriptions: filtered,
-                            studentNamesById: idToStudent.map((k, v) => MapEntry(k, v.fullName)),
-                          ),
-                        )
-                      : _buildListView(filtered, students);
-              },
-              loading: () => const SliverToBoxAdapter(
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              error: (_, __) => const SliverToBoxAdapter(
-                child: Center(child: Text('Error loading students')),
-              ),
-            ),
-            loading: () => const SliverToBoxAdapter(
-              child: Center(child: CircularProgressIndicator()),
-            ),
-              error: (error, _) => SliverToBoxAdapter(
-              child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                      Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error),
-                          const SizedBox(height: 16),
-                      Text('Unable to load subscriptions', style: theme.textTheme.headlineSmall),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Please check your connection and try again.',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
+                          ? SliverToBoxAdapter(
+                              child: SubscriptionTimeline(
+                                subscriptions: filtered,
+                                studentNamesById: idToStudent.map(
+                                  (k, v) => MapEntry(k, v.fullName),
+                                ),
+                              ),
+                            )
+                          : _buildListView(filtered, students);
+                    },
+                    loading: () => const SliverToBoxAdapter(
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                    error: (_, __) => const SliverToBoxAdapter(
+                      child: Center(child: Text('Error loading student data')),
+                    ),
+                  ),
+                  loading: () => const SliverToBoxAdapter(
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (error, _) => SliverToBoxAdapter(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 48,
+                              color: theme.colorScheme.error,
                             ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                      PrimaryButton(text: 'Retry', onPressed: () => ref.invalidate(subscriptionsProvider)),
-                        ],
+                            const SizedBox(height: 16),
+                            Text(
+                              'Unable to load subscriptions',
+                              style: theme.textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            PrimaryButton(
+                              text: 'Retry',
+                              onPressed: () =>
+                                  ref.invalidate(subscriptionsProvider),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
+                const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
               ],
-        ),
             ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddSubscriptionDialog(context),
-        backgroundColor: theme.colorScheme.primary,
-        foregroundColor: theme.colorScheme.onPrimary,
-        child: const Icon(Icons.add_outlined),
+          ),
+        ],
       ),
+      floatingActionButton: _buildAnimatedFAB(theme),
+    );
+  }
+
+  Widget _buildAnimatedFAB(ThemeData theme) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeOutBack,
+      builder: (context, value, child) {
+        return Transform.scale(
+          scale: value,
+          child: FloatingActionButton(
+            onPressed: () => _showAddSubscriptionDialog(context),
+            backgroundColor: theme.colorScheme.primary,
+            elevation: 8,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    theme.colorScheme.primary.withValues(alpha: 0.8),
+                    theme.colorScheme.primary,
+                  ],
+                ),
+              ),
+              child: const Center(
+                child: Icon(Icons.add, color: Colors.white, size: 28),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildModernHeader(ThemeData theme) {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Subscriptions',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
-                  )),
-              Text('Manage subscription plans and payments',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w500,
-                  )),
-            ],
-          ),
-        ),
-            IconButton(
-          onPressed: () => setState(() => _isTimelineView = !_isTimelineView),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Subscriptions',
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Manage student access and payments',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton.filledTonal(
+              onPressed: () =>
+                  setState(() => _isTimelineView = !_isTimelineView),
               icon: Icon(
-            _isTimelineView ? Icons.view_list_outlined : Icons.timeline_outlined,
-                color: theme.colorScheme.onSurface,
+                _isTimelineView
+                    ? Icons.view_list_rounded
+                    : Icons.timeline_rounded,
               ),
               tooltip: _isTimelineView ? 'List View' : 'Timeline View',
+            ),
+          ],
         ),
       ],
     );
   }
 
-  List<Subscription> _filterSubscriptions(List<Subscription> subscriptions, List<Student> students) {
+  List<Subscription> _filterSubscriptions(
+    List<Subscription> subscriptions,
+    List<Student> students,
+  ) {
     var filtered = subscriptions;
-
-    // Create student lookup map for efficient access
     final idToStudent = {for (final s in students) s.id: s};
 
-    // Apply status filter first
     if (_selectedStatus != null) {
       filtered = filtered.where((s) {
         switch (_selectedStatus!) {
           case SubscriptionStatus.active:
-            // Active if status is active AND not expired
             return s.status == SubscriptionStatus.active && !s.isExpired;
           case SubscriptionStatus.expired:
-            // Expired if either status is expired OR end date has passed
             return s.status == SubscriptionStatus.expired || s.isExpired;
           case SubscriptionStatus.pending:
             return s.status == SubscriptionStatus.pending;
@@ -302,99 +372,89 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
       }).toList();
     }
 
-    // Apply search filter
     if (_searchQuery.isNotEmpty && _searchQuery.trim().isNotEmpty) {
       final query = _searchQuery.trim().toLowerCase();
       filtered = filtered.where((subscription) {
-        // Search in subscription fields
         final planMatch = subscription.planName.toLowerCase().contains(query);
         final amountMatch = subscription.amount.toString().contains(query);
         final idMatch = subscription.id.toLowerCase().contains(query);
-
-        // Search in student fields
         final student = idToStudent[subscription.studentId];
         if (student == null) return planMatch || amountMatch || idMatch;
 
-        final studentMatch = student.fullName.toLowerCase().contains(query) ||
-                            student.email.toLowerCase().contains(query) ||
-                            (student.phone?.toLowerCase().contains(query) ?? false) ||
-                            (student.seatNumber?.toLowerCase().contains(query) ?? false);
-
+        final studentMatch =
+            student.fullName.toLowerCase().contains(query) ||
+            student.email.toLowerCase().contains(query) ||
+            (student.phone?.toLowerCase().contains(query) ?? false) ||
+            (student.seatNumber?.toLowerCase().contains(query) ?? false);
         return planMatch || amountMatch || idMatch || studentMatch;
       }).toList();
     }
-
     return filtered;
   }
 
-  Widget _buildListView(List<Subscription> subscriptions, List<Student> students) {
+  Widget _buildListView(
+    List<Subscription> subscriptions,
+    List<Student> students,
+  ) {
     final idToStudent = {for (final s in students) s.id: s};
     final padding = ResponsiveUtils.getResponsivePadding(context);
-    if (ResponsiveUtils.isMobile(context)) {
+
+    // Grid Logic
+    final media = MediaQuery.of(context);
+    final screenWidth = media.size.width;
+    final isMobile = screenWidth < 600;
+
+    if (isMobile) {
       return SliverPadding(
         padding: padding,
         sliver: SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-        final subscription = subscriptions[index];
-              final student = idToStudent[subscription.studentId];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: SubscriptionCard(
-            subscription: subscription,
-                  studentName: student?.fullName,
-                  studentAvatarPath: student?.profileImagePath,
-                  studentInitials: student?.initials,
-                  onTap: () => context.go('/students/details/${subscription.studentId}'),
-            onEdit: () => _showEditSubscriptionDialog(subscription),
-            onCancel: () => _cancelSubscription(subscription),
-            onRenew: () => _renewSubscription(subscription),
-            onDelete: () => _confirmDelete(subscription),
-          ),
-        );
-            },
-            childCount: subscriptions.length,
-          ),
-        ),
-      );
-    } else {
-      final media = MediaQuery.of(context);
-      final screenWidth = media.size.width;
-      final isLandscape = media.orientation == Orientation.landscape;
-      final double minTileWidth = isLandscape ? 360 : 320;
-      int crossAxisCount = (screenWidth / minTileWidth).floor();
-      if (crossAxisCount < 2) crossAxisCount = 2;
-      if (crossAxisCount > 6) crossAxisCount = 6;
-      final double aspect = isLandscape ? 1.2 : 1.5;
-      return SliverPadding(
-        padding: padding,
-        sliver: SliverGrid(
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
+          delegate: SliverChildBuilderDelegate((context, index) {
             final subscription = subscriptions[index];
-              final student = idToStudent[subscription.studentId];
-            return RepaintBoundary(
+            final student = idToStudent[subscription.studentId];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
               child: SubscriptionCard(
                 subscription: subscription,
                 studentName: student?.fullName,
                 studentAvatarPath: student?.profileImagePath,
                 studentInitials: student?.initials,
-                onTap: () => context.go('/students/details/${subscription.studentId}'),
+                onTap: () =>
+                    context.go('/students/details/${subscription.studentId}'),
+                onEdit: () => _showEditSubscriptionDialog(subscription),
+                onCancel: () => _cancelSubscription(subscription),
+                onRenew: () => _renewSubscription(subscription),
+                onDelete: () => _confirmDelete(subscription),
+              ),
+            );
+          }, childCount: subscriptions.length),
+        ),
+      );
+    } else {
+      final int crossAxisCount = (screenWidth / 360).floor().clamp(2, 4);
+      return SliverPadding(
+        padding: padding,
+        sliver: SliverGrid(
+          delegate: SliverChildBuilderDelegate((context, index) {
+            final subscription = subscriptions[index];
+            final student = idToStudent[subscription.studentId];
+            return SubscriptionCard(
+              subscription: subscription,
+              studentName: student?.fullName,
+              studentAvatarPath: student?.profileImagePath,
+              studentInitials: student?.initials,
+              onTap: () =>
+                  context.go('/students/details/${subscription.studentId}'),
               onEdit: () => _showEditSubscriptionDialog(subscription),
               onCancel: () => _cancelSubscription(subscription),
               onRenew: () => _renewSubscription(subscription),
               onDelete: () => _confirmDelete(subscription),
-              )
             );
-            
-            },
-            childCount: subscriptions.length,
-          ),
+          }, childCount: subscriptions.length),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
-            childAspectRatio: aspect,
+            childAspectRatio: 1.4,
           ),
         ),
       );
@@ -405,86 +465,63 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
     return Padding(
       padding: ResponsiveUtils.getResponsivePadding(context),
       child: Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.card_membership_outlined, size: 64, color: theme.colorScheme.primary),
-          ),
-            const SizedBox(height: 24),
-            Text('No subscriptions found',
-                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text(
-            'Create your first subscription to get started',
-              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-      ),
-    );
-  }
-
-  Widget _buildNoFilteredResultsState(ThemeData theme) {
-    String filterDescription = '';
-    if (_selectedStatus != null) {
-      filterDescription = 'status: ${_getStatusDisplayName(_selectedStatus!)}';
-    }
-    if (_searchQuery.isNotEmpty) {
-      if (filterDescription.isNotEmpty) filterDescription += ' and ';
-      filterDescription += 'search: "${_searchQuery}"';
-    }
-
-    return Padding(
-      padding: ResponsiveUtils.getResponsivePadding(context),
-      child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: theme.colorScheme.outline.withValues(alpha: 0.1),
+                color: theme.colorScheme.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.filter_list_off, size: 64, color: theme.colorScheme.outline),
+              child: Icon(
+                Icons.card_membership_outlined,
+                size: 64,
+                color: theme.colorScheme.primary,
+              ),
             ),
             const SizedBox(height: 24),
-            Text('No subscriptions match your filters',
-                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              'No subscriptions found',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 8),
             Text(
-              'Try adjusting your filters or search terms',
-              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              textAlign: TextAlign.center,
-            ),
-            if (filterDescription.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Text(
-                'Current filter: $filterDescription',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w500,
-                ),
-                textAlign: TextAlign.center,
+              'Create your first subscription to get started',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
-            ],
-            const SizedBox(height: 24),
-            FilledButton.icon(
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoFilteredResultsState(ThemeData theme) {
+    return Padding(
+      padding: ResponsiveUtils.getResponsivePadding(context),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(
+              Icons.filter_list_off,
+              size: 64,
+              color: theme.colorScheme.outline,
+            ),
+            const SizedBox(height: 16),
+            Text('No matches found', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 8),
+            FilledButton.tonal(
               onPressed: () {
                 setState(() {
                   _selectedStatus = null;
                   _searchQuery = '';
                 });
               },
-              icon: const Icon(Icons.clear_all),
-              label: const Text('Clear Filters'),
+              child: const Text('Clear Filters'),
             ),
           ],
         ),
@@ -493,810 +530,538 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
   }
 
   void _showAddSubscriptionDialog(BuildContext context) {
-    final formKey = GlobalKey<FormState>();
-    final studentIdCtrl = TextEditingController();
-    final planCtrl = TextEditingController();
-    final amountCtrl = TextEditingController();
-    DateTime? start;
-    DateTime? end;
-    var status = SubscriptionStatus.active;
-    Student? selectedStudent;
-
     showAppBottomSheet<void>(
       context,
-      builder: (context) {
-        final theme = Theme.of(context);
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-          Future<void> pickDate({required bool isStart}) async {
-              final date = await showDatePicker(
-                context: ctx,
-                initialDate: isStart
-                    ? (start ?? DateTime.now())
-                    : (end ?? (start != null ? start!.add(const Duration(days: 30)) : DateTime.now())),
-                firstDate: DateTime(2000),
-                lastDate: DateTime(2100),
-              );
-              if (date != null) {
-                setSheetState(() {
-                  if (isStart) {
-                    start = date;
-                  } else {
-                    end = date;
-                  }
-                });
-              }
-            }
-
-            return SingleChildScrollView(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom + 16),
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Add Subscription',
-                        style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    TypeaheadStudentField(
-                      initial: selectedStudent,
-                      onSelected: (s) {
-                        setSheetState(() => selectedStudent = s);
-                        if (s != null) {
-                          studentIdCtrl.text = s.id;
-                        } else {
-                          studentIdCtrl.clear();
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: studentIdCtrl,
-                      readOnly: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Selected Student ID',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.badge_outlined),
-                      ),
-                      validator: (v) => (v == null || v.isEmpty) ? 'Please select a student' : null,
-                      ),
-                    const SizedBox(height: 16),
-                    Text('Plan name',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSurface,
-                        )),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: planCtrl,
-                      decoration: InputDecoration(
-                        labelText: 'e.g. Monthly, Quarterly, Yearly, or custom',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        filled: true,
-                        fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                        prefixIcon: const Icon(Icons.badge_outlined),
-                      ),
-                      textInputAction: TextInputAction.next,
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Plan name is required' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: amountCtrl,
-                      decoration: InputDecoration(
-                        labelText: 'Amount',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        filled: true,
-                        fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'Required';
-                        final parsed = double.tryParse(v);
-                        if (parsed == null || parsed < 0) return 'Invalid amount';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Duration',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSurface,
-                        )),
-                    const SizedBox(height: 8),
-                    Row(children: [
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                              borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
-                            ),
-                            child: TextButton.icon(
-                              onPressed: () => pickDate(isStart: true),
-                              icon: const Icon(Icons.date_range),
-                            label: Text(start == null
-                                    ? 'Start date'
-                                : '${start!.day}/${start!.month}/${start!.year}'),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                              borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
-                            ),
-                            child: TextButton.icon(
-                              onPressed: () => pickDate(isStart: false),
-                              icon: const Icon(Icons.event),
-                            label: Text(end == null
-                                    ? 'End date'
-                                : '${end!.day}/${end!.month}/${end!.year}'),
-                              ),
-                            ),
-                          ),
-                    ]),
-                    const SizedBox(height: 16),
-                    Text('Status',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSurface,
-                        )),
-                    const SizedBox(height: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: ButtonTheme(
-                          alignedDropdown: true,
-                          child: DropdownButton<SubscriptionStatus>(
-                            value: status,
-                            isExpanded: true,
-                            icon: Icon(Icons.arrow_drop_down_rounded, color: theme.colorScheme.onSurface),
-                            items: SubscriptionStatus.values
-                                .map((s) => DropdownMenuItem(
-                                    value: s,
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(12),
-                                      child: Text(_getStatusDisplayName(s)),
-                                    ),
-                                    ))
-                                .toList(),
-                            onChanged: (v) => setSheetState(() {
-                              status = v ?? SubscriptionStatus.active;
-                            }),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    if (start != null && end != null && end!.isBefore(start!))
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline, size: 16, color: theme.colorScheme.error),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                'Start date cannot be after End date.\nTips: Set Start earlier than or equal to End.',
-                                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: (start != null && end != null && !end!.isBefore(start!))
-                            ? () => _createSubscription(
-                          formKey: formKey,
-                          studentIdCtrl: studentIdCtrl,
-                                  planCtrl: planCtrl,
-                          amountCtrl: amountCtrl,
-                          start: start,
-                          end: end,
-                          status: status,
-                          )
-                            : null,
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Text('Create Subscription'),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+      builder: (context) => _AddSubscriptionSheet(onSaved: _onRefresh),
     );
-  }
-
-  Future<void> _createSubscription({
-    required GlobalKey<FormState> formKey,
-    required TextEditingController studentIdCtrl,
-    required TextEditingController planCtrl,
-    required TextEditingController amountCtrl,
-    required DateTime? start,
-    required DateTime? end,
-    required SubscriptionStatus status,
-  }) async {
-    if (!formKey.currentState!.validate()) return;
-    if (start == null || end == null) return;
-
-    final studentId = studentIdCtrl.text.trim();
-    final planName = planCtrl.text.trim();
-    final amountText = amountCtrl.text.trim();
-
-    if (studentId.isEmpty) {
-      if (context.mounted) {
-        CustomNotification.show(context, message: 'Please select a student', type: NotificationType.warning);
-      }
-      return;
-    }
-    if (planName.isEmpty) {
-      if (context.mounted) {
-        CustomNotification.show(context, message: 'Please select a plan', type: NotificationType.warning);
-      }
-      return;
-    }
-
-    final amount = double.tryParse(amountText);
-    if (amount == null || amount <= 0) {
-      if (context.mounted) {
-        CustomNotification.show(context, message: 'Please enter a valid amount', type: NotificationType.warning);
-      }
-      return;
-    }
-
-    try {
-      await ref.read(subscriptionsNotifierProvider.notifier).createSubscription(
-            studentId: studentId,
-            planName: planName,
-            startDate: start,
-            endDate: end,
-            amount: amount,
-            status: status,
-          );
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      await _onRefresh();
-      CustomNotification.show(context, message: 'Subscription created successfully', type: NotificationType.success);
-    } catch (e, st) {
-      TelemetryService.instance.captureException(
-        e,
-        st,
-        feature: 'create_subscription',
-        context: {
-          'start': start.toIso8601String(),
-          'end': end.toIso8601String(),
-          'amount': amount,
-          'student_id': studentId,
-          'plan': planName,
-        },
-      );
-      if (!mounted) return;
-      final msg = ErrorMapper.friendly(e);
-      setState(() {
-        _overlapBannerMessage = ErrorMapper.isOverlap(e)
-            ? 'This period overlaps an existing subscription.'
-            : _overlapBannerMessage;
-      });
-      CustomNotification.show(context, message: msg, type: NotificationType.error);
-    }
   }
 
   void _showEditSubscriptionDialog(Subscription subscription) {
     showAppBottomSheet<void>(
       context,
-      builder: (context) {
-        return _EditSubscriptionSheet(subscription: subscription, onSaved: _onRefresh);
-      },
+      builder: (context) => _EditSubscriptionSheet(
+        subscription: subscription,
+        onSaved: _onRefresh,
+      ),
     );
   }
 
+  // --- Actions ---
+
   Future<void> _confirmDelete(Subscription s) async {
     final confirmed = await showDialog<bool>(
-            context: context,
-            builder: (ctx) => AlertDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
         title: const Text('Delete subscription?'),
-        content: Text('This will permanently delete the "${s.planName}" subscription.'),
-              actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Theme.of(ctx).colorScheme.error),
-            child: const Text('Delete'),
-                ),
-              ],
-            ),
-          );
-    if (confirmed ?? false) {
+        content: Text('Permanently delete "${s.planName}" subscription?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
       try {
-        await ref.read(subscriptionsNotifierProvider.notifier).deleteSubscription(s.id);
+        await ref
+            .read(subscriptionsNotifierProvider.notifier)
+            .deleteSubscription(s.id);
         await _onRefresh();
         if (mounted) {
-          CustomNotification.show(context, message: 'Subscription deleted', type: NotificationType.success);
+          CustomNotification.show(
+            context,
+            message: 'Subscription deleted',
+            type: NotificationType.success,
+          );
         }
-    } catch (e) {
+      } catch (e) {
         if (mounted) {
-          CustomNotification.show(context, message: 'Error deleting subscription: $e', type: NotificationType.error);
+          CustomNotification.show(
+            context,
+            message: 'Delete failed: $e',
+            type: NotificationType.error,
+          );
         }
       }
     }
   }
 
   Future<void> _cancelSubscription(Subscription subscription) async {
-    await showAppBottomSheet<void>(
-      context,
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Subscription?'),
+        content: Text(
+          'Are you sure you want to cancel the subscription for ${subscription.planName}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Cancel Subscription',
+              style: TextStyle(color: Colors.red),
             ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Cancel Subscription', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text('Are you sure you want to cancel this subscription for ${subscription.planName}?', style: theme.textTheme.bodyMedium),
-                  const SizedBox(height: 24),
-                  PrimaryButton(
-                    onPressed: () async {
-                      if (mounted) Navigator.of(context).pop();
-                      try {
-                        await ref.read(subscriptionsNotifierProvider.notifier).cancelSubscription(subscription.id);
-                        await _onRefresh();
-                        if (mounted) {
-                          CustomNotification.show(context, message: 'Subscription cancelled successfully', type: NotificationType.success);
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          CustomNotification.show(context, message: 'Error cancelling subscription: $e', type: NotificationType.error);
-                        }
-                      }
-                    },
-                    text: 'Cancel Subscription',
-                    backgroundColor: Theme.of(context).colorScheme.error,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-        );
-      },
+          ),
+        ],
+      ),
     );
+
+    if (confirmed == true) {
+      try {
+        await ref
+            .read(subscriptionsNotifierProvider.notifier)
+            .cancelSubscription(subscription.id);
+        await _onRefresh();
+        if (mounted) {
+          CustomNotification.show(
+            context,
+            message: 'Subscription cancelled',
+            type: NotificationType.success,
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          CustomNotification.show(
+            context,
+            message: 'Error: $e',
+            type: NotificationType.error,
+          );
+        }
+      }
+    }
   }
 
   Future<void> _renewSubscription(Subscription subscription) async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final pickedDate = await showDatePicker(
       context: context,
-      initialDate: subscription.endDate,
-      firstDate: DateTime(now.year - 10),
+      initialDate: subscription.endDate.isBefore(now)
+          ? now.add(const Duration(days: 30))
+          : subscription.endDate.add(const Duration(days: 30)),
+      firstDate: DateTime(now.year - 5),
       lastDate: DateTime(now.year + 10),
+      helpText: 'Select New End Date',
     );
-    if (picked == null) return;
+    if (pickedDate == null) return;
 
-    final amountCtrl = TextEditingController(text: subscription.amount.toStringAsFixed(2));
+    final amountCtrl = TextEditingController(
+      text: subscription.amount.toStringAsFixed(2),
+    );
     final amount = await showDialog<double>(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Renew Subscription'),
-          content: TextField(
-            controller: amountCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Renewal amount', prefixIcon: Icon(Icons.currency_rupee)),
+      builder: (ctx) => AlertDialog(
+        title: const Text('Renew Subscription'),
+        content: TextField(
+          controller: amountCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Renewal Amount',
+            prefixIcon: Icon(Icons.currency_rupee),
+            border: OutlineInputBorder(),
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(null), child: const Text('Cancel')),
-            FilledButton(
-              onPressed: () {
-                final v = double.tryParse(amountCtrl.text.trim());
-                if (v == null || v < 0) {
-                  CustomNotification.show(ctx, message: 'Enter a valid amount', type: NotificationType.warning);
-                  return;
-                }
-                Navigator.of(ctx).pop(v);
-              },
-              child: const Text('Confirm'),
-            ),
-          ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final v = double.tryParse(amountCtrl.text.trim());
+              if (v != null && v >= 0) Navigator.pop(ctx, v);
+            },
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
     );
-    if (amount == null) return;
 
-    try {
+    if (amount != null) {
       try {
-        await ref.read(subscriptionsNotifierProvider.notifier).renewSubscription(subscription.id, picked, amount);
-      } catch (e, st) {
-        TelemetryService.instance.captureException(
-          e,
-          st,
-          feature: 'renew_subscription',
-          context: {
-            'current_end': subscription.endDate.toIso8601String(),
-            'picked': picked.toIso8601String(),
-            'subscription_id': subscription.id,
-          },
-        );
-        if (!context.mounted) return;
-        final msg = ErrorMapper.friendly(e);
-        setState(() {
-          _overlapBannerMessage = ErrorMapper.isOverlap(e)
-              ? 'This renewal overlaps a previous period.'
-              : _overlapBannerMessage;
-        });
-        if (mounted) {
-          CustomNotification.show(context, message: msg, type: NotificationType.error);
-        }
-        if (ErrorMapper.isOverlap(e) && mounted) {
-          final proceed = await showDialog<bool>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Confirm renewal change'),
-              content: const Text('The new end date overlaps a previous period. Proceed only if you are backdating intentionally.'),
-              actions: [
-                TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Adjust dates')),
-                FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Proceed anyway')),
-              ],
-            ),
-          );
-          if (proceed ?? false) {
-            await ref
-                .read(subscriptionsNotifierProvider.notifier)
-                .renewSubscription(subscription.id, picked, amount, allowOverlap: true);
-          }
-        }
-      }
-      if (mounted) {
+        await ref
+            .read(subscriptionsNotifierProvider.notifier)
+            .renewSubscription(subscription.id, pickedDate, amount);
         await _onRefresh();
-        CustomNotification.show(context, message: 'Subscription renewed successfully', type: NotificationType.success);
-      }
-    } catch (e) {
-      if (mounted) {
-        CustomNotification.show(context, message: 'Error: $e', type: NotificationType.error);
+        if (mounted) {
+          CustomNotification.show(
+            context,
+            message: 'Renowed successfully',
+            type: NotificationType.success,
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          CustomNotification.show(
+            context,
+            message: 'Renew failed: $e',
+            type: NotificationType.error,
+          );
+        }
       }
     }
   }
 }
 
-class _EditSubscriptionSheet extends ConsumerStatefulWidget {
-  const _EditSubscriptionSheet({required this.subscription, required this.onSaved});
-  final Subscription subscription;
+// --- Sheets ---
+
+class _AddSubscriptionSheet extends ConsumerStatefulWidget {
+  const _AddSubscriptionSheet({required this.onSaved});
   final Future<void> Function() onSaved;
 
   @override
-  ConsumerState<_EditSubscriptionSheet> createState() => _EditSubscriptionSheetState();
+  ConsumerState<_AddSubscriptionSheet> createState() =>
+      _AddSubscriptionSheetState();
 }
 
-class _EditSubscriptionSheetState extends ConsumerState<_EditSubscriptionSheet> {
-  late final TextEditingController _planCtrl;
-  late final TextEditingController _amountCtrl;
-  late SubscriptionStatus _status;
-  late DateTime _start;
+class _AddSubscriptionSheetState extends ConsumerState<_AddSubscriptionSheet> {
   final _formKey = GlobalKey<FormState>();
+  final _studentIdCtrl = TextEditingController();
+  final _planCtrl = TextEditingController();
+  final _amountCtrl = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    final s = widget.subscription;
-    _planCtrl = TextEditingController(text: s.planName);
-    _amountCtrl = TextEditingController(text: s.amount.toString());
-    _status = s.status;
-    _start = s.startDate;
-  }
-
-  @override
-  void dispose() {
-    _planCtrl.dispose();
-    _amountCtrl.dispose();
-    super.dispose();
-  }
+  DateTime? _start;
+  DateTime? _end;
+  final SubscriptionStatus _status = SubscriptionStatus.active;
+  Student? _selectedStudent;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.8,
+
+    // Staggered animation setup could be here, but using simple entrance for now
+    return SingleChildScrollView(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        left: 0,
+        right: 0,
+        top: 0, // Reset top padding as we'll use a container
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Grab handle
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(top: 8, bottom: 16),
-            decoration: BoxDecoration(
-              color: cs.onSurface.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          
-          // Title
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Edit Subscription',
-                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Premium Header with Gradient/Image or just Clean Design
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.3,
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(32),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.2,
+                        ),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primaryContainer,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.add_card,
+                          color: theme.colorScheme.primary,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'New Subscription',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'Add a new student plan',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-          ),
-          
-          // Form content
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+
+            Padding(
+              padding: const EdgeInsets.all(24),
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Plan name
-                    TextFormField(
+                    TypeaheadStudentField(
+                      initial: _selectedStudent,
+                      onSelected: (s) {
+                        setState(() {
+                          _selectedStudent = s;
+                          if (s != null) _studentIdCtrl.text = s.id;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    ModernTextField(
                       controller: _planCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Plan Name',
-                        border: OutlineInputBorder(),
-                      ),
-                      textInputAction: TextInputAction.next,
-                      autofocus: true,
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      label: 'Plan Name',
+                      icon: Icons.badge_outlined,
+                      isRequired: true,
+                      validator: (v) => v?.isEmpty == true ? 'Required' : null,
                     ),
-                    
                     const SizedBox(height: 16),
-                    
-                    // Amount
-                    TextFormField(
+                    ModernTextField(
                       controller: _amountCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Amount',
-                        border: OutlineInputBorder(),
+                      label: 'Amount (₹)',
+                      icon: Icons.currency_rupee,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
                       ),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      textInputAction: TextInputAction.done,
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'Required';
-                        final parsed = double.tryParse(v);
-                        if (parsed == null || parsed < 0) return 'Invalid amount';
-                        return null;
-                      },
+                      isRequired: true,
+                      validator: (v) => double.tryParse(v ?? '') == null
+                          ? 'Invalid amount'
+                          : null,
                     ),
-
-                    const SizedBox(height: 16),
-                    
-                    // Status
-                    DropdownButtonFormField<SubscriptionStatus>(
-                      value: _status,
-                      decoration: const InputDecoration(
-                        labelText: 'Status',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: SubscriptionStatus.values
-                          .map((s) => DropdownMenuItem(
-                                value: s,
-                                child: Text(_getStatusDisplayName(s)),
-                              ))
-                          .toList(),
-                      onChanged: (v) => setState(() => _status = v ?? _status),
-                    ),
-
-                    const SizedBox(height: 16),
-                    
-                    // Start date
-                    TextFormField(
-                      readOnly: true,
-                      decoration: InputDecoration(
-                        labelText: 'Start Date',
-                        border: const OutlineInputBorder(),
-                        suffixIcon: const Icon(Icons.calendar_today),
-                        hintText: '${_start.day}/${_start.month}/${_start.year}',
-                      ),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: _start,
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime(2100),
-                          helpText: 'Select new start date',
-                        );
-                        if (picked != null) {
-                          final newStart = DateTime(picked.year, picked.month, picked.day);
-                          if (!widget.subscription.endDate.isAfter(newStart)) {
-                            if (mounted) {
-                              CustomNotification.show(
-                                context,
-                                message: 'Start must be before end date',
-                                type: NotificationType.warning,
-                              );
-                            }
-                            return;
-                          }
-                          setState(() => _start = newStart);
-                        }
-                      },
-                    ),
-
-                    const SizedBox(height: 16),
-                    
-                    // End date (read-only)
-                    TextFormField(
-                      readOnly: true,
-                      decoration: InputDecoration(
-                        labelText: 'End Date (Read-only)',
-                        border: const OutlineInputBorder(),
-                        suffixIcon: const Icon(Icons.lock),
-                        hintText: '${widget.subscription.endDate.day}/${widget.subscription.endDate.month}/${widget.subscription.endDate.year}',
-                        helperText: 'Use Renew to extend',
-                      ),
-                    ),
-
                     const SizedBox(height: 24),
-                    
-                    // Save button
+
+                    Text(
+                      'DURATION',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final d = await showDatePicker(
+                                context: context,
+                                initialDate: DateTime.now(),
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime(2100),
+                              );
+                              if (d != null) setState(() => _start = d);
+                            },
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.3),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: theme.colorScheme.outlineVariant
+                                      .withValues(alpha: 0.5),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.calendar_today,
+                                        size: 16,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Start Date',
+                                        style: theme.textTheme.labelSmall,
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _start == null
+                                        ? 'Select'
+                                        : '${_start!.day}/${_start!.month}/${_start!.year}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Icon(
+                          Icons.arrow_forward,
+                          size: 16,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final d = await showDatePicker(
+                                context: context,
+                                initialDate: _start ?? DateTime.now(),
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime(2100),
+                              );
+                              if (d != null) setState(() => _end = d);
+                            },
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.3),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: theme.colorScheme.outlineVariant
+                                      .withValues(alpha: 0.5),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.event,
+                                        size: 16,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'End Date',
+                                        style: theme.textTheme.labelSmall,
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _end == null
+                                        ? 'Select'
+                                        : '${_end!.day}/${_end!.month}/${_end!.year}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+
                     SizedBox(
                       width: double.infinity,
+                      height: 56,
                       child: FilledButton(
                         onPressed: _save,
-                        child: const Text('Save Changes'),
+                        style: FilledButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: const Text(
+                          'Create Subscription',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  String _getStatusDisplayName(SubscriptionStatus status) {
-    switch (status) {
-      case SubscriptionStatus.active:
-        return 'Active';
-      case SubscriptionStatus.pending:
-        return 'Pending';
-      case SubscriptionStatus.expired:
-        return 'Expired';
-      case SubscriptionStatus.cancelled:
-        return 'Cancelled';
-    }
-  }
-
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    
-    // Additional validation
-    final planName = _planCtrl.text.trim();
-    final amountText = _amountCtrl.text.trim();
-    
-    if (planName.isEmpty) {
+    if (_start == null || _end == null) {
       CustomNotification.show(
         context,
-        message: 'Plan name cannot be empty',
-        type: NotificationType.warning,
+        message: 'Dates are required',
+        type: NotificationType.error,
       );
       return;
     }
-    
-    final amount = double.tryParse(amountText);
-    if (amount == null || amount <= 0) {
+    if (_selectedStudent == null) {
       CustomNotification.show(
         context,
-        message: 'Amount must be a valid positive number',
-        type: NotificationType.warning,
-      );
-      return;
-    }
-    
-    if (_start.isAfter(widget.subscription.endDate)) {
-      CustomNotification.show(
-        context,
-        message: 'Start date cannot be after the current end date',
-        type: NotificationType.warning,
+        message: 'Select a student',
+        type: NotificationType.error,
       );
       return;
     }
 
     try {
-      final notifier = ref.read(subscriptionsNotifierProvider.notifier);
-      
-      // Create updated subscription with validation
-      final updatedSubscription = widget.subscription.copyWith(
-        planName: planName,
-        amount: amount,
-        startDate: _start,
-        status: _status,
-        updatedAt: DateTime.now(), // Ensure updated timestamp
-      );
-      
-      // Update in database with activity logging
-      await notifier.updateSubscription(updatedSubscription);
-      
-      // Force immediate refresh of all subscription-related providers
-      ref.invalidate(subscriptionsProvider);
-      ref.invalidate(subscriptionsByStudentProvider(widget.subscription.studentId));
-      ref.invalidate(subscriptionByIdProvider(widget.subscription.id));
-      
-      // Refresh UI immediately
-      await widget.onSaved();
-      
-      if (context.mounted) {
-        Navigator.of(context).pop();
+      await ref
+          .read(subscriptionsNotifierProvider.notifier)
+          .createSubscription(
+            studentId: _selectedStudent!.id,
+            planName: _planCtrl.text.trim(),
+            startDate: _start!,
+            endDate: _end!,
+            amount: double.parse(_amountCtrl.text.trim()),
+            status: _status,
+          );
+      if (mounted) {
+        Navigator.pop(context);
+        await widget.onSaved();
         CustomNotification.show(
           context,
-          message: 'Subscription "${planName}" updated successfully',
+          message: 'Created successfully',
           type: NotificationType.success,
         );
       }
-    } catch (e, stackTrace) {
-      // Log error for debugging
-      TelemetryService.instance.captureException(
-        e,
-        stackTrace,
-        feature: 'edit_subscription',
-        context: {
-          'subscription_id': widget.subscription.id,
-          'plan_name': planName,
-          'amount': amount,
-          'start_date': _start.toIso8601String(),
-          'status': _status.name,
-        },
-      );
-      
-      if (context.mounted) {
-        final friendlyMessage = ErrorMapper.friendly(e);
+    } catch (e) {
+      if (mounted) {
         CustomNotification.show(
           context,
-          message: 'Failed to update subscription: $friendlyMessage',
+          message: 'Failed: $e',
           type: NotificationType.error,
         );
       }
@@ -1304,4 +1069,258 @@ class _EditSubscriptionSheetState extends ConsumerState<_EditSubscriptionSheet> 
   }
 }
 
+class _EditSubscriptionSheet extends ConsumerStatefulWidget {
+  const _EditSubscriptionSheet({
+    required this.subscription,
+    required this.onSaved,
+  });
+  final Subscription subscription;
+  final Future<void> Function() onSaved;
 
+  @override
+  ConsumerState<_EditSubscriptionSheet> createState() =>
+      _EditSubscriptionSheetState();
+}
+
+class _EditSubscriptionSheetState
+    extends ConsumerState<_EditSubscriptionSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _planCtrl;
+  late TextEditingController _amountCtrl;
+  late SubscriptionStatus _status;
+
+  @override
+  void initState() {
+    super.initState();
+    _planCtrl = TextEditingController(text: widget.subscription.planName);
+    _amountCtrl = TextEditingController(
+      text: widget.subscription.amount.toString(),
+    );
+    _status = widget.subscription.status;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // Staggered animation setup could be here, but using simple entrance for now
+    return SingleChildScrollView(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        left: 0,
+        right: 0,
+        top: 0, // Reset top padding as we'll use a container
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Premium Header with Gradient/Image or just Clean Design
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.3,
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(32),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.2,
+                        ),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.tertiaryContainer,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.edit_note,
+                          color: theme.colorScheme.tertiary,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Edit Subscription',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'Update plan details',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ModernTextField(
+                      controller: _planCtrl,
+                      label: 'Plan Name',
+                      icon: Icons.badge_outlined,
+                      isRequired: true,
+                      validator: (v) => v?.isEmpty == true ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    ModernTextField(
+                      controller: _amountCtrl,
+                      label: 'Amount (₹)',
+                      icon: Icons.currency_rupee,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      isRequired: true,
+                      validator: (v) => double.tryParse(v ?? '') == null
+                          ? 'Invalid amount'
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+
+                    DropdownButtonFormField<SubscriptionStatus>(
+                      value: _status,
+                      decoration: InputDecoration(
+                        labelText: 'Status',
+                        prefixIcon: Icon(
+                          Icons.info_outline,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                            color: theme.colorScheme.outlineVariant.withValues(
+                              alpha: 0.2,
+                            ),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        filled: true,
+                        fillColor: theme.colorScheme.surfaceContainerHighest
+                            .withValues(alpha: 0.3),
+                        contentPadding: const EdgeInsets.all(16),
+                      ),
+                      items: SubscriptionStatus.values
+                          .map(
+                            (s) => DropdownMenuItem(
+                              value: s,
+                              child: Text(
+                                _getStatusDisplayName(s),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) => setState(() => _status = v!),
+                    ),
+
+                    const SizedBox(height: 32),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: FilledButton(
+                        onPressed: _save,
+                        style: FilledButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: const Text(
+                          'Save Changes',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    try {
+      final updated = widget.subscription.copyWith(
+        planName: _planCtrl.text.trim(),
+        amount: double.parse(_amountCtrl.text.trim()),
+        status: _status,
+        updatedAt: DateTime.now(),
+      );
+
+      await ref
+          .read(subscriptionsNotifierProvider.notifier)
+          .updateSubscription(updated);
+      await widget.onSaved();
+
+      if (mounted) {
+        Navigator.pop(context);
+        CustomNotification.show(
+          context,
+          message: 'Updated successfully',
+          type: NotificationType.success,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        CustomNotification.show(
+          context,
+          message: 'Update failed: $e',
+          type: NotificationType.error,
+        );
+      }
+    }
+  }
+}

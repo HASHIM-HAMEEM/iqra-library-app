@@ -11,26 +11,16 @@ import 'package:library_registration_app/presentation/providers/subscriptions/su
 
 part 'export_provider.g.dart';
 
-enum ExportType {
-  all,
-  students,
-  subscriptions,
-  activityLogs,
-}
+enum ExportType { all, students, subscriptions, activityLogs }
 
-enum ExportStatus {
-  idle,
-  loading,
-  success,
-  error,
-}
+enum ExportStatus { idle, loading, success, error }
 
 class ExportState {
   const ExportState({
     this.status = ExportStatus.idle,
+    this.progress = 0.0,
     this.filePath,
     this.errorMessage,
-    this.progress = 0.0,
   });
 
   final ExportStatus status;
@@ -75,16 +65,12 @@ class ExportNotifier extends _$ExportNotifier {
       switch (type) {
         case ExportType.all:
           filePath = await _exportAllData(exportService);
-          break;
         case ExportType.students:
           filePath = await _exportStudentsOnly(exportService);
-          break;
         case ExportType.subscriptions:
           filePath = await _exportSubscriptionsOnly(exportService);
-          break;
         case ExportType.activityLogs:
           filePath = await _exportActivityLogsOnly(exportService);
-          break;
       }
 
       state = state.copyWith(
@@ -111,16 +97,12 @@ class ExportNotifier extends _$ExportNotifier {
       switch (type) {
         case ExportType.all:
           filePath = await _exportAllCsv(exportService);
-          break;
         case ExportType.students:
           filePath = await _exportStudentsCsv(exportService);
-          break;
         case ExportType.subscriptions:
           filePath = await _exportSubscriptionsCsv(exportService);
-          break;
         case ExportType.activityLogs:
           filePath = await _exportActivityLogsCsv(exportService);
-          break;
       }
 
       state = state.copyWith(
@@ -195,44 +177,44 @@ class ExportNotifier extends _$ExportNotifier {
       subscriptions: subscriptionsAsync,
       activityLogs: activityLogsAsync,
     );
-    
+
     state = state.copyWith(progress: 0.9);
     return filePath;
   }
 
   Future<String> _exportStudentsOnly(ExportService exportService) async {
     state = state.copyWith(progress: 0.2);
-    
+
     final students = await ref.read(studentsProvider.future);
     state = state.copyWith(progress: 0.6);
-    
+
     final filePath = await exportService.exportStudentsData(students);
     state = state.copyWith(progress: 0.9);
-    
+
     return filePath;
   }
 
   Future<String> _exportSubscriptionsOnly(ExportService exportService) async {
     state = state.copyWith(progress: 0.2);
-    
+
     final subscriptions = await ref.read(subscriptionsProvider.future);
     state = state.copyWith(progress: 0.6);
-    
+
     final filePath = await exportService.exportSubscriptionsData(subscriptions);
     state = state.copyWith(progress: 0.9);
-    
+
     return filePath;
   }
 
   Future<String> _exportActivityLogsOnly(ExportService exportService) async {
     state = state.copyWith(progress: 0.2);
-    
+
     final activityLogs = await ref.read(activityLogsProvider.future);
     state = state.copyWith(progress: 0.6);
-    
+
     final filePath = await exportService.exportActivityLogsData(activityLogs);
     state = state.copyWith(progress: 0.9);
-    
+
     return filePath;
   }
 
@@ -254,26 +236,36 @@ Future<List<Student>> allStudentsForExport(AllStudentsForExportRef ref) async {
 }
 
 @riverpod
-Future<List<Subscription>> allSubscriptionsForExport(AllSubscriptionsForExportRef ref) async {
+Future<List<Subscription>> allSubscriptionsForExport(
+  AllSubscriptionsForExportRef ref,
+) async {
   return ref.watch(subscriptionsProvider.future);
 }
 
 @riverpod
-Future<List<ActivityLog>> allActivityLogsForExport(AllActivityLogsForExportRef ref) async {
+Future<List<ActivityLog>> allActivityLogsForExport(
+  AllActivityLogsForExportRef ref,
+) async {
   return ref.watch(activityLogsProvider.future);
 }
 
 @riverpod
 Future<Map<String, int>> exportDataCounts(ExportDataCountsRef ref) async {
   final students = await ref.watch(allStudentsForExportProvider.future);
-  final subscriptions = await ref.watch(allSubscriptionsForExportProvider.future);
+  final subscriptions = await ref.watch(
+    allSubscriptionsForExportProvider.future,
+  );
   final activityLogs = await ref.watch(allActivityLogsForExportProvider.future);
 
   return {
     'students': students.length,
     'subscriptions': subscriptions.length,
     'activityLogs': activityLogs.length,
-    'activeSubscriptions': subscriptions.where((s) => s.status == SubscriptionStatus.active).length,
-    'expiredSubscriptions': subscriptions.where((s) => s.status == SubscriptionStatus.expired).length,
+    'activeSubscriptions': subscriptions
+        .where((s) => s.status == SubscriptionStatus.active)
+        .length,
+    'expiredSubscriptions': subscriptions
+        .where((s) => s.status == SubscriptionStatus.expired)
+        .length,
   };
 }

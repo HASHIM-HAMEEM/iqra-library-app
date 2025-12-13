@@ -15,25 +15,27 @@
 /// Author: IQRA Library Team
 /// Version: 1.0.0
 /// Built with Flutter & Supabase
+library;
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 // Release builds: avoid importing ui we don't need
 import 'package:flutter/services.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform, kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:library_registration_app/core/config/app_config.dart';
-import 'package:library_registration_app/core/services/connectivity_service.dart';
-import 'package:library_registration_app/core/utils/telemetry_service.dart';
-import 'package:library_registration_app/presentation/widgets/common/diagnostics_overlay.dart';
 import 'package:library_registration_app/core/routing/app_router.dart';
+import 'package:library_registration_app/core/services/connectivity_service.dart';
 import 'package:library_registration_app/core/theme/app_theme.dart';
+import 'package:library_registration_app/core/utils/telemetry_service.dart';
+import 'package:library_registration_app/presentation/pages/splash/splash_page.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
 import 'package:library_registration_app/presentation/providers/ui/ui_state_provider.dart';
-import 'package:library_registration_app/presentation/pages/splash/splash_page.dart';
+import 'package:library_registration_app/presentation/widgets/common/diagnostics_overlay.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
- final appInitProvider = FutureProvider<void>((ref) async {
+final appInitProvider = FutureProvider<void>((ref) async {
   final settingsService = ref.read(appSettingsDaoProvider);
   String? themePref;
   try {
@@ -79,36 +81,38 @@ void main() async {
       authOptions: const FlutterAuthClientOptions(
         authFlowType: AuthFlowType.implicit, // Better for mobile apps
       ),
-      realtimeClientOptions: const RealtimeClientOptions(
-        eventsPerSecond: 10,
-      ),
+      realtimeClientOptions: const RealtimeClientOptions(eventsPerSecond: 10),
     );
   } catch (e, st) {
     TelemetryService.instance.captureException(e, st, feature: 'supabase_init');
   }
-  
+
   // Initialize connectivity service
   try {
     await ConnectivityService.instance.initialize();
   } catch (e, st) {
-    TelemetryService.instance.captureException(e, st, feature: 'connectivity_init');
+    TelemetryService.instance.captureException(
+      e,
+      st,
+      feature: 'connectivity_init',
+    );
   }
-   // Global error handling
-   FlutterError.onError = (FlutterErrorDetails details) {
-     FlutterError.presentError(details);
-     TelemetryService.instance.captureException(
-       details.exception,
-       details.stack ?? StackTrace.current,
-       feature: 'flutter_framework',
-       context: {
-         'library': details.library ?? 'flutter',
-         'context': details.context?.toDescription() ?? 'n/a',
-       },
-     );
-   };
+  // Global error handling
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    TelemetryService.instance.captureException(
+      details.exception,
+      details.stack ?? StackTrace.current,
+      feature: 'flutter_framework',
+      context: {
+        'library': details.library ?? 'flutter',
+        'context': details.context?.toDescription() ?? 'n/a',
+      },
+    );
+  };
   runApp(const ProviderScope(child: LibraryRegistrationApp()));
   // Session refresh removed - handled by individual SupabaseClient instances
- }
+}
 
 class LibraryRegistrationApp extends ConsumerWidget {
   const LibraryRegistrationApp({super.key});
@@ -144,13 +148,16 @@ class LibraryRegistrationApp extends ConsumerWidget {
         final navColor = theme.colorScheme.surface;
         final overlay = SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
-          statusBarIconBrightness:
-              brightness == Brightness.dark ? Brightness.light : Brightness.dark,
-          statusBarBrightness:
-              brightness == Brightness.dark ? Brightness.dark : Brightness.light,
+          statusBarIconBrightness: brightness == Brightness.dark
+              ? Brightness.light
+              : Brightness.dark,
+          statusBarBrightness: brightness == Brightness.dark
+              ? Brightness.dark
+              : Brightness.light,
           systemNavigationBarColor: navColor,
-          systemNavigationBarIconBrightness:
-              brightness == Brightness.dark ? Brightness.light : Brightness.dark,
+          systemNavigationBarIconBrightness: brightness == Brightness.dark
+              ? Brightness.light
+              : Brightness.dark,
         );
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: overlay,
@@ -200,9 +207,7 @@ class _AppErrorBoundaryState extends State<_AppErrorBoundary> {
         details.stack ?? StackTrace.current,
         feature: 'error_widget',
       );
-      return _FriendlyErrorView(
-        onRetry: () => setState(() => _error = null),
-      );
+      return _FriendlyErrorView(onRetry: () => setState(() => _error = null));
     };
   }
 
@@ -229,7 +234,11 @@ class _FriendlyErrorView extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.error_outline, size: 40, color: theme.colorScheme.error),
+              Icon(
+                Icons.error_outline,
+                size: 40,
+                color: theme.colorScheme.error,
+              ),
               const SizedBox(height: 12),
               Text(
                 'Something went wrong. Please try again.',
@@ -237,10 +246,7 @@ class _FriendlyErrorView extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-              FilledButton(
-                onPressed: onRetry,
-                child: const Text('Retry'),
-              ),
+              FilledButton(onPressed: onRetry, child: const Text('Retry')),
             ],
           ),
         ),

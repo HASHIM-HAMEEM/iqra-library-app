@@ -1,19 +1,20 @@
-import 'package:flutter/material.dart';
 import 'dart:io' show Platform;
+
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:library_registration_app/core/theme/app_theme.dart';
 import 'package:library_registration_app/core/config/app_config.dart';
+import 'package:library_registration_app/core/theme/app_theme.dart';
 import 'package:library_registration_app/core/utils/responsive_utils.dart';
 import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
+import 'package:library_registration_app/presentation/providers/auth/setup_provider.dart';
+import 'package:library_registration_app/presentation/providers/database_provider.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_text_field.dart';
 import 'package:library_registration_app/presentation/widgets/common/primary_button.dart';
 import 'package:local_auth/error_codes.dart' as auth_error;
 import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
-import 'package:library_registration_app/presentation/providers/auth/setup_provider.dart';
-import 'package:library_registration_app/presentation/providers/database_provider.dart';
-import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 
 class AuthPage extends ConsumerStatefulWidget {
   const AuthPage({super.key});
@@ -96,23 +97,39 @@ class _AuthPageState extends ConsumerState<AuthPage>
       // Consider any non-empty enrollment acceptable (some devices report only 'weak')
       final hasAnyBiometric = enrolled.isNotEmpty;
       // Respect user's preference from setup/settings
-      final enabledPrefSetup = await ref.read(setupProvider.notifier).isBiometricEnabled();
+      final enabledPrefSetup = await ref
+          .read(setupProvider.notifier)
+          .isBiometricEnabled();
       // Fallback to app settings keys if present (defensive)
       final appSettings = ref.read(appSettingsDaoProvider);
-      final enabledPrefAppPrimary = await appSettings.getBoolSetting('biometric_auth_enabled');
-      final enabledPrefAppLegacy = await appSettings.getBoolSetting('biometric_enabled');
-      final enabledPrefApp = (enabledPrefAppPrimary ?? enabledPrefAppLegacy) ?? false;
+      final enabledPrefAppPrimary = await appSettings.getBoolSetting(
+        'biometric_auth_enabled',
+      );
+      final enabledPrefAppLegacy = await appSettings.getBoolSetting(
+        'biometric_enabled',
+      );
+      final enabledPrefApp =
+          (enabledPrefAppPrimary ?? enabledPrefAppLegacy) ?? false;
       final enabledPref = enabledPrefSetup || enabledPrefApp;
       // Require the admin to have signed in at least once before offering biometric
       // Note: do not reset this flag on logout; it must persist to allow biometrics on next launch
       final hasSignedInOnce =
-          (await ref.read(appSettingsDaoProvider).getBoolSetting('has_signed_in_once')) ?? false;
-      final canShowIcon = isDeviceSupported && enabledPref && hasSignedInOnce && (hasAnyBiometric || canCheck);
+          (await ref
+              .read(appSettingsDaoProvider)
+              .getBoolSetting('has_signed_in_once')) ??
+          false;
+      final canShowIcon =
+          isDeviceSupported &&
+          enabledPref &&
+          hasSignedInOnce &&
+          (hasAnyBiometric || canCheck);
       if (mounted) setState(() => _biometricAvailable = canShowIcon);
       if (AppConfig.developerMode && mounted) {
-        setState(() => _biometricWhyHidden = canShowIcon
-            ? null
-            : 'deviceSupported=$isDeviceSupported, canCheck=$canCheck, enrolled=${enrolled.isNotEmpty}, enabledPref=$enabledPref, signedInOnce=$hasSignedInOnce');
+        setState(
+          () => _biometricWhyHidden = canShowIcon
+              ? null
+              : 'deviceSupported=$isDeviceSupported, canCheck=$canCheck, enrolled=${enrolled.isNotEmpty}, enabledPref=$enabledPref, signedInOnce=$hasSignedInOnce',
+        );
       }
 
       // Optional auto-prompt once if conditions are good and nothing loading
@@ -128,8 +145,12 @@ class _AuthPageState extends ConsumerState<AuthPage>
         });
       }
       if (AppConfig.developerMode) {
-        debugPrint('[Biometric] deviceSupported=$isDeviceSupported canCheck=$canCheck enrolled=$enrolled');
-        debugPrint('[Biometric] enabledPrefSetup=$enabledPrefSetup enabledPrefApp=$enabledPrefApp hasSignedInOnce=$hasSignedInOnce');
+        debugPrint(
+          '[Biometric] deviceSupported=$isDeviceSupported canCheck=$canCheck enrolled=$enrolled',
+        );
+        debugPrint(
+          '[Biometric] enabledPrefSetup=$enabledPrefSetup enabledPrefApp=$enabledPrefApp hasSignedInOnce=$hasSignedInOnce',
+        );
         debugPrint('[Biometric] canShowIcon=$canShowIcon');
       }
     } on PlatformException catch (e) {
@@ -153,7 +174,10 @@ class _AuthPageState extends ConsumerState<AuthPage>
     if (!_formKey.currentState!.validate()) return;
     final success = await ref
         .read(authProvider.notifier)
-        .authenticateWithPassword(_emailController.text, _passwordController.text);
+        .authenticateWithPassword(
+          _emailController.text,
+          _passwordController.text,
+        );
     if (!success) {
       final error = ref.read(authProvider).error;
       if (error != null) {
@@ -201,9 +225,9 @@ class _AuthPageState extends ConsumerState<AuthPage>
           }
         }
         debugPrint('[Biometric] success');
-        } else {
+      } else {
         // User canceled or system returned false without exception
-          _showErrorNotification('Authentication canceled');
+        _showErrorNotification('Authentication canceled');
         debugPrint('[Biometric] canceled/false');
       }
     } on PlatformException catch (e) {
@@ -211,20 +235,21 @@ class _AuthPageState extends ConsumerState<AuthPage>
       switch (e.code) {
         case auth_error.notAvailable:
           _showErrorNotification("This device doesn't support biometrics.");
-          break;
         case auth_error.notEnrolled:
-          _showErrorNotification('No biometric enrolled. Add a fingerprint/face in Settings.');
-          break;
+          _showErrorNotification(
+            'No biometric enrolled. Add a fingerprint/face in Settings.',
+          );
         case auth_error.lockedOut:
         case auth_error.permanentlyLockedOut:
-          _showErrorNotification('Too many attempts. Try again later or use password.');
-          break;
+          _showErrorNotification(
+            'Too many attempts. Try again later or use password.',
+          );
         case auth_error.passcodeNotSet:
           _showErrorNotification('Set a device screen lock to use biometrics.');
-          break;
         case auth_error.otherOperatingSystem:
-          _showErrorNotification('Biometrics not supported on this OS version.');
-          break;
+          _showErrorNotification(
+            'Biometrics not supported on this OS version.',
+          );
         default:
           _showErrorNotification("Couldn't verify. Please try again.");
       }
@@ -337,35 +362,44 @@ class _AuthPageState extends ConsumerState<AuthPage>
                             ),
                             child: Padding(
                               padding: const EdgeInsets.all(12),
-                              child: Builder(builder: (context) {
-                                final theme = Theme.of(context);
-                                final isLight = theme.brightness == Brightness.light;
-                                final bgColor = isLight
-                                    ? theme.colorScheme.inverseSurface.withValues(alpha: 0.9)
-                                    : theme.colorScheme.surfaceVariant.withValues(alpha: 0.6);
-                                final outline = theme.colorScheme.outline.withValues(alpha: 0.25);
-                                return DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: bgColor,
-                                    border: Border.all(color: outline),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
-                                        blurRadius: 14,
-                                        offset: const Offset(0, 6),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Image.asset(
-                                      'IqraLogo.png',
-                                      fit: BoxFit.contain,
+                              child: Builder(
+                                builder: (context) {
+                                  final theme = Theme.of(context);
+                                  final isLight =
+                                      theme.brightness == Brightness.light;
+                                  final bgColor = isLight
+                                      ? theme.colorScheme.inverseSurface
+                                            .withValues(alpha: 0.9)
+                                      : theme
+                                            .colorScheme
+                                            .surfaceContainerHighest
+                                            .withValues(alpha: 0.6);
+                                  final outline = theme.colorScheme.outline
+                                      .withValues(alpha: 0.25);
+                                  return DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: bgColor,
+                                      border: Border.all(color: outline),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: theme.colorScheme.onSurface
+                                              .withValues(alpha: 0.06),
+                                          blurRadius: 14,
+                                          offset: const Offset(0, 6),
+                                        ),
+                                      ],
                                     ),
-                                  ),
-                                );
-                              }),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Image.asset(
+                                        'IqraLogo.png',
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
                           ),
                           const SizedBox(height: 32),
@@ -415,11 +449,17 @@ class _AuthPageState extends ConsumerState<AuthPage>
                                       : const Icon(Icons.fingerprint_rounded),
                                 ),
                               ],
-                              if (AppConfig.developerMode && !_biometricAvailable && _biometricWhyHidden != null) ...[
+                              if (AppConfig.developerMode &&
+                                  !_biometricAvailable &&
+                                  _biometricWhyHidden != null) ...[
                                 const SizedBox(width: 8),
                                 Tooltip(
-                                  message: 'Biometric hidden: ${_biometricWhyHidden!}',
-                                  child: const Icon(Icons.info_outline, size: 18),
+                                  message:
+                                      'Biometric hidden: ${_biometricWhyHidden!}',
+                                  child: const Icon(
+                                    Icons.info_outline,
+                                    size: 18,
+                                  ),
                                 ),
                               ],
                             ],
@@ -456,20 +496,23 @@ class _AuthPageState extends ConsumerState<AuthPage>
                                     if (value == null || value.isEmpty) {
                                       return 'Email is required';
                                     }
-                                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                                    if (!RegExp(
+                                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                                    ).hasMatch(value)) {
                                       return 'Enter a valid email address';
                                     }
                                     return null;
                                   },
-                                  onSubmitted: (_) => _passwordFocusNode.requestFocus(),
+                                  onSubmitted: (_) =>
+                                      _passwordFocusNode.requestFocus(),
                                 ),
                                 const SizedBox(height: 16),
                                 CustomTextField(
-                                   controller: _passwordController,
-                                   focusNode: _passwordFocusNode,
-                                   hintText: 'Enter your password',
-                                   obscureText: _obscurePassword,
-                                   prefixIcon: Icons.lock_outline,
+                                  controller: _passwordController,
+                                  focusNode: _passwordFocusNode,
+                                  hintText: 'Enter your password',
+                                  obscureText: _obscurePassword,
+                                  prefixIcon: Icons.lock_outline,
                                   suffixIcon: IconButton(
                                     icon: Icon(
                                       _obscurePassword
@@ -501,7 +544,8 @@ class _AuthPageState extends ConsumerState<AuthPage>
                                   text: 'Sign In',
                                   onPressed:
                                       (_emailController.text.isNotEmpty &&
-                                          _passwordController.text.length >= 6) &&
+                                              _passwordController.text.length >=
+                                                  6) &&
                                           !ref.read(authProvider).isLoading
                                       ? _authenticateWithPassword
                                       : null,

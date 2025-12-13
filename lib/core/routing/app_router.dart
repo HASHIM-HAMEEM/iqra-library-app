@@ -4,11 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:library_registration_app/presentation/layouts/main_layout.dart';
 import 'package:library_registration_app/presentation/pages/activity/activity_page.dart';
 import 'package:library_registration_app/presentation/pages/auth/auth_page.dart';
-
 import 'package:library_registration_app/presentation/pages/dashboard/dashboard_page.dart';
 // Migration page removed - using Supabase only
 import 'package:library_registration_app/presentation/pages/settings/settings_page.dart';
-
 import 'package:library_registration_app/presentation/pages/students/add_student_page.dart';
 import 'package:library_registration_app/presentation/pages/students/edit_student_page.dart';
 import 'package:library_registration_app/presentation/pages/students/student_details_page.dart';
@@ -16,11 +14,12 @@ import 'package:library_registration_app/presentation/pages/students/students_pa
 import 'package:library_registration_app/presentation/pages/subscriptions/subscription_details_page.dart';
 import 'package:library_registration_app/presentation/pages/subscriptions/subscriptions_page.dart';
 import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
+
 final routerProvider = Provider<GoRouter>((ref) {
   // Always derive routing from auth state; auth can be local-only (offline biometric)
-  final bool isAuthenticated = ref.watch(isAuthenticatedProvider);
+  final isAuthenticated = ref.watch(isAuthenticatedProvider);
 
-  final String computedInitialLocation = !isAuthenticated ? '/auth' : '/dashboard';
+  final computedInitialLocation = !isAuthenticated ? '/auth' : '/dashboard';
 
   return GoRouter(
     initialLocation: computedInitialLocation,
@@ -29,13 +28,17 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       // Check authentication
       if (!isAuthenticated && currentPath != '/auth') {
-        debugPrint('[Router] redirect -> /auth (not authenticated). from=$currentPath');
+        debugPrint(
+          '[Router] redirect -> /auth (not authenticated). from=$currentPath',
+        );
         return '/auth';
       }
 
       // If trying to access auth while authenticated, redirect to dashboard
       if (isAuthenticated && currentPath == '/auth') {
-        debugPrint('[Router] redirect -> /dashboard (already authed). from=$currentPath');
+        debugPrint(
+          '[Router] redirect -> /dashboard (already authed). from=$currentPath',
+        );
         return '/dashboard';
       }
 
@@ -43,17 +46,12 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       // Root route (keeps initial build lightweight; redirect will navigate appropriately)
-      GoRoute(
-        path: '/',
-        builder: (context, state) => const SizedBox.shrink(),
-      ),
+      GoRoute(path: '/', builder: (context, state) => const SizedBox.shrink()),
       // Auth route
       GoRoute(
         path: '/auth',
-        pageBuilder: (context, state) => _buildFadeThroughPage(
-          key: state.pageKey,
-          child: const AuthPage(),
-        ),
+        pageBuilder: (context, state) =>
+            _buildFadeThroughPage(key: state.pageKey, child: const AuthPage()),
       ),
 
       // Main app routes with layout
@@ -135,8 +133,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             ],
           ),
 
-
-
           // Activity
           GoRoute(
             path: '/activity',
@@ -201,23 +197,33 @@ CustomTransitionPage<void> _buildSharedAxisPage({
     reverseTransitionDuration: const Duration(milliseconds: 280),
     child: child,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
       switch (axis) {
         case SharedAxisAxis.horizontal:
           return SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0.08, 0), end: Offset.zero).animate(curved),
+            position: Tween<Offset>(
+              begin: const Offset(0.08, 0),
+              end: Offset.zero,
+            ).animate(curved),
             child: FadeTransition(opacity: curved, child: child),
           );
         case SharedAxisAxis.vertical:
           return SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero).animate(curved),
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.08),
+              end: Offset.zero,
+            ).animate(curved),
             child: FadeTransition(opacity: curved, child: child),
           );
         case SharedAxisAxis.scaled:
           return FadeTransition(
             opacity: curved,
             child: ScaleTransition(
-              scale: Tween<double>(begin: 0.98, end: 1.0).animate(curved),
+              scale: Tween<double>(begin: 0.98, end: 1).animate(curved),
               child: child,
             ),
           );
@@ -236,12 +242,20 @@ CustomTransitionPage<void> _buildFadeThroughPage({
     reverseTransitionDuration: const Duration(milliseconds: 260),
     child: child,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final fadeIn = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
-      final fadeOut = CurvedAnimation(parent: secondaryAnimation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
+      final fadeIn = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      final fadeOut = CurvedAnimation(
+        parent: secondaryAnimation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
       return FadeTransition(
         opacity: fadeIn,
         child: FadeTransition(
-          opacity: Tween<double>(begin: 1.0, end: 0.0).animate(fadeOut),
+          opacity: Tween<double>(begin: 1, end: 0).animate(fadeOut),
           child: child,
         ),
       );
@@ -261,9 +275,16 @@ CustomTransitionPage<void> _buildModalSheetPage({
     barrierDismissible: true,
     barrierColor: Colors.black54.withAlpha(40),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
       return SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero).animate(curved),
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.08),
+          end: Offset.zero,
+        ).animate(curved),
         child: FadeTransition(opacity: curved, child: child),
       );
     },

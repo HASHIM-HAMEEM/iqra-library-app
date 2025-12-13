@@ -8,15 +8,16 @@ class ErrorMapper {
         text.contains('end date cannot be before start date')) {
       return 'Start date must be earlier than or equal to End date.';
     }
-    if (text.contains('timeout') || text.contains('socket') || text.contains('network')) {
+    if (text.contains('timeout') ||
+        text.contains('socket') ||
+        text.contains('network')) {
       return "Couldn't save right now. Check your connection and try again.";
     }
     return 'Could not complete the action. Please try again.';
   }
 
-  static bool isOverlap(Object error) => _isOverlap(error.toString().toLowerCase());
+  static bool isOverlap(Object error) =>
+      _isOverlap(error.toString().toLowerCase());
 
   static bool _isOverlap(String text) => text.contains('overlap');
 }
-
-

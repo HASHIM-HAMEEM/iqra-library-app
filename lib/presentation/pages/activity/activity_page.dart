@@ -47,7 +47,12 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
     if (_isLoadingPage || !_hasMore) return;
     setState(() => _isLoadingPage = true);
     try {
-      final next = await ref.read(activityLogsPaginatedProvider((offset: _offset, limit: _pageSize)).future);
+      final next = await ref.read(
+        activityLogsPaginatedProvider((
+          offset: _offset,
+          limit: _pageSize,
+        )).future,
+      );
       if (!mounted) return;
       setState(() {
         _paged.addAll(next);
@@ -80,7 +85,7 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
             } else {
               // Fall back to router home when pushed as root
               if (mounted) {
-                 GoRouter.of(context).go('/dashboard');
+                GoRouter.of(context).go('/dashboard');
               }
             }
           },
@@ -136,7 +141,9 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
                     itemBuilder: (context, index) {
                       final dayKey = days[index];
                       final list = grouped[dayKey]!;
-                      final dayLabel = _friendlyDayLabel(DateTime.parse(dayKey));
+                      final dayLabel = _friendlyDayLabel(
+                        DateTime.parse(dayKey),
+                      );
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -150,10 +157,12 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
                               ),
                             ),
                           ),
-                          ...list.map((a) => Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: _buildActivityTile(theme, a),
-                              )),
+                          ...list.map(
+                            (a) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _buildActivityTile(theme, a),
+                            ),
+                          ),
                         ],
                       );
                     },
@@ -169,10 +178,19 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Center(
                 child: _isLoadingPage
-                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : (!_hasMore
-                        ? Text('All activity loaded', style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor))
-                        : const SizedBox.shrink()),
+                          ? Text(
+                              'All activity loaded',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.hintColor,
+                              ),
+                            )
+                          : const SizedBox.shrink()),
               ),
             ),
           ),
@@ -332,8 +350,7 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
   }
 
   Widget _buildError(ThemeData theme, Object error) {
-    // ignore: avoid_print
-    print('ActivityPage error: $error');
+    debugPrint('ActivityPage error: $error');
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 48),
       child: Column(

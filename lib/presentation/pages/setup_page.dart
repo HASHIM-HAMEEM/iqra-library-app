@@ -217,44 +217,47 @@ class _SetupPageState extends ConsumerState<SetupPage>
   Widget _buildWelcomeSection(ThemeData theme) {
     return Column(
       children: [
-        Builder(builder: (context) {
-          final size = ResponsiveUtils.getResponsiveValue(
-            context,
-            mobile: 96,
-            tablet: 120,
-            desktop: 140,
-          ).toDouble();
-          final isLight = theme.brightness == Brightness.light;
-          final bgColor = isLight
-              ? theme.colorScheme.surface
-              : theme.colorScheme.surfaceVariant.withValues(alpha: 0.6);
-          final outline = theme.colorScheme.outline.withValues(alpha: 0.25);
-          return SizedBox(
-            width: size,
-            height: size,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: bgColor,
-                border: Border.all(color: outline),
-                boxShadow: [
-                  BoxShadow(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
-                    blurRadius: 14,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Image.asset(
-                  'IqraLogo.png',
-                  fit: BoxFit.contain,
+        Builder(
+          builder: (context) {
+            final size = ResponsiveUtils.getResponsiveValue(
+              context,
+              mobile: 96,
+              tablet: 120,
+              desktop: 140,
+            ).toDouble();
+            final isLight = theme.brightness == Brightness.light;
+            final bgColor = isLight
+                ? theme.colorScheme.surface
+                : theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.6,
+                  );
+            final outline = theme.colorScheme.outline.withValues(alpha: 0.25);
+            return SizedBox(
+              width: size,
+              height: size,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: bgColor,
+                  border: Border.all(color: outline),
+                  boxShadow: [
+                    BoxShadow(
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.06,
+                      ),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Image.asset('IqraLogo.png', fit: BoxFit.contain),
                 ),
               ),
-            ),
-          );
-        }),
+            );
+          },
+        ),
         const SizedBox(height: 24),
         Text(
           'Welcome, Admin!',
@@ -382,7 +385,9 @@ class _SetupPageState extends ConsumerState<SetupPage>
                 _enableBiometric = value;
               });
               // persist preference immediately
-              ref.read(setupProvider.notifier).setBiometricEnabled(enabled: value);
+              ref
+                  .read(setupProvider.notifier)
+                  .setBiometricEnabled(enabled: value);
             },
           ),
         ],

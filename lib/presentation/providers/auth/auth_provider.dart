@@ -1,15 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-// import 'package:library_registration_app/core/services/connectivity_service.dart';
-// import 'package:library_registration_app/core/config/app_config.dart';
 import 'package:library_registration_app/data/services/app_settings_service.dart';
 import 'package:library_registration_app/data/services/supabase_service.dart';
-
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Authentication state
 class AuthState {
-
   const AuthState({
     this.isAuthenticated = false,
     this.isLoading = false,
@@ -61,7 +57,9 @@ class AuthState {
   }
 
   bool get isSessionExpired {
-    if (lastAuthTime == null) return true;
+    // If no local timestamp recorded, don't consider expired
+    // (we rely on Supabase session validity as primary check)
+    if (lastAuthTime == null) return false;
     final now = DateTime.now();
     final sessionDuration = Duration(minutes: sessionTimeoutMinutes);
     return now.difference(lastAuthTime!) > sessionDuration;
@@ -90,7 +88,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   final AppSettingsService _appSettingsService;
   final SupabaseService _supabaseService;
-  
+
   // Security constants
   static const int _maxFailedAttempts = 13;
   static const Duration _lockoutDuration = Duration(minutes: 15);
@@ -115,8 +113,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> _loadFailedAttempts() async {
     try {
-      final attempts = await _appSettingsService.getIntSetting('failed_auth_attempts') ?? 0;
-    final lockoutString = await _appSettingsService.getStringSetting('lockout_until');
+      final attempts =
+          await _appSettingsService.getIntSetting('failed_auth_attempts') ?? 0;
+      final lockoutString = await _appSettingsService.getStringSetting(
+        'lockout_until',
+      );
       DateTime? lockoutUntil;
       if (lockoutString != null) {
         lockoutUntil = DateTime.tryParse(lockoutString);
@@ -142,7 +143,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       newAttempts,
       description: 'Number of failed authentication attempts',
     );
-    
+
     if (newAttempts >= _maxFailedAttempts) {
       final lockoutUntil = DateTime.now().add(_lockoutDuration);
       await _appSettingsService.setStringSetting(
@@ -162,10 +163,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> _clearFailedAttempts() async {
     await _appSettingsService.deleteSetting('failed_auth_attempts');
     await _clearLockout();
-    state = state.copyWith(
-      failedAttempts: 0,
-      lockoutUntil: null,
-    );
+    state = state.copyWith(failedAttempts: 0);
   }
 
   Future<void> _clearLockout() async {
@@ -229,10 +227,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         }();
       } else {
         // User is not authenticated
-        state = state.copyWith(
-          isAuthenticated: false,
-          user: null,
-        );
+        state = state.copyWith(isAuthenticated: false);
         _clearSession();
       }
     });
@@ -240,64 +235,38 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> _checkExistingSession() async {
     try {
-      // Check if user is already authenticated with Supabase
+      // Check if user explicitly logged out
+      final explicitlyLoggedOut =
+          await _appSettingsService.getBoolSetting('user_logged_out') ?? false;
+      if (explicitlyLoggedOut) {
+        // User explicitly logged out - don't auto-login
+        state = state.copyWith(isAuthenticated: false, requiresReauth: true);
+        return;
+      }
+
+      // Traditional login: If user has a valid Supabase session, they're logged in
       final user = _supabaseService.currentUser;
-      if (user != null) {
-        final lastAuthString = await _appSettingsService.getStringSetting(
-          'last_auth_time',
+      final session = _supabaseService.currentSession;
+
+      if (user != null && session != null) {
+        // User has valid session - they're logged in (traditional login behavior)
+        state = state.copyWith(
+          isAuthenticated: true,
+          user: user,
+          lastAuthTime: DateTime.now(),
+          requiresReauth: false,
+          lastKnownEmail: user.email,
         );
-        DateTime? lastAuthTime;
-        if (lastAuthString != null) {
-          lastAuthTime = DateTime.tryParse(lastAuthString);
-        }
-        
-        final tempState = state.copyWith(lastAuthTime: lastAuthTime);
-
-        // If we have a valid Supabase session, trust it more than our local timestamp
-        final supabaseSession = _supabaseService.currentSession;
-        final hasValidSupabaseSession = supabaseSession != null &&
-            supabaseSession.user != null &&
-            (supabaseSession.expiresAt == null ||
-             DateTime.fromMillisecondsSinceEpoch(supabaseSession.expiresAt! * 1000).isAfter(DateTime.now()));
-
-        if (hasValidSupabaseSession) {
-          // Trust the Supabase session over local timestamp
-          state = state.copyWith(
-            isAuthenticated: true,
-            user: user,
-            lastAuthTime: DateTime.now(), // Update timestamp since session is valid
-            requiresReauth: false,
-            lastKnownEmail: user.email,
-          );
-          // Update stored timestamp
+        // Update stored timestamp
+        try {
           await _appSettingsService.setStringSetting(
             'last_auth_time',
             DateTime.now().toIso8601String(),
             description: 'Last successful authentication time',
           );
-        } else if (lastAuthTime != null && !tempState.isSessionExpired) {
-          // Fallback to timestamp-based validation
-          state = state.copyWith(
-            isAuthenticated: true,
-            user: user,
-            lastAuthTime: lastAuthTime,
-            requiresReauth: false,
-            lastKnownEmail: user.email,
-          );
-        } else {
-          // Require reauthentication but KEEP the Supabase session so biometric can reattach
-          String? lastEmail;
-          try {
-            lastEmail = await _appSettingsService.getStringSetting('last_admin_email');
-          } catch (_) {}
-          state = state.copyWith(
-            isAuthenticated: false,
-            user: null,
-            requiresReauth: true,
-            lastKnownEmail: lastEmail ?? state.lastKnownEmail,
-          );
-        }
+        } catch (_) {}
       }
+      // If no session, user needs to login (but don't force re-auth on valid user)
     } catch (e) {
       // Error checking session, assume not authenticated
     }
@@ -315,7 +284,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return false;
     }
 
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true);
 
     try {
       // Enhanced input validation
@@ -345,17 +314,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
 
       // Directly attempt authentication with a short retry on transient network errors
-      const int maxAttempts = 13;
-      int attempt = 0;
+      const maxAttempts = 13;
+      var attempt = 0;
       while (true) {
         try {
           await _supabaseService.signInWithPassword(email.trim(), password);
           break; // success
         } catch (e) {
           attempt++;
-          final String lower = e.toString().toLowerCase();
-          final bool isTransientNetwork =
-              lower.contains('socket') || lower.contains('network') || lower.contains('timeout');
+          final lower = e.toString().toLowerCase();
+          final isTransientNetwork =
+              lower.contains('socket') ||
+              lower.contains('network') ||
+              lower.contains('timeout');
           if (!isTransientNetwork || attempt >= maxAttempts) {
             rethrow;
           }
@@ -364,12 +335,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
           await Future<void>.delayed(Duration(milliseconds: delayMs));
         }
       }
-      
+
       // Authentication successful - clear failed attempts
       await _clearFailedAttempts();
+      // Clear the logged out flag since user is now logged in
+      await _appSettingsService.deleteSetting('user_logged_out');
       // Mark that a real credential sign-in occurred. Used to gate biometrics visibility.
-      await _appSettingsService.setBoolSetting('has_signed_in_once', true,
-          description: 'Admin has completed at least one credential login');
+      await _appSettingsService.setBoolSetting(
+        'has_signed_in_once',
+        true,
+        description: 'Admin has completed at least one credential login',
+      );
       // Persist last known admin email for offline biometric display
       try {
         await _appSettingsService.setStringSetting(
@@ -384,36 +360,38 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       // Increment failed attempts for authentication failures
       await _incrementFailedAttempts();
-      
+
       // Handle different types of errors with enhanced messaging
       String errorMessage;
       if (e is AuthException) {
         switch (e.statusCode) {
           case '400':
-            errorMessage = 'Invalid email or password. Please check your credentials.';
-            break;
+            errorMessage =
+                'Invalid email or password. Please check your credentials.';
           case '401':
             errorMessage = 'Invalid email or password.';
-            break;
           case '422':
-            errorMessage = 'Email not confirmed. Please check your email for a confirmation link.';
-            break;
+            errorMessage =
+                'Email not confirmed. Please check your email for a confirmation link.';
           case '429':
-            errorMessage = 'Too many login attempts. Please wait before trying again.';
-            break;
+            errorMessage =
+                'Too many login attempts. Please wait before trying again.';
           case '500':
             errorMessage = 'Server error. Please try again later.';
-            break;
           default:
-            errorMessage = e.message.isNotEmpty ? e.message : 'Authentication failed. Please try again.';
+            errorMessage = e.message.isNotEmpty
+                ? e.message
+                : 'Authentication failed. Please try again.';
         }
-      } else if (e.toString().toLowerCase().contains('network') || 
-                 e.toString().toLowerCase().contains('socket') ||
-                 e.toString().toLowerCase().contains('connection') ||
-                 e.toString().toLowerCase().contains('timeout')) {
-        errorMessage = 'Couldn\'t reach the authentication service. Please try again.';
+      } else if (e.toString().toLowerCase().contains('network') ||
+          e.toString().toLowerCase().contains('socket') ||
+          e.toString().toLowerCase().contains('connection') ||
+          e.toString().toLowerCase().contains('timeout')) {
+        errorMessage =
+            "Couldn't reach the authentication service. Please try again.";
       } else {
-        errorMessage = 'Authentication failed. Please check your credentials and try again.';
+        errorMessage =
+            'Authentication failed. Please check your credentials and try again.';
       }
 
       // Add lockout warning if approaching limit
@@ -439,7 +417,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return false;
     }
 
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true);
 
     try {
       // If we have a Supabase session (or persisted tokens), ensure it's fresh and then unlock
@@ -447,8 +425,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       var session = _supabaseService.currentSession;
       if (session != null || user != null) {
         // Refresh if expired or about to expire
-        final bool isExpired = session?.expiresAt != null &&
-            DateTime.fromMillisecondsSinceEpoch(session!.expiresAt! * 1000).isBefore(DateTime.now());
+        final isExpired =
+            session?.expiresAt != null &&
+            DateTime.fromMillisecondsSinceEpoch(
+              session!.expiresAt! * 1000,
+            ).isBefore(DateTime.now());
         if (isExpired || session == null) {
           try {
             await _supabaseService.refreshSession();
@@ -467,6 +448,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
             description: 'Last successful authentication time',
           );
           await _clearFailedAttempts();
+          // Clear logged out flag on successful biometric auth
+          await _appSettingsService.deleteSetting('user_logged_out');
           state = state.copyWith(
             isAuthenticated: true,
             isLoading: false,
@@ -490,7 +473,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         } catch (_) {}
         String? lastEmail;
         try {
-          lastEmail = await _appSettingsService.getStringSetting('last_admin_email');
+          lastEmail = await _appSettingsService.getStringSetting(
+            'last_admin_email',
+          );
         } catch (_) {}
         await _clearFailedAttempts();
         state = state.copyWith(
@@ -507,39 +492,45 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Otherwise, require credentials because we cannot identify a Supabase session
       state = state.copyWith(
         isLoading: false,
-        error: 'No valid session found. Please sign in with email and password first.',
+        error:
+            'No valid session found. Please sign in with email and password first.',
       );
       return false;
     } catch (e) {
       // Don't increment failed attempts for biometric failures as they're handled by the OS
       String errorMessage;
-      if (e.toString().toLowerCase().contains('network') || 
+      if (e.toString().toLowerCase().contains('network') ||
           e.toString().toLowerCase().contains('connection')) {
-        errorMessage = 'Network error during biometric authentication. Please try again.';
+        errorMessage =
+            'Network error during biometric authentication. Please try again.';
       } else {
-        errorMessage = 'Biometric authentication failed. Please try again or use password.';
+        errorMessage =
+            'Biometric authentication failed. Please try again or use password.';
       }
-      
-      state = state.copyWith(
-        isLoading: false,
-        error: errorMessage,
-      );
+
+      state = state.copyWith(isLoading: false, error: errorMessage);
       return false;
     }
   }
 
-  Future<void> logout({bool hard = false}) async {
+  Future<void> logout({bool hard = true}) async {
     try {
-      // Soft logout by default: keep Supabase session so biometric can re-unlock
+      // Mark that user explicitly logged out - prevents auto-login on app restart
+      await _appSettingsService.setBoolSetting(
+        'user_logged_out',
+        true,
+        description: 'User explicitly logged out',
+      );
+
+      // Always sign out of Supabase by default for security
       if (hard) {
         await _supabaseService.signOut();
       }
       await _clearSession();
       state = state.copyWith(
         isAuthenticated: false,
-        user: null,
         requiresReauth: true,
-        error: null,
+        user: null,
       );
     } catch (e) {
       await _clearSession();
@@ -571,14 +562,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (state.lastAuthTime == null || !state.isAuthenticated) return false;
     final now = DateTime.now();
     final sessionDuration = Duration(minutes: state.sessionTimeoutMinutes);
-    final timeUntilExpiry = sessionDuration - now.difference(state.lastAuthTime!);
-    return timeUntilExpiry <= _sessionWarningThreshold && timeUntilExpiry > Duration.zero;
+    final timeUntilExpiry =
+        sessionDuration - now.difference(state.lastAuthTime!);
+    return timeUntilExpiry <= _sessionWarningThreshold &&
+        timeUntilExpiry > Duration.zero;
   }
 
   /// Extend current session (useful for "keep me logged in" functionality)
   Future<void> extendSession() async {
     if (!state.isAuthenticated) return;
-    
+
     try {
       // Validate that the Supabase session is still valid
       final session = _supabaseService.currentSession;
@@ -651,7 +644,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       // Check if Supabase session is expired
       if (session.expiresAt != null) {
-        final expiryTime = DateTime.fromMillisecondsSinceEpoch(session.expiresAt! * 1000);
+        final expiryTime = DateTime.fromMillisecondsSinceEpoch(
+          session.expiresAt! * 1000,
+        );
         if (expiryTime.isBefore(DateTime.now())) {
           await logout();
           return;
@@ -675,7 +670,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await logout();
     }
   }
-
 }
 
 // Auth provider
@@ -688,7 +682,9 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
 // Convenience providers
 final isAuthenticatedProvider = Provider<bool>((ref) {
   final authState = ref.watch(authProvider);
-  return authState.isAuthenticated && !authState.isSessionExpired;
+  // Trust isAuthenticated flag - session expiry is handled internally
+  // by checking Supabase session validity, not just local timestamp
+  return authState.isAuthenticated;
 });
 
 final authLoadingProvider = Provider<bool>((ref) {

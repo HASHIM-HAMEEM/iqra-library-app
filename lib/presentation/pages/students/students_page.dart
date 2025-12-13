@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,8 +10,8 @@ import 'package:library_registration_app/presentation/providers/students/student
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
 import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
-import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 import 'package:library_registration_app/presentation/widgets/common/async_avatar.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 
 class StudentsPage extends ConsumerStatefulWidget {
   const StudentsPage({super.key});
@@ -29,12 +30,12 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
   String _stagedFilter = 'All';
   String _stagedSortBy = 'Name';
   Timer? _debounceTimer;
-  
+
   // Cache for subscription status to avoid repeated calculations
-  Map<String, bool> _activeStatusCache = {};
-  Map<String, bool> _expiredStatusCache = {};
+  final Map<String, bool> _activeStatusCache = {};
+  final Map<String, bool> _expiredStatusCache = {};
   DateTime? _lastCacheUpdate;
-  
+
   // Pagination state
   final int _pageSize = 50;
   final ScrollController _scrollController = ScrollController();
@@ -147,8 +148,12 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
       _isLoadingPage = true;
     });
     try {
-      final next = await ref
-          .read(pagedStudentsProvider((offset: _currentOffset, limit: _pageSize)).future);
+      final next = await ref.read(
+        pagedStudentsProvider((
+          offset: _currentOffset,
+          limit: _pageSize,
+        )).future,
+      );
       if (!mounted) return;
       setState(() {
         _pagedStudents.addAll(next);
@@ -170,98 +175,112 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
     List<Subscription> subscriptions,
   ) {
     final now = DateTime.now();
-    
+
     // Check if cache needs to be updated (every 5 minutes or if empty)
-    final shouldUpdateCache = _lastCacheUpdate == null ||
+    final shouldUpdateCache =
+        _lastCacheUpdate == null ||
         now.difference(_lastCacheUpdate!).inMinutes > 5 ||
         _activeStatusCache.isEmpty;
-    
+
     if (shouldUpdateCache) {
       _updateSubscriptionCache(subscriptions, now);
       _lastCacheUpdate = now;
     }
-    
+
     // Pre-filter students based on active filter to reduce iterations
     List<Student> filtered;
-    
+
     switch (_activeFilter) {
       case 'Active':
-        filtered = students.where((s) => _activeStatusCache[s.id] == true).toList();
-        break;
+        filtered = students
+            .where((s) => _activeStatusCache[s.id] ?? false)
+            .toList();
       case 'Expired':
-        filtered = students.where((s) => 
-          _activeStatusCache[s.id] != true && _expiredStatusCache[s.id] == true
-        ).toList();
-        break;
+        filtered = students
+            .where(
+              (s) =>
+                  !(_activeStatusCache[s.id] ?? false) &&
+                  (_expiredStatusCache[s.id] ?? false),
+            )
+            .toList();
       case 'New':
         final thirtyDaysAgo = now.subtract(const Duration(days: 30));
-        filtered = students.where((s) => s.createdAt.isAfter(thirtyDaysAgo)).toList();
-        break;
+        filtered = students
+            .where((s) => s.createdAt.isAfter(thirtyDaysAgo))
+            .toList();
       default:
-        filtered = List.from(students); // Create a copy to avoid modifying original
+        filtered = List.from(
+          students,
+        ); // Create a copy to avoid modifying original
     }
-    
+
     // Sort the filtered list
     _sortStudents(filtered);
-    
+
     return filtered;
   }
-  
-  void _updateSubscriptionCache(List<Subscription> subscriptions, DateTime now) {
+
+  void _updateSubscriptionCache(
+    List<Subscription> subscriptions,
+    DateTime now,
+  ) {
     _activeStatusCache.clear();
     _expiredStatusCache.clear();
-    
+
     // Group subscriptions by student ID for efficient lookup
     final studentIdToSubs = <String, List<Subscription>>{};
     for (final sub in subscriptions) {
       (studentIdToSubs[sub.studentId] ??= []).add(sub);
     }
-    
+
     // Calculate status for each student
     for (final entry in studentIdToSubs.entries) {
       final studentId = entry.key;
       final subs = entry.value;
-      
-      bool hasActive = false;
-      bool hasExpired = false;
-      
+
+      var hasActive = false;
+      var hasExpired = false;
+
       for (final sub in subs) {
-        if (sub.status == SubscriptionStatus.active && sub.endDate.isAfter(now)) {
+        if (sub.status == SubscriptionStatus.active &&
+            sub.endDate.isAfter(now)) {
           hasActive = true;
         }
-        if (sub.status == SubscriptionStatus.expired || sub.endDate.isBefore(now)) {
+        if (sub.status == SubscriptionStatus.expired ||
+            sub.endDate.isBefore(now)) {
           hasExpired = true;
         }
-        
+
         // Early exit if both statuses are found
         if (hasActive && hasExpired) break;
       }
-      
+
       _activeStatusCache[studentId] = hasActive;
       _expiredStatusCache[studentId] = hasExpired;
     }
   }
-  
+
   void _clearSubscriptionCache() {
     _activeStatusCache.clear();
     _expiredStatusCache.clear();
     _lastCacheUpdate = null;
   }
-  
+
   void _sortStudents(List<Student> students) {
     switch (_sortBy) {
       case 'Name':
-        students.sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
-        break;
+        students.sort(
+          (a, b) =>
+              a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
+        );
       case 'Email':
-        students.sort((a, b) => a.email.toLowerCase().compareTo(b.email.toLowerCase()));
-        break;
+        students.sort(
+          (a, b) => a.email.toLowerCase().compareTo(b.email.toLowerCase()),
+        );
       case 'Date':
         students.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        break;
       case 'Age':
         students.sort((a, b) => a.age.compareTo(b.age));
-        break;
     }
   }
 
@@ -275,50 +294,49 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
       body: RefreshIndicator(
         onRefresh: _onRefresh,
         child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          controller: _scrollController,
           slivers: [
-          // Modern Header
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: ResponsiveUtils.getResponsivePadding(
-                context,
-              ).copyWith(top: 8),
-              child: _buildModernHeader(theme),
+            // Modern Header
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: ResponsiveUtils.getResponsivePadding(
+                  context,
+                ).copyWith(top: 8),
+                child: _buildModernHeader(theme),
+              ),
             ),
-          ),
 
-          // Search and Filter Section
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: ResponsiveUtils.getResponsivePadding(
-                context,
-              ).copyWith(top: 16),
-              child: _buildSearchSection(theme),
+            // Search and Filter Section
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: ResponsiveUtils.getResponsivePadding(
+                  context,
+                ).copyWith(top: 16),
+                child: _buildSearchSection(theme),
+              ),
             ),
-          ),
 
-          // Chips moved into filter sheet (tune icon)
+            // Chips moved into filter sheet (tune icon)
 
-          // Students List (slivers)
-          ..._buildStudentsSlivers(subsAsync),
-        ],
+            // Students List (slivers)
+            ..._buildStudentsSlivers(subsAsync),
+          ],
         ),
       ),
-      floatingActionButton:
-          Listener(
-            onPointerDown: (_) => setState(() {}),
-            onPointerUp: (_) => setState(() {}),
-            child: FloatingActionButton(
-              onPressed: () {
-                context.go('/students/add');
-                _showNotification('Opening Add Student form');
-              },
-              backgroundColor: theme.colorScheme.primary,
-              foregroundColor: theme.colorScheme.onPrimary,
-              child: const Icon(Icons.person_add_rounded),
-            )
-          ),
+      floatingActionButton: Listener(
+        onPointerDown: (_) => setState(() {}),
+        onPointerUp: (_) => setState(() {}),
+        child: FloatingActionButton(
+          onPressed: () {
+            context.go('/students/add');
+            _showNotification('Opening Add Student form');
+          },
+          backgroundColor: theme.colorScheme.primary,
+          foregroundColor: theme.colorScheme.onPrimary,
+          child: const Icon(Icons.person_add_rounded),
+        ),
+      ),
     );
   }
 
@@ -358,46 +376,70 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
   Widget _buildSearchSection(ThemeData theme) {
     return Container(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(16),
+        color: theme.colorScheme.surface.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withValues(alpha: 0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
         border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.1),
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+          width: 0.5,
         ),
       ),
       child: TextField(
         controller: _searchController,
+        style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
         decoration: InputDecoration(
-          hintText: 'Search students by name, email, or phone...',
+          hintText: 'Search students...',
           hintStyle: TextStyle(
-            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+            fontSize: 16,
           ),
-          prefixIcon: Icon(
-            Icons.search_rounded,
-            color: theme.colorScheme.onSurfaceVariant,
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(left: 16, right: 12),
+            child: Icon(
+              Icons.search_rounded,
+              color: theme.colorScheme.primary,
+              size: 24,
+            ),
           ),
           suffixIcon: _searchQuery.isNotEmpty
-              ? IconButton(
-                  icon: Icon(
-                    Icons.clear_rounded,
-                    color: theme.colorScheme.onSurfaceVariant,
+              ? Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.clear_rounded,
+                        color: theme.colorScheme.onSurfaceVariant,
+                        size: 16,
+                      ),
+                    ),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() {
+                        _searchQuery = '';
+                      });
+                      _performSearch('');
+                    },
                   ),
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() {
-                      _searchQuery = '';
-                    });
-                    _performSearch('');
-                  },
                 )
               : null,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 14,
+            vertical: 16,
+            horizontal: 20,
           ),
         ),
         onChanged: (value) {
-          // handled by controller listener with debounce
           setState(() {
             _searchQuery = value;
           });
@@ -416,83 +458,186 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
         final theme = Theme.of(ctx);
         return StatefulBuilder(
           builder: (sheetCtx, setSheetState) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(2),
+            return SingleChildScrollView(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+                left: 24,
+                right: 24,
+                top: 16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 32,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Filters & Sort',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Filter & Sort',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setSheetState(() {
+                            _stagedFilter = 'All';
+                            _stagedSortBy = 'Name';
+                          });
+                        },
+                        style: TextButton.styleFrom(
+                          foregroundColor: theme.colorScheme.secondary,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                        ),
+                        child: const Text('Reset'),
+                      ),
+                    ],
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Status',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: ['All', 'Active', 'Expired', 'New'].map((option) {
-                    final selected = _stagedFilter == option;
-                    return ChoiceChip(
-                      label: Text(option),
-                      selected: selected,
-                      onSelected: (_) => setSheetState(() => _stagedFilter = option),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Sort by',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: ['Name', 'Email', 'Date', 'Age'].map((option) {
-                    final selected = _stagedSortBy == option;
-                    return ChoiceChip(
-                      label: Text(option),
-                      selected: selected,
-                      onSelected: (_) => setSheetState(() => _stagedSortBy = option),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () {
-                        setSheetState(() {
-                          _stagedFilter = 'All';
-                          _stagedSortBy = 'Name';
-                        });
-                      },
-                      child: const Text('Reset'),
+                  const SizedBox(height: 24),
+
+                  // Status Filter
+                  Text(
+                    'STATUS',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
                     ),
-                    const SizedBox(width: 8),
-                    FilledButton(
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: ['All', 'Active', 'Expired', 'New'].map((option) {
+                      final selected = _stagedFilter == option;
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeInOut,
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? theme.colorScheme.primaryContainer
+                              : theme.colorScheme.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: selected
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.outline.withValues(
+                                    alpha: 0.2,
+                                  ),
+                            width: selected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () =>
+                                setSheetState(() => _stagedFilter = option),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 10,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (selected) ...[
+                                    Icon(
+                                      Icons.check,
+                                      size: 16,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ],
+                                  Text(
+                                    option,
+                                    style: theme.textTheme.labelLarge?.copyWith(
+                                      color: selected
+                                          ? theme.colorScheme.onPrimaryContainer
+                                          : theme.colorScheme.onSurface,
+                                      fontWeight: selected
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Sort By Filter
+                  Text(
+                    'SORT BY',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: ['Name', 'Email', 'Date', 'Age'].map((option) {
+                      final selected = _stagedSortBy == option;
+                      return InkWell(
+                        onTap: () =>
+                            setSheetState(() => _stagedSortBy = option),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? theme.colorScheme.secondaryContainer
+                                : theme.colorScheme.surfaceContainerHighest
+                                      .withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: selected
+                                  ? theme.colorScheme.secondary
+                                  : Colors.transparent,
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            option,
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              color: selected
+                                  ? theme.colorScheme.onSecondaryContainer
+                                  : theme.colorScheme.onSurface,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Apply Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
                       onPressed: () {
                         setState(() {
                           _activeFilter = _stagedFilter;
@@ -501,14 +646,26 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                           _clearSubscriptionCache();
                         });
                         Navigator.of(ctx).pop();
-                        _showNotification('Applied filters');
+                        _showNotification('Filters applied successfully');
                       },
-                      child: const Text('Apply'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text(
+                        'Apply Filters',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-              ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
             );
           },
         );
@@ -534,8 +691,9 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
     if (_searchQuery.isNotEmpty) {
       return [
         SliverPadding(
-          padding: ResponsiveUtils.getResponsivePadding(context)
-              .copyWith(top: 16, bottom: 24),
+          padding: ResponsiveUtils.getResponsivePadding(
+            context,
+          ).copyWith(top: 16, bottom: 24),
           sliver: _buildStudentsSliverListOrGrid(_searchResults),
         ),
       ];
@@ -555,8 +713,9 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
             return SliverToBoxAdapter(child: _buildNoResultsState());
           }
           return SliverPadding(
-            padding: ResponsiveUtils.getResponsivePadding(context)
-                .copyWith(top: 16, bottom: 8),
+            padding: ResponsiveUtils.getResponsivePadding(
+              context,
+            ).copyWith(top: 16, bottom: 8),
             sliver: _buildStudentsSliverListOrGrid(filtered),
           );
         },
@@ -576,14 +735,12 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : (!_hasMorePages
-                      ? Text(
-                          'All students loaded',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: Theme.of(context).hintColor),
-                        )
-                      : const SizedBox.shrink()),
+                        ? Text(
+                            'All students loaded',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: Theme.of(context).hintColor),
+                          )
+                        : const SizedBox.shrink()),
             ),
           ),
         ),
@@ -609,9 +766,8 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
     final aspect = ResponsiveUtils.isTablet(context) ? 2.2 : 2.6;
     return SliverGrid(
       delegate: SliverChildBuilderDelegate(
-        (context, index) => RepaintBoundary(
-          child: _buildModernStudentCard(students[index]),
-        ),
+        (context, index) =>
+            RepaintBoundary(child: _buildModernStudentCard(students[index])),
         childCount: students.length,
       ),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -790,143 +946,113 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
     final theme = Theme.of(context);
 
     // Get subscription status for this student
-    final hasActiveSubscription = _activeStatusCache[student.id] == true;
-    final hasExpiredSubscription = _expiredStatusCache[student.id] == true;
+    final hasActiveSubscription = _activeStatusCache[student.id] ?? false;
+    final hasExpiredSubscription = _expiredStatusCache[student.id] ?? false;
 
-    return Card(
-      elevation: 2,
-      shadowColor:
-          theme.colorScheme.onSurface.withValues(alpha: 0.05),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: theme.colorScheme.outlineVariant, width: 0.8),
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
             context.push('/students/details/${student.id}');
-            _showNotification("Opening ${student.fullName}'s profile");
+            // _showNotification("Opening ${student.fullName}'s profile");
           },
           onLongPress: () {
             _showDeleteConfirmation(student);
           },
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(24),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Avatar
+                // Avatar with Status Ring
                 Container(
-                  width: 48,
-                  height: 48,
+                  padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: theme.colorScheme.surfaceContainerHighest,
+                    border: Border.all(
+                      color: hasActiveSubscription
+                          ? const Color(0xFF10B981) // Success Green
+                          : (hasExpiredSubscription
+                                ? theme.colorScheme.error
+                                : Colors.transparent),
+                      width: 2,
+                    ),
                   ),
-                  clipBehavior: Clip.antiAlias,
-                  child: _buildStudentAvatar(student, theme),
+                  child: _buildStudentAvatar(student, theme, size: 52),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 16),
                 // Info
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              student.fullName,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: -0.2,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          _buildSubscriptionStatusBadge(
-                            hasActiveSubscription,
-                            hasExpiredSubscription,
-                            theme,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Wrap(
-                        spacing: 8,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(
-                            'Age: ${student.age}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          if (student.seatNumber != null && student.seatNumber!.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: theme.colorScheme.primary.withValues(alpha: 0.18),
-                                  width: 0.8,
-                                ),
-                              ),
-                              child: Text(
-                                'Seat ${student.seatNumber!}',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.primary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                        ],
+                      Text(
+                        student.fullName,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 17,
+                          letterSpacing: -0.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
+                          Icon(
+                            Icons.email_outlined,
+                            size: 14,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               student.email,
-                              style: theme.textTheme.bodySmall?.copyWith(
+                              style: theme.textTheme.bodyMedium?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w500,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (student.phone?.isNotEmpty ?? false) ...[
-                            const SizedBox(width: 8),
-                            Text('•',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                )),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                student.phone!,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Icon(Icons.chevron_right_rounded,
-                    color: theme.colorScheme.onSurfaceVariant),
+                // Action Arrow
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.5,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 14,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ],
             ),
           ),
@@ -935,62 +1061,22 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
     );
   }
 
-  Widget _buildSubscriptionStatusBadge(
-    bool hasActiveSubscription,
-    bool hasExpiredSubscription,
-    ThemeData theme,
-  ) {
-    String statusText;
-    Color backgroundColor;
-    Color textColor;
+  // Helper methods like _buildSubscriptionStatusBadge removed as status is now in avatar ring
 
-    if (hasActiveSubscription) {
-      statusText = 'Active';
-      backgroundColor = theme.colorScheme.primary.withValues(alpha: 0.1);
-      textColor = theme.colorScheme.primary;
-    } else if (hasExpiredSubscription) {
-      statusText = 'Expired';
-      backgroundColor = theme.colorScheme.error.withValues(alpha: 0.1);
-      textColor = theme.colorScheme.error;
-    } else {
-      statusText = 'No Sub';
-      backgroundColor = theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.1);
-      textColor = theme.colorScheme.onSurfaceVariant;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: textColor.withValues(alpha: 0.2),
-          width: 1,
-        ),
-      ),
-      child: Text(
-        statusText,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: textColor,
-          fontWeight: FontWeight.w600,
-          fontSize: 10,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStudentAvatar(Student student, ThemeData theme, {double size = 48}) {
+  Widget _buildStudentAvatar(
+    Student student,
+    ThemeData theme, {
+    double size = 48,
+  }) {
     return ClipOval(
       child: AsyncAvatar(
         imagePath: student.profileImagePath,
         initials: student.initials,
         size: size,
-        fallbackIcon: Icons.school_outlined,
+        fallbackIcon: Icons.person_rounded,
       ),
     );
   }
-
-
 
   void _showDeleteConfirmation(Student student) {
     showAppBottomSheet<void>(

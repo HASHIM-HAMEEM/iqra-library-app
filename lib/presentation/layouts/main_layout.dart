@@ -1,18 +1,18 @@
 // ignore_for_file: unused_element
+
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
-import 'dart:ui' as ui;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:library_registration_app/core/utils/responsive_utils.dart';
 import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
-import 'dart:async';
-
 
 class MainLayout extends ConsumerStatefulWidget {
-
   const MainLayout({
-    required this.child, required this.currentRoute, super.key,
+    required this.child,
+    required this.currentRoute,
+    super.key,
   });
   final Widget child;
   final String currentRoute;
@@ -21,24 +21,18 @@ class MainLayout extends ConsumerStatefulWidget {
   ConsumerState<MainLayout> createState() => _MainLayoutState();
 }
 
-class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObserver {
-  Timer? _sessionValidationTimer;
+class _MainLayoutState extends ConsumerState<MainLayout>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Periodically validate session while app is running
-    _sessionValidationTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      try {
-        ref.read(authProvider.notifier).validateSession();
-      } catch (_) {}
-    });
+    // No session validation timer - user stays logged in until they explicitly logout
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _sessionValidationTimer?.cancel();
     super.dispose();
   }
 
@@ -46,15 +40,17 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
+      // Refresh session silently in background - don't logout on any failure
       try {
         final authNotifier = ref.read(authProvider.notifier);
         if (authNotifier.currentSession != null) {
           authNotifier.refreshSession();
         }
       } catch (_) {}
-      ref.read(authProvider.notifier).validateSession();
+      // No validateSession call - user stays logged in
     }
   }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -66,16 +62,19 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
     final isFullScreenForm =
         path.startsWith('/students/add') || path.startsWith('/students/edit');
     // Show side navigation only on wide tablets and desktop
-    final showSideNav = !hideNavForActivity && ((isTablet && width >= 900) || isDesktop);
+    final showSideNav =
+        !hideNavForActivity && ((isTablet && width >= 900) || isDesktop);
     // Show bottom navigation on mobile and small tablets (portrait)
     final showBottomNav =
         !hideNavForActivity &&
         !showSideNav && // never show bottom nav when side nav is visible
-        (!isDesktop && (ResponsiveUtils.isMobile(context) || (isTablet && width < 900))) &&
+        (!isDesktop &&
+            (ResponsiveUtils.isMobile(context) || (isTablet && width < 900))) &&
         !isFullScreenForm;
     // Only show the top center nav on true desktop platforms (or web),
     // and never when a side nav is already visible (prevents duplicate navs on tablets in landscape).
-    final isDesktopOS = kIsWeb ||
+    final isDesktopOS =
+        kIsWeb ||
         defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.windows ||
         defaultTargetPlatform == TargetPlatform.linux;
@@ -87,7 +86,8 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
       body: Column(
         children: [
           // Top Navigation Bar
-          if (!hideNavForActivity) _buildTopNavigationBar(context, theme, showCenterTopNav),
+          if (!hideNavForActivity)
+            _buildTopNavigationBar(context, theme, showCenterTopNav),
 
           // Main Content
           Expanded(
@@ -140,51 +140,58 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
                           borderRadius: BorderRadius.circular(14),
                           child: RepaintBoundary(
                             child: Container(
-                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                               decoration: BoxDecoration(
-                                color: theme.colorScheme.surface.withValues(alpha: 0.75),
-                                 borderRadius: BorderRadius.circular(14),
-                                 border: Border.all(
-                                   color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
-                                 ),
-                               ),
-                               child: SingleChildScrollView(
-                                 scrollDirection: Axis.horizontal,
-                                 child: Row(
-                                   mainAxisAlignment: MainAxisAlignment.center,
-                                   children: [
-                                     _buildNavItem(
-                                       context,
-                                       'Dashboard',
-                                       '/dashboard',
-                                       Icons.dashboard_outlined,
-                                     ),
-                                     const SizedBox(width: 6),
-                                     _buildNavItem(
-                                       context,
-                                       'Students',
-                                       '/students',
-                                       Icons.people_outlined,
-                                     ),
-                                     const SizedBox(width: 6),
-                                     _buildNavItem(
-                                       context,
-                                       'Subscriptions',
-                                       '/subscriptions',
-                                       Icons.card_membership_outlined,
-                                     ),
-                                     const SizedBox(width: 6),
-                                     _buildNavItem(
-                                       context,
-                                       'Recent Activity',
-                                       '/activity',
-                                       Icons.access_time_outlined,
-                                     ),
-                                   ],
-                                 ),
-                               ),
-                             ),
-                           ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surface.withValues(
+                                  alpha: 0.75,
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.06,
+                                  ),
+                                ),
+                              ),
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    _buildNavItem(
+                                      context,
+                                      'Dashboard',
+                                      '/dashboard',
+                                      Icons.dashboard_outlined,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    _buildNavItem(
+                                      context,
+                                      'Students',
+                                      '/students',
+                                      Icons.people_outlined,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    _buildNavItem(
+                                      context,
+                                      'Subscriptions',
+                                      '/subscriptions',
+                                      Icons.card_membership_outlined,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    _buildNavItem(
+                                      context,
+                                      'Recent Activity',
+                                      '/activity',
+                                      Icons.access_time_outlined,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     )
@@ -231,7 +238,9 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
           curve: Curves.easeInOut,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: isActive ? theme.colorScheme.primary.withValues(alpha: 0.12) : null,
+            color: isActive
+                ? theme.colorScheme.primary.withValues(alpha: 0.12)
+                : null,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: borderColor),
           ),
@@ -250,7 +259,9 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
                 child: Icon(
                   icon,
                   size: 16,
-                  color: isActive ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.75),
+                  color: isActive
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurface.withValues(alpha: 0.75),
                 ),
               ),
               const SizedBox(width: 10),
@@ -287,83 +298,97 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
             ),
           ),
           child: Column(
-        children: [
-          const SizedBox(height: 32),
-          _buildSideNavItem(
-            context,
-            'Dashboard',
-            '/dashboard',
-            Icons.dashboard_outlined,
-          ),
-          const SizedBox(height: 8),
-          _buildSideNavItem(
-            context,
-            'Students',
-            '/students',
-            Icons.people_outlined,
-          ),
-          const SizedBox(height: 8),
-          _buildSideNavItem(
-            context,
-            'Subscriptions',
-            '/subscriptions',
-            Icons.card_membership_outlined,
-          ),
-          const SizedBox(height: 8),
-          _buildSideNavItem(
-            context,
-            'Recent Activity',
-            '/activity',
-            Icons.access_time_outlined,
-          ),
-          const SizedBox(height: 8),
-          _buildSideNavItem(
-            context,
-            'Settings',
-            '/settings',
-            Icons.settings_outlined,
-          ),
-          const SizedBox(height: 8),
-          // Replace Data Migration with Export Data
-          Visibility(
-          visible: !(ResponsiveUtils.isLandscape(context) && !ResponsiveUtils.isDesktop(context)),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                hoverColor: theme.colorScheme.primary.withValues(alpha: 0.08),
-                onTap: () => _navigateToRoute(context, '/settings'),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
+            children: [
+              const SizedBox(height: 32),
+              _buildSideNavItem(
+                context,
+                'Dashboard',
+                '/dashboard',
+                Icons.dashboard_outlined,
+              ),
+              const SizedBox(height: 8),
+              _buildSideNavItem(
+                context,
+                'Students',
+                '/students',
+                Icons.people_outlined,
+              ),
+              const SizedBox(height: 8),
+              _buildSideNavItem(
+                context,
+                'Subscriptions',
+                '/subscriptions',
+                Icons.card_membership_outlined,
+              ),
+              const SizedBox(height: 8),
+              _buildSideNavItem(
+                context,
+                'Recent Activity',
+                '/activity',
+                Icons.access_time_outlined,
+              ),
+              const SizedBox(height: 8),
+              _buildSideNavItem(
+                context,
+                'Settings',
+                '/settings',
+                Icons.settings_outlined,
+              ),
+              const SizedBox(height: 8),
+              // Replace Data Migration with Export Data
+              Visibility(
+                visible:
+                    !(ResponsiveUtils.isLandscape(context) &&
+                        !ResponsiveUtils.isDesktop(context)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 2,
                   ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.download_outlined, size: 22, color: theme.colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Export Data',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: theme.colorScheme.onSurface,
-                          ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      hoverColor: theme.colorScheme.primary.withValues(
+                        alpha: 0.08,
+                      ),
+                      onTap: () => _navigateToRoute(context, '/settings'),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.download_outlined,
+                              size: 22,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Export Data',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      ],
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-           const Spacer(),
-           const SizedBox(height: 32),
-        ],
+              const Spacer(),
+              const SizedBox(height: 32),
+            ],
           ),
         ),
       ),
@@ -416,7 +441,10 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
                     borderRadius: BorderRadius.circular(6),
                   ),
                 ),
-                if (isActive) const SizedBox(width: 10) else const SizedBox(width: 14),
+                if (isActive)
+                  const SizedBox(width: 10)
+                else
+                  const SizedBox(width: 14),
                 Container(
                   width: 32,
                   height: 32,
@@ -483,63 +511,69 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
                 ),
               ),
               child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: List.generate(routes.length, (i) {
-              final isActive = i == currentIndex;
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: List.generate(routes.length, (i) {
+                  final isActive = i == currentIndex;
 
-              return Expanded(
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(24),
-                  onTap: () => _navigateToRoute(context, routes[i]),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
-                        switchInCurve: Curves.easeOut,
-                        switchOutCurve: Curves.easeIn,
-                        child: isActive
-                            ? Stack(
-                                key: const ValueKey('active'),
-                                alignment: Alignment.center,
-                                children: [
-                                  // Subtle icon-shaped glow (stays within icon boundary)
-                                  Icon(
-                                    icons[i],
-                                    size: 30,
-                                    color: theme.colorScheme.primary.withValues(alpha: 0.18),
-                                  ),
-                                  Icon(
+                  return Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(24),
+                      onTap: () => _navigateToRoute(context, routes[i]),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 200),
+                            switchInCurve: Curves.easeOut,
+                            switchOutCurve: Curves.easeIn,
+                            child: isActive
+                                ? Stack(
+                                    key: const ValueKey('active'),
+                                    alignment: Alignment.center,
+                                    children: [
+                                      // Subtle icon-shaped glow (stays within icon boundary)
+                                      Icon(
+                                        icons[i],
+                                        size: 30,
+                                        color: theme.colorScheme.primary
+                                            .withValues(alpha: 0.18),
+                                      ),
+                                      Icon(
+                                        icons[i],
+                                        size: 26,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                    ],
+                                  )
+                                : Icon(
+                                    key: const ValueKey('inactive'),
                                     icons[i],
                                     size: 26,
-                                    color: theme.colorScheme.primary,
+                                    color: theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.65),
                                   ),
-                                ],
-                              )
-                            : Icon(
-                                key: const ValueKey('inactive'),
-                                icons[i],
-                                size: 26,
-                                color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
-                              ),
+                          ),
+                          const SizedBox(height: 4),
+                          AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 200),
+                            style: theme.textTheme.labelMedium!.copyWith(
+                              fontWeight: isActive
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              fontSize: 13,
+                              color: isActive
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.onSurface.withValues(
+                                      alpha: 0.65,
+                                    ),
+                            ),
+                            child: Text(labels[i]),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 200),
-                        style: theme.textTheme.labelMedium!.copyWith(
-                          fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                          fontSize: 13,
-                          color: isActive
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurface.withValues(alpha: 0.65),
-                        ),
-                        child: Text(labels[i]),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }),
+                    ),
+                  );
+                }),
               ),
             ),
           ),
@@ -575,60 +609,58 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
           },
         );
       },
-      child: Builder(builder: (context) {
-        final orientation = MediaQuery.of(context).orientation;
-        final isTablet = ResponsiveUtils.isTablet(context);
-        final isDesktop = ResponsiveUtils.isDesktop(context);
+      child: Builder(
+        builder: (context) {
+          final orientation = MediaQuery.of(context).orientation;
+          final isTablet = ResponsiveUtils.isTablet(context);
+          final isDesktop = ResponsiveUtils.isDesktop(context);
 
-        // Larger, responsive diameter across devices/orientations
-        double diameter;
-        if (isDesktop) {
-          diameter = 68;
-        } else if (isTablet) {
-          diameter = orientation == Orientation.portrait ? 72 : 64;
-        } else {
-          // mobile
-          diameter = orientation == Orientation.portrait ? 60 : 56;
-        }
+          // Larger, responsive diameter across devices/orientations
+          double diameter;
+          if (isDesktop) {
+            diameter = 68;
+          } else if (isTablet) {
+            diameter = orientation == Orientation.portrait ? 72 : 64;
+          } else {
+            // mobile
+            diameter = orientation == Orientation.portrait ? 60 : 56;
+          }
 
-        // Cap to top bar height (64) minus small padding for breathing space
-        diameter = diameter.clamp(0, 56).toDouble();
+          // Cap to top bar height (64) minus small padding for breathing space
+          diameter = diameter.clamp(0, 56).toDouble();
 
-        final iconSize = (diameter * 0.58).clamp(24.0, 40.0);
+          final iconSize = (diameter * 0.58).clamp(24.0, 40.0);
 
-        // Neutral, theme-aware colors that work in both light and dark
-        final isLight = theme.brightness == Brightness.light;
-        final cs = theme.colorScheme;
-        final bgColor = isLight
-            ? cs.surface.withValues(alpha: 0.98)
-            : cs.surfaceVariant.withValues(alpha: 0.75);
-        final fgColor = cs.onSurface;
+          // Neutral, theme-aware colors that work in both light and dark
+          final isLight = theme.brightness == Brightness.light;
+          final cs = theme.colorScheme;
+          final bgColor = isLight
+              ? cs.surface.withValues(alpha: 0.98)
+              : cs.surfaceContainerHighest.withValues(alpha: 0.75);
+          final fgColor = cs.onSurface;
 
-        return Container(
-          width: diameter,
-          height: diameter,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: bgColor,
-            border: Border.all(
-              color: theme.colorScheme.outline.withValues(alpha: 0.25),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+          return Container(
+            width: diameter,
+            height: diameter,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: bgColor,
+              border: Border.all(
+                color: theme.colorScheme.outline.withValues(alpha: 0.25),
               ),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: Icon(
-            Icons.person_rounded,
-            size: iconSize,
-            color: fgColor,
-          ),
-        );
-      }),
+              boxShadow: [
+                BoxShadow(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            alignment: Alignment.center,
+            child: Icon(Icons.person_rounded, size: iconSize, color: fgColor),
+          );
+        },
+      ),
     );
   }
 
@@ -636,4 +668,5 @@ class _MainLayoutState extends ConsumerState<MainLayout> with WidgetsBindingObse
     context.go(route);
   }
 }
+
 // Fixed by removing the unused _showGlobalExportSheet method

@@ -31,7 +31,11 @@ class SubscriptionDetailsPage extends ConsumerWidget {
             onSelected: (value) async {
               switch (value) {
                 case 'edit':
-                  _showEdit(context, ref, (ref.read(subscriptionByIdProvider(id)).value)!);
+                  _showEdit(
+                    context,
+                    ref,
+                    (ref.read(subscriptionByIdProvider(id)).value)!,
+                  );
                   break;
                 case 'renew':
                   {
@@ -91,8 +95,14 @@ class SubscriptionDetailsPage extends ConsumerWidget {
               PopupMenuItem(
                 value: 'delete',
                 child: ListTile(
-                  leading: Icon(Icons.delete_outline, color: theme.colorScheme.error),
-                  title: Text('Delete', style: TextStyle(color: theme.colorScheme.error)),
+                  leading: Icon(
+                    Icons.delete_outline,
+                    color: theme.colorScheme.error,
+                  ),
+                  title: Text(
+                    'Delete',
+                    style: TextStyle(color: theme.colorScheme.error),
+                  ),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -166,122 +176,144 @@ class SubscriptionDetailsPage extends ConsumerWidget {
           builder: (sheetCtx, setSheetState) {
             // Dates are view-only in Edit per policy
             return SingleChildScrollView(
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Edit Subscription',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: planCtrl,
-                  decoration: const InputDecoration(labelText: 'Plan Name'),
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: amountCtrl,
-                  decoration: const InputDecoration(labelText: 'Amount'),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Required';
-                    final parsed = double.tryParse(v);
-                    if (parsed == null || parsed < 0) return 'Invalid amount';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                Row(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          final picked = await showDatePicker(
-                            context: sheetCtx,
-                            initialDate: sub.startDate,
-                            firstDate: DateTime(2000),
-                            lastDate: DateTime(2100),
-                            helpText: 'Select new start date',
-                          );
-                          if (picked != null) {
-                            final newStart = DateTime(picked.year, picked.month, picked.day);
-                            if (!sub.endDate.isAfter(newStart)) {
-                              CustomNotification.show(
-                                sheetCtx,
-                                message: 'Start must be before current end date (${sub.endDate.day}/${sub.endDate.month}/${sub.endDate.year})',
-                                type: NotificationType.warning,
-                              );
-                              return;
-                            }
-                            await ref
-                                .read(subscriptionsNotifierProvider.notifier)
-                                .updateSubscription(
-                                  sub.copyWith(startDate: newStart),
-                                );
-                            // Invalidate specific providers for immediate UI update
-                            ref.invalidate(subscriptionsProvider);
-                            ref.invalidate(subscriptionsByStudentProvider(sub.studentId));
-                            ref.invalidate(subscriptionByIdProvider(sub.id));
-                            if (context.mounted) {
-                              Navigator.of(sheetCtx).pop();
-                              CustomNotification.show(context, message: 'Start date updated', type: NotificationType.success);
-                            }
-                          }
-                        },
-                        icon: const Icon(Icons.date_range),
-                        label: Text(
-                          '${sub.startDate.day}/${sub.startDate.month}/${sub.startDate.year}',
-                        ),
+                    const Text(
+                      'Edit Subscription',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: null,
-                        icon: const Icon(Icons.event),
-                        label: Text('${sub.endDate.day}/${sub.endDate.month}/${sub.endDate.year}'),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: planCtrl,
+                      decoration: const InputDecoration(labelText: 'Plan Name'),
+                      validator: (v) =>
+                          (v == null || v.isEmpty) ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: amountCtrl,
+                      decoration: const InputDecoration(labelText: 'Amount'),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'Required';
+                        final parsed = double.tryParse(v);
+                        if (parsed == null || parsed < 0)
+                          return 'Invalid amount';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              final picked = await showDatePicker(
+                                context: sheetCtx,
+                                initialDate: sub.startDate,
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime(2100),
+                                helpText: 'Select new start date',
+                              );
+                              if (picked != null) {
+                                final newStart = DateTime(
+                                  picked.year,
+                                  picked.month,
+                                  picked.day,
+                                );
+                                if (sheetCtx.mounted) {
+                                  CustomNotification.show(
+                                    sheetCtx,
+                                    message:
+                                        'Start must be before current end date (${sub.endDate.day}/${sub.endDate.month}/${sub.endDate.year})',
+                                    type: NotificationType.warning,
+                                  );
+                                }
+                                await ref
+                                    .read(
+                                      subscriptionsNotifierProvider.notifier,
+                                    )
+                                    .updateSubscription(
+                                      sub.copyWith(startDate: newStart),
+                                    );
+                                // Invalidate specific providers for immediate UI update
+                                ref.invalidate(subscriptionsProvider);
+                                ref.invalidate(
+                                  subscriptionsByStudentProvider(sub.studentId),
+                                );
+                                ref.invalidate(
+                                  subscriptionByIdProvider(sub.id),
+                                );
+                                if (sheetCtx.mounted) {
+                                  Navigator.of(sheetCtx).pop();
+                                  CustomNotification.show(
+                                    context,
+                                    message: 'Start date updated',
+                                    type: NotificationType.success,
+                                  );
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.date_range),
+                            label: Text(
+                              '${sub.startDate.day}/${sub.startDate.month}/${sub.startDate.year}',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: null,
+                            icon: const Icon(Icons.event),
+                            label: Text(
+                              '${sub.endDate.day}/${sub.endDate.month}/${sub.endDate.year}',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'End date is managed by Renew. Edit lets you change only the start date.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          if (!formKey.currentState!.validate()) return;
+                          await ref
+                              .read(subscriptionsNotifierProvider.notifier)
+                              .updateSubscription(
+                                sub.copyWith(
+                                  planName: planCtrl.text.trim(),
+                                  amount: double.parse(amountCtrl.text.trim()),
+                                ),
+                              );
+                          // Ensure list tiles and counters reflect instantly
+                          ref
+                              .read(subscriptionsNotifierProvider.notifier)
+                              .refresh();
+                          ref.invalidate(subscriptionByIdProvider(sub.id));
+                          if (sheetCtx.mounted) Navigator.of(sheetCtx).pop();
+                        },
+                        child: const Text('Save'),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'End date is managed by Renew. Edit lets you change only the start date.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      if (!formKey.currentState!.validate()) return;
-                      await ref
-                          .read(subscriptionsNotifierProvider.notifier)
-                          .updateSubscription(
-                            sub.copyWith(
-                              planName: planCtrl.text.trim(),
-                              amount: double.parse(amountCtrl.text.trim()),
-                            ),
-                          );
-                      // Ensure list tiles and counters reflect instantly
-                      ref.read(subscriptionsNotifierProvider.notifier).refresh();
-                      ref.invalidate(subscriptionByIdProvider(sub.id));
-                      if (context.mounted) Navigator.of(sheetCtx).pop();
-                    },
-                    child: const Text('Save'),
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
             );
           },
         );
@@ -314,9 +346,7 @@ class SubscriptionDetailsPage extends ConsumerWidget {
           content: TextField(
             controller: amountCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Renewal amount',
-            ),
+            decoration: const InputDecoration(labelText: 'Renewal amount'),
           ),
           actions: [
             TextButton(
@@ -350,10 +380,7 @@ class SubscriptionDetailsPage extends ConsumerWidget {
         e,
         st,
         feature: 'renew_subscription_details',
-        context: {
-          'subscription_id': id,
-          'picked': picked.toIso8601String(),
-        },
+        context: {'subscription_id': id, 'picked': picked.toIso8601String()},
       );
       if (!context.mounted) return;
       final msg = ErrorMapper.friendly(e);
@@ -368,7 +395,8 @@ class SubscriptionDetailsPage extends ConsumerWidget {
           builder: (ctx) => AlertDialog(
             title: const Text('Confirm renewal change'),
             content: const Text(
-                'The new end date overlaps a previous period. Proceed only if you are backdating intentionally.'),
+              'The new end date overlaps a previous period. Proceed only if you are backdating intentionally.',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
@@ -381,11 +409,16 @@ class SubscriptionDetailsPage extends ConsumerWidget {
             ],
           ),
         );
-          if (proceed ?? false) {
-            await ref
-                .read(subscriptionsNotifierProvider.notifier)
-                .renewSubscription(id, picked, renewalAmount!, allowOverlap: true);
-          }
+        if (proceed ?? false) {
+          await ref
+              .read(subscriptionsNotifierProvider.notifier)
+              .renewSubscription(
+                id,
+                picked,
+                renewalAmount!,
+                allowOverlap: true,
+              );
+        }
       }
     }
   }

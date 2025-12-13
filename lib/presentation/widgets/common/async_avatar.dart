@@ -11,17 +11,21 @@ class AsyncAvatar extends ConsumerWidget {
     required this.initials,
     this.size = 48,
     this.fallbackIcon,
+    this.backgroundColor,
+    this.foregroundColor,
   });
 
   final String? imagePath;
   final String initials;
   final double size;
   final IconData? fallbackIcon;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    
+
     if (imagePath == null || imagePath!.isEmpty) {
       return _buildPlaceholder(theme);
     }
@@ -37,7 +41,8 @@ class AsyncAvatar extends ConsumerWidget {
           width: size,
           height: size,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _buildPlaceholder(theme),
+          errorBuilder: (context, error, stackTrace) =>
+              _buildPlaceholder(theme),
         ),
       );
     }
@@ -52,7 +57,8 @@ class AsyncAvatar extends ConsumerWidget {
             width: size,
             height: size,
             fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => _buildPlaceholder(theme),
+            errorBuilder: (context, error, stackTrace) =>
+                _buildPlaceholder(theme),
           ),
         );
       } catch (e) {
@@ -63,19 +69,21 @@ class AsyncAvatar extends ConsumerWidget {
     // Handle storage paths - generate signed URL
     final supabaseService = ref.read(supabaseServiceProvider);
     return FutureBuilder<String?>(
-      future: supabaseService.getProfileImageSignedUrl(path) as Future<String?>?,
+      future:
+          supabaseService.getProfileImageSignedUrl(path) as Future<String?>?,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return CircleAvatar(
             radius: size / 2,
-            backgroundColor: theme.colorScheme.primaryContainer,
+            backgroundColor:
+                backgroundColor ?? theme.colorScheme.primaryContainer,
             child: SizedBox(
               width: size * 0.6,
               height: size * 0.6,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  theme.colorScheme.onPrimaryContainer,
+                  foregroundColor ?? theme.colorScheme.onPrimaryContainer,
                 ),
               ),
             ),
@@ -89,7 +97,8 @@ class AsyncAvatar extends ConsumerWidget {
               width: size,
               height: size,
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => _buildPlaceholder(theme),
+              errorBuilder: (context, error, stackTrace) =>
+                  _buildPlaceholder(theme),
             ),
           );
         }
@@ -103,22 +112,22 @@ class AsyncAvatar extends ConsumerWidget {
     if (fallbackIcon != null) {
       return CircleAvatar(
         radius: size / 2,
-        backgroundColor: theme.colorScheme.primaryContainer,
+        backgroundColor: backgroundColor ?? theme.colorScheme.primaryContainer,
         child: Icon(
           fallbackIcon!,
           size: size * 0.6,
-          color: theme.colorScheme.onPrimaryContainer,
+          color: foregroundColor ?? theme.colorScheme.onPrimaryContainer,
         ),
       );
     }
 
     return CircleAvatar(
       radius: size / 2,
-      backgroundColor: theme.colorScheme.primary,
+      backgroundColor: backgroundColor ?? theme.colorScheme.primary,
       child: Text(
         initials,
         style: TextStyle(
-          color: theme.colorScheme.onPrimary,
+          color: foregroundColor ?? theme.colorScheme.onPrimary,
           fontSize: size * 0.35,
           fontWeight: FontWeight.bold,
         ),

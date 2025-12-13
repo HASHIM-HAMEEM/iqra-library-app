@@ -1,4 +1,3 @@
-
 // equatable: ^2.0.5
 import 'package:equatable/equatable.dart';
 
@@ -46,12 +45,12 @@ class Student extends Equatable {
 
   int get age {
     final now = DateTime.now();
-    var age = now.year - dateOfBirth.year;
+    var a = now.year - dateOfBirth.year;
     if (now.month < dateOfBirth.month ||
         (now.month == dateOfBirth.month && now.day < dateOfBirth.day)) {
-      age--;
+      a--;
     }
-    return age;
+    return a;
   }
 
   String get initials {
@@ -128,28 +127,51 @@ class Student extends Equatable {
       id: json['id'] as String,
       firstName: (json['first_name'] ?? json['firstName']) as String,
       lastName: (json['last_name'] ?? json['lastName']) as String,
-      dateOfBirth: DateTime.parse((json['date_of_birth'] ?? json['dateOfBirth']) as String),
+      dateOfBirth: DateTime.parse(
+        (json['date_of_birth'] ?? json['dateOfBirth']) as String,
+      ),
       email: json['email'] as String,
       phone: json['phone'] as String?,
       address: json['address'] as String?,
-      profileImagePath: (json['profile_image_path'] ?? json['profileImagePath']) as String?,
+      profileImagePath:
+          (json['profile_image_path'] ?? json['profileImagePath']) as String?,
       seatNumber: (json['seat_number'] ?? json['seatNumber']) as String?,
-      createdAt: DateTime.parse((json['created_at'] ?? json['createdAt']) as String),
-      updatedAt: DateTime.parse((json['updated_at'] ?? json['updatedAt']) as String),
+      createdAt: DateTime.parse(
+        (json['created_at'] ?? json['createdAt']) as String,
+      ),
+      updatedAt: DateTime.parse(
+        (json['updated_at'] ?? json['updatedAt']) as String,
+      ),
       isDeleted: (json['is_deleted'] ?? json['isDeleted'] ?? false) as bool,
-      subscriptionPlan: (json['subscription_plan'] ?? json['subscriptionPlan']) as String?,
-      subscriptionStartDate: ((json['subscription_start_date'] ?? json['subscriptionStartDate']) as String?) != null
-          ? DateTime.parse((json['subscription_start_date'] ?? json['subscriptionStartDate']) as String)
+      subscriptionPlan:
+          (json['subscription_plan'] ?? json['subscriptionPlan']) as String?,
+      subscriptionStartDate:
+          ((json['subscription_start_date'] ?? json['subscriptionStartDate'])
+                  as String?) !=
+              null
+          ? DateTime.parse(
+              (json['subscription_start_date'] ?? json['subscriptionStartDate'])
+                  as String,
+            )
           : null,
-      subscriptionEndDate: ((json['subscription_end_date'] ?? json['subscriptionEndDate']) as String?) != null
-          ? DateTime.parse((json['subscription_end_date'] ?? json['subscriptionEndDate']) as String)
+      subscriptionEndDate:
+          ((json['subscription_end_date'] ?? json['subscriptionEndDate'])
+                  as String?) !=
+              null
+          ? DateTime.parse(
+              (json['subscription_end_date'] ?? json['subscriptionEndDate'])
+                  as String,
+            )
           : null,
       subscriptionAmount: (() {
-        final Object? raw = json['subscription_amount'] ?? json['subscriptionAmount'];
+        final Object? raw =
+            json['subscription_amount'] ?? json['subscriptionAmount'];
         if (raw == null) return null;
         return (raw as num).toDouble();
       })(),
-      subscriptionStatus: (json['subscription_status'] ?? json['subscriptionStatus']) as String?,
+      subscriptionStatus:
+          (json['subscription_status'] ?? json['subscriptionStatus'])
+              as String?,
     );
   }
 
@@ -168,7 +190,9 @@ class Student extends Equatable {
       'updated_at': updatedAt.toUtc().toIso8601String(),
       'is_deleted': isDeleted,
       'subscription_plan': subscriptionPlan,
-      'subscription_start_date': subscriptionStartDate?.toUtc().toIso8601String(),
+      'subscription_start_date': subscriptionStartDate
+          ?.toUtc()
+          .toIso8601String(),
       'subscription_end_date': subscriptionEndDate?.toUtc().toIso8601String(),
       'subscription_amount': subscriptionAmount,
       'subscription_status': subscriptionStatus,

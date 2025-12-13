@@ -1,8 +1,8 @@
 // import 'package:library_registration_app/data/models/subscription_model.dart';
+import 'package:intl/intl.dart';
 import 'package:library_registration_app/data/services/supabase_service.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/domain/repositories/subscription_repository.dart';
-import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 class SubscriptionRepositoryImpl implements SubscriptionRepository {
@@ -10,9 +10,15 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
   final SupabaseService _supabase;
   final Uuid _uuid = const Uuid();
 
-  DateTime _normalizeUtcDay(DateTime dt) => DateTime.utc(dt.toUtc().year, dt.toUtc().month, dt.toUtc().day);
+  DateTime _normalizeUtcDay(DateTime dt) =>
+      DateTime.utc(dt.toUtc().year, dt.toUtc().month, dt.toUtc().day);
 
-  bool _rangesOverlap(DateTime aStart, DateTime aEnd, DateTime bStart, DateTime bEnd) {
+  bool _rangesOverlap(
+    DateTime aStart,
+    DateTime aEnd,
+    DateTime bStart,
+    DateTime bEnd,
+  ) {
     // inclusive overlap check on day granularity
     return !(aEnd.isBefore(bStart) || bEnd.isBefore(aStart));
   }
@@ -38,44 +44,44 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
 
   @override
   Future<List<Subscription>> getAllSubscriptions() async {
-    return await _supabase.getAllSubscriptions();
+    return _supabase.getAllSubscriptions();
   }
 
   @override
   Future<List<Subscription>> getActiveSubscriptions() async {
-    return await _supabase.getActiveSubscriptions();
+    return _supabase.getActiveSubscriptions();
   }
 
   @override
   Future<List<Subscription>> getExpiredSubscriptions() async {
-    return await _supabase.getExpiredSubscriptions();
+    return _supabase.getExpiredSubscriptions();
   }
 
   @override
   Future<List<Subscription>> getSubscriptionsByStatus(
     SubscriptionStatus status,
   ) async {
-    return await _supabase.getSubscriptionsByStatus(status.name);
+    return _supabase.getSubscriptionsByStatus(status.name);
   }
 
   @override
   Future<List<Subscription>> getSubscriptionsByStudent(String studentId) async {
-    return await _supabase.getSubscriptionsByStudent(studentId);
+    return _supabase.getSubscriptionsByStudent(studentId);
   }
 
   @override
   Future<Subscription?> getSubscriptionById(String id) async {
-    return await _supabase.getSubscriptionById(id);
+    return _supabase.getSubscriptionById(id);
   }
 
   @override
   Future<Subscription?> getActiveSubscriptionByStudent(String studentId) async {
-    return await _supabase.getActiveSubscriptionByStudent(studentId);
+    return _supabase.getActiveSubscriptionByStudent(studentId);
   }
 
   @override
   Future<List<Subscription>> getExpiringSubscriptions(int days) async {
-    return await _supabase.getExpiringSubscriptions(days);
+    return _supabase.getExpiringSubscriptions(days);
   }
 
   @override
@@ -83,22 +89,22 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
     int offset,
     int limit,
   ) async {
-    return await _supabase.getSubscriptionsPaginated(offset, limit);
+    return _supabase.getSubscriptionsPaginated(offset, limit);
   }
 
   @override
   Future<int> getSubscriptionsCount() async {
-    return await _supabase.getSubscriptionsCount();
+    return _supabase.getSubscriptionsCount();
   }
 
   @override
   Future<int> getActiveSubscriptionsCount() async {
-    return await _supabase.getActiveSubscriptionsCount();
+    return _supabase.getActiveSubscriptionsCount();
   }
 
   @override
   Future<double> getTotalRevenue() async {
-    return await _supabase.getTotalRevenue();
+    return _supabase.getTotalRevenue();
   }
 
   @override
@@ -106,12 +112,14 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
     DateTime startDate,
     DateTime endDate,
   ) async {
-    return await _supabase.getRevenueByDateRange(startDate, endDate);
+    return _supabase.getRevenueByDateRange(startDate, endDate);
   }
 
   @override
-  Future<String> createSubscription(Subscription subscription, {bool allowOverlap = false}) async {
-    
+  Future<String> createSubscription(
+    Subscription subscription, {
+    bool allowOverlap = false,
+  }) async {
     final id = _uuid.v4();
     final now = DateTime.now().toUtc();
 
@@ -146,8 +154,10 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
   }
 
   @override
-  Future<void> updateSubscription(Subscription subscription, {bool allowOverlap = false}) async {
-    
+  Future<void> updateSubscription(
+    Subscription subscription, {
+    bool allowOverlap = false,
+  }) async {
     // Normalize and validate dates
     final startUtc = _normalizeUtcDay(subscription.startDate);
     final endUtc = _normalizeUtcDay(subscription.endDate);
@@ -180,7 +190,6 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
 
   @override
   Future<void> cancelSubscription(String id) async {
-    
     await _supabase.cancelSubscription(id);
   }
 
@@ -188,10 +197,9 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
   Future<void> renewSubscription(
     String id,
     DateTime newEndDate,
-    double amount,
-    {bool allowOverlap = false}
-  ) async {
-    
+    double amount, {
+    bool allowOverlap = false,
+  }) async {
     // Fetch current subscription for validation
     final current = await _supabase.getSubscriptionById(id);
     if (current == null) return;
@@ -214,7 +222,6 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
 
   @override
   Future<void> deleteSubscription(String id) async {
-    
     await _supabase.deleteSubscription(id);
   }
 

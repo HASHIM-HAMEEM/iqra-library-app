@@ -30,7 +30,8 @@ enum SubscriptionStatus {
       case 'pending':
         return SubscriptionStatus.pending;
       default:
-        throw ArgumentError('Invalid subscription status: $status');
+        // Graceful fallback for unknown status instead of crashing
+        return SubscriptionStatus.pending;
     }
   }
 }
@@ -68,7 +69,7 @@ class Subscription extends Equatable {
 
   Duration get duration => endDate.difference(startDate);
 
-  double get dailyRate => amount / duration.inDays;
+  double get dailyRate => duration.inDays > 0 ? amount / duration.inDays : 0.0;
 
   Subscription copyWith({
     String? id,
@@ -115,8 +116,14 @@ class Subscription extends Equatable {
   // JSON mapping for Supabase rows
   factory Subscription.fromJson(Map<String, dynamic> json) {
     final statusStr = (json['status'] ?? json['subscription_status']) as String;
-    final start = (json['start_date'] ?? json['subscription_start_date'] ?? json['startDate']) as String;
-    final endRaw = (json['end_date'] ?? json['subscription_end_date'] ?? json['endDate']) as String?;
+    final start =
+        (json['start_date'] ??
+                json['subscription_start_date'] ??
+                json['startDate'])
+            as String;
+    final endRaw =
+        (json['end_date'] ?? json['subscription_end_date'] ?? json['endDate'])
+            as String?;
     final created = (json['created_at'] ?? json['createdAt']) as String;
     final updated = (json['updated_at'] ?? json['updatedAt']) as String;
 

@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 
 class CompactStatTile extends StatelessWidget {
   const CompactStatTile({
-    required this.icon, required this.color, required this.label, required this.value, super.key,
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.value,
+    super.key,
     this.deltaPercent,
   });
 
@@ -30,24 +34,43 @@ class CompactStatTile extends StatelessWidget {
       curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            theme.colorScheme.surface,
+            theme.colorScheme.surfaceContainerLowest,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withValues(alpha: 0.1), width: 1),
             ),
             child: TweenAnimationBuilder<double>(
               tween: Tween<double>(begin: 0.95, end: 1),
               duration: const Duration(milliseconds: 260),
               curve: Curves.easeOutBack,
-              builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
+              builder: (context, scale, child) =>
+                  Transform.scale(scale: scale, child: child),
               child: Icon(icon, color: color, size: 20),
             ),
           ),

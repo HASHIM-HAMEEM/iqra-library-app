@@ -11,52 +11,51 @@ class StudentRepositoryImpl implements StudentRepository {
 
   @override
   Future<List<Student>> getAllStudents() async {
-    return await _supabase.getAllStudents();
+    return _supabase.getAllStudents();
   }
 
   @override
   Future<List<Student>> getActiveStudents() async {
-    return await _supabase.getActiveStudents();
+    return _supabase.getActiveStudents();
   }
 
   @override
   Future<Student?> getStudentById(String id) async {
-    return await _supabase.getStudentById(id);
+    return _supabase.getStudentById(id);
   }
 
   @override
   Future<List<Student>> searchStudents(String query) async {
-    return await _supabase.searchStudents(query);
+    return _supabase.searchStudents(query);
   }
 
   @override
   Future<List<Student>> getStudentsPaginated(int offset, int limit) async {
-    return await _supabase.getStudentsPaginated(offset, limit);
+    return _supabase.getStudentsPaginated(offset, limit);
   }
 
   @override
   Future<int> getStudentsCount() async {
-    return await _supabase.getStudentsCount();
+    return _supabase.getStudentsCount();
   }
 
   @override
   Future<bool> isEmailExists(String email, {String? excludeId}) async {
-    return await _supabase.isEmailExists(email, excludeId: excludeId);
+    return _supabase.isEmailExists(email, excludeId: excludeId);
   }
 
   @override
   Future<List<Student>> getStudentsByAgeRange(int minAge, int maxAge) async {
-    return await _supabase.getStudentsByAgeRange(minAge, maxAge);
+    return _supabase.getStudentsByAgeRange(minAge, maxAge);
   }
 
   @override
   Future<List<Student>> getRecentStudents(int days) async {
-    return await _supabase.getRecentStudents(days);
+    return _supabase.getRecentStudents(days);
   }
 
   @override
   Future<String> createStudent(Student student) async {
-    
     final id = _uuid.v4();
     final now = DateTime.now();
 
@@ -72,7 +71,6 @@ class StudentRepositoryImpl implements StudentRepository {
       profileImagePath: student.profileImagePath,
       createdAt: now,
       updatedAt: now,
-      isDeleted: false,
     );
 
     await _supabase.createStudent(studentWithId);
@@ -81,7 +79,6 @@ class StudentRepositoryImpl implements StudentRepository {
 
   @override
   Future<void> updateStudent(Student student) async {
-    
     final updatedStudent = Student(
       id: student.id,
       firstName: student.firstName,
@@ -102,13 +99,11 @@ class StudentRepositoryImpl implements StudentRepository {
 
   @override
   Future<void> deleteStudent(String id, {bool hard = false}) async {
-    
     await _supabase.deleteStudent(id, hard: hard);
   }
 
   @override
   Future<void> restoreStudent(String id) async {
-    
     await _supabase.restoreStudent(id);
   }
 

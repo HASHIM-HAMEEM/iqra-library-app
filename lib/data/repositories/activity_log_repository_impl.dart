@@ -11,12 +11,12 @@ class ActivityLogRepositoryImpl implements ActivityLogRepository {
 
   @override
   Future<List<ActivityLog>> getAllActivityLogs() async {
-    return await _supabase.getAllActivityLogs();
+    return _supabase.getAllActivityLogs();
   }
 
   @override
   Future<List<ActivityLog>> getActivityLogsByType(ActivityType type) async {
-    return await _supabase.getActivityLogsByType(type.databaseValue);
+    return _supabase.getActivityLogsByType(type.databaseValue);
   }
 
   @override
@@ -24,7 +24,7 @@ class ActivityLogRepositoryImpl implements ActivityLogRepository {
     String entityId,
     String entityType,
   ) async {
-    return await _supabase.getActivityLogsByEntity(entityId, entityType);
+    return _supabase.getActivityLogsByEntity(entityId, entityType);
   }
 
   @override
@@ -32,12 +32,12 @@ class ActivityLogRepositoryImpl implements ActivityLogRepository {
     DateTime startDate,
     DateTime endDate,
   ) async {
-    return await _supabase.getActivityLogsByDateRange(startDate, endDate);
+    return _supabase.getActivityLogsByDateRange(startDate, endDate);
   }
 
   @override
   Future<List<ActivityLog>> getRecentActivityLogs(int limit) async {
-    return await _supabase.getRecentActivityLogs(limit);
+    return _supabase.getRecentActivityLogs(limit);
   }
 
   @override
@@ -45,17 +45,17 @@ class ActivityLogRepositoryImpl implements ActivityLogRepository {
     int offset,
     int limit,
   ) async {
-    return await _supabase.getActivityLogsPaginated(offset, limit);
+    return _supabase.getActivityLogsPaginated(offset, limit);
   }
 
   @override
   Future<int> getActivityLogsCount() async {
-    return await _supabase.getActivityLogsCount();
+    return _supabase.getActivityLogsCount();
   }
 
   @override
   Future<ActivityLog?> getActivityLogById(String id) async {
-    return await _supabase.getActivityLogById(id);
+    return _supabase.getActivityLogById(id);
   }
 
   @override

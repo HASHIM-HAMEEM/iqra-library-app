@@ -8,6 +8,7 @@ class DiagnosticsOverlay extends StatefulWidget {
   @override
   State<DiagnosticsOverlay> createState() => _DiagnosticsOverlayState();
 }
+
 class _DiagnosticsOverlayState extends State<DiagnosticsOverlay> {
   bool _expanded = false;
 
@@ -30,7 +31,9 @@ class _DiagnosticsOverlayState extends State<DiagnosticsOverlay> {
                   decoration: BoxDecoration(
                     color: theme.colorScheme.surface.withValues(alpha: 0.95),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+                    border: Border.all(
+                      color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                    ),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.1),
@@ -52,7 +55,9 @@ class _DiagnosticsOverlayState extends State<DiagnosticsOverlay> {
                               items[index],
                               style: theme.textTheme.bodySmall?.copyWith(
                                 fontFamily: 'monospace',
-                                color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.8,
+                                ),
                               ),
                             );
                           },
@@ -65,13 +70,14 @@ class _DiagnosticsOverlayState extends State<DiagnosticsOverlay> {
               FloatingActionButton.small(
                 heroTag: '_diag_fab',
                 onPressed: () => setState(() => _expanded = !_expanded),
-                child: Icon(_expanded ? Icons.close : Icons.bug_report_outlined),
+                child: Icon(
+                  _expanded ? Icons.close : Icons.bug_report_outlined,
+                ),
               ),
             ],
           ),
-        )
+        ),
       ],
     );
   }
 }
-

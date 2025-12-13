@@ -6,17 +6,17 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:library_registration_app/core/utils/responsive_utils.dart';
 // import 'package:library_registration_app/domain/entities/subscription.dart';
+import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
+import 'package:library_registration_app/presentation/providers/export/export_provider.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
 import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_provider.dart';
+import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
 import 'package:library_registration_app/presentation/widgets/common/compact_stat_tile.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 import 'package:library_registration_app/presentation/widgets/common/filter_chips.dart';
 import 'package:library_registration_app/presentation/widgets/common/quick_action_card.dart';
 import 'package:library_registration_app/presentation/widgets/common/recent_activity_card.dart';
 import 'package:library_registration_app/presentation/widgets/common/section_header.dart';
-import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
-import 'package:library_registration_app/presentation/providers/export/export_provider.dart';
-import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
-import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -28,12 +28,11 @@ class DashboardPage extends ConsumerStatefulWidget {
 class _DashboardPageState extends ConsumerState<DashboardPage> {
   String _selectedRange = 'Today';
 
-  void _showNotification(String message, {NotificationType type = NotificationType.success}) {
-    CustomNotification.show(
-      context,
-      message: message,
-      type: type,
-    );
+  void _showNotification(
+    String message, {
+    NotificationType type = NotificationType.success,
+  }) {
+    CustomNotification.show(context, message: message, type: type);
   }
 
   ({DateTime startDate, DateTime endDate}) _getRangeDates() {
@@ -79,7 +78,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     ref.invalidate(totalRevenueProvider);
     ref.invalidate(studentsProvider);
     ref.invalidate(subscriptionsProvider);
-    
+
     _showNotification('Dashboard refreshed');
   }
 
@@ -88,13 +87,18 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final theme = Theme.of(context);
     // Always-live totals for tiles
     final studentsCount = ref.watch(studentsCountProvider);
-    final activeSubscriptionsCount = ref.watch(activeSubscriptionsCountProvider);
+    final activeSubscriptionsCount = ref.watch(
+      activeSubscriptionsCountProvider,
+    );
     final range = _getRangeDates();
     // Recompute provider key when range changes by selected chip
     final totalRevenue = ref.watch(
-      revenueByDateRangeProvider((startDate: range.startDate, endDate: range.endDate)),
+      revenueByDateRangeProvider((
+        startDate: range.startDate,
+        endDate: range.endDate,
+      )),
     );
-    
+
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       body: RefreshIndicator(
@@ -102,153 +106,176 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-          // Modern Header
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: ResponsiveUtils.getResponsivePadding(
-                context,
-              ).copyWith(top: 8),
-              child: _buildModernHeader(theme),
-            ),
-          ),
-
-          // Time Filter Chips
-          SliverToBoxAdapter(
-            child: Container(
-              margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              child: FilterChipsRow(
-                options: const ['Today', 'Week', 'Month'],
-                selected: _selectedRange,
-                onSelected: (v) => setState(() => _selectedRange = v),
+            // Modern Header
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: ResponsiveUtils.getResponsivePadding(
+                  context,
+                ).copyWith(top: 8),
+                child: _buildModernHeader(theme),
               ),
             ),
-          ),
 
-          // Compact Stats Row
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: ResponsiveUtils.getResponsivePadding(
-                context,
-              ).copyWith(top: 12),
-              child: _buildCompactStats(
-                theme,
-                studentsCount,
-                activeSubscriptionsCount,
-                totalRevenue,
+            // Time Filter Chips
+            SliverToBoxAdapter(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                child: FilterChipsRow(
+                  options: const ['Today', 'Week', 'Month'],
+                  selected: _selectedRange,
+                  onSelected: (v) => setState(() => _selectedRange = v),
+                ),
               ),
             ),
-          ),
 
-          // Quick Actions Section
-          SliverToBoxAdapter(
-            child: Container(
-              padding: ResponsiveUtils.getResponsivePadding(context),
-              child: const SectionHeader(
-                title: 'Quick Actions',
-                subtitle: 'Common tasks and shortcuts',
+            // Compact Stats Row
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: ResponsiveUtils.getResponsivePadding(
+                  context,
+                ).copyWith(top: 12),
+                child: _buildCompactStats(
+                  theme,
+                  studentsCount,
+                  activeSubscriptionsCount,
+                  totalRevenue,
+                ),
               ),
             ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: ResponsiveUtils.getResponsivePadding(context),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: RepaintBoundary(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 150),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        // Subtle gradient to simulate depth without runtime blur
-                        gradient: LinearGradient(
-                          colors: [
-                            theme.colorScheme.surface.withValues(alpha: 0.88),
-                            theme.colorScheme.surface.withValues(alpha: 0.72),
+
+            // Quick Actions Section
+            SliverToBoxAdapter(
+              child: Container(
+                padding: ResponsiveUtils.getResponsivePadding(context),
+                child: const SectionHeader(
+                  title: 'Quick Actions',
+                  subtitle: 'Common tasks and shortcuts',
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: ResponsiveUtils.getResponsivePadding(context),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: RepaintBoundary(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 150),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          // Glassmorphism effect
+                          gradient: LinearGradient(
+                            colors: [
+                              theme.colorScheme.surfaceContainerHighest
+                                  .withValues(alpha: 0.4),
+                              theme.colorScheme.surface.withValues(alpha: 0.6),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.08,
+                            ),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: theme.shadowColor.withValues(alpha: 0.04),
+                              blurRadius: 16,
+                              offset: const Offset(0, 8),
+                            ),
                           ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
                         ),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
-                        ),
+                        padding: const EdgeInsets.all(16),
+                        child: ResponsiveUtils.isMobile(context)
+                            ? SizedBox(
+                                height: 166,
+                                child: _buildQuickActionsGrid(context),
+                              )
+                            : _buildQuickActionsGrid(context),
                       ),
-                      padding: const EdgeInsets.all(12),
-                      child: ResponsiveUtils.isMobile(context)
-                          ? SizedBox(
-                              height: 166,
-                              child: _buildQuickActionsGrid(context),
-                            )
-                          : _buildQuickActionsGrid(context),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
 
-          // Recent Activity Section
-          SliverToBoxAdapter(
-            child: Container(
-              padding: ResponsiveUtils.getResponsivePadding(context),
-              child: SectionHeader(
-                title: 'Recent Activity',
-                subtitle: 'Latest updates and changes',
-                action: TextButton.icon(
-                  onPressed: () => GoRouter.of(context).go('/activity'),
-                  icon: const Icon(Icons.chevron_right, size: 18),
-                  label: const Text('View all'),
+            // Recent Activity Section
+            SliverToBoxAdapter(
+              child: Container(
+                padding: ResponsiveUtils.getResponsivePadding(context),
+                child: SectionHeader(
+                  title: 'Recent Activity',
+                  subtitle: 'Latest updates and changes',
+                  action: TextButton.icon(
+                    onPressed: () => GoRouter.of(context).go('/activity'),
+                    icon: const Icon(Icons.chevron_right, size: 18),
+                    label: const Text('View all'),
+                  ),
                 ),
               ),
             ),
-          ),
-          SliverToBoxAdapter(
-            child: Container(
-              padding: ResponsiveUtils.getResponsivePadding(context),
-              margin: const EdgeInsets.only(top: 16, bottom: 32),
-              child: const RecentActivityCard(),
+            SliverToBoxAdapter(
+              child: Container(
+                padding: ResponsiveUtils.getResponsivePadding(context),
+                margin: const EdgeInsets.only(top: 16, bottom: 32),
+                child: const RecentActivityCard(),
+              ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
   }
 
   Widget _buildModernHeader(ThemeData theme) {
+    final now = DateTime.now();
+    final greeting = _getGreeting(now.hour);
+    final dateStr = DateFormat('EEEE, MMMM d').format(now);
+
     return Padding(
-      padding: const EdgeInsets.only(),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-                  'Library Dashboard',
-          style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.6,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  greeting,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
+                const SizedBox(height: 4),
                 Text(
-                  DateFormat('EEEE, MMMM d').format(DateTime.now()),
+                  dateStr,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 _buildLoggedInUser(theme),
-            ],
+              ],
+            ),
           ),
-          ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 16),
           _buildHeaderProfileAvatar(theme),
         ],
       ),
     );
+  }
+
+  String _getGreeting(int hour) {
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
   }
 
   // Greeting section removed per request
@@ -276,7 +303,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final fgColor = cs.onSurface;
 
     return GestureDetector(
-                onTap: () {
+      onTap: () {
         showDialog<AlertDialog>(
           context: context,
           builder: (context) => AlertDialog(
@@ -313,9 +340,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               blurRadius: 16,
               spreadRadius: 1,
               offset: const Offset(0, 4),
-              ),
-            ],
-          ),
+            ),
+          ],
+        ),
         alignment: Alignment.center,
         child: Container(
           width: diameter - 6,
@@ -324,16 +351,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             shape: BoxShape.circle,
             color: bgColor,
             border: Border.all(
-            color: theme.colorScheme.outline.withValues(alpha: 0.6),
+              color: theme.colorScheme.outline.withValues(alpha: 0.6),
               width: 1,
             ),
           ),
           alignment: Alignment.center,
-          child: Icon(
-            Icons.person_rounded,
-            size: iconSize,
-            color: fgColor,
-          ),
+          child: Icon(Icons.person_rounded, size: iconSize, color: fgColor),
         ),
       ),
     );
@@ -347,7 +370,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     }
     return Row(
       children: [
-        Icon(Icons.verified_user_outlined, size: 16, color: theme.colorScheme.primary),
+        Icon(
+          Icons.verified_user_outlined,
+          size: 16,
+          color: theme.colorScheme.primary,
+        ),
         const SizedBox(width: 6),
         Text(
           'Admin: $email',
@@ -384,7 +411,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     AsyncValue<int> activeSubscriptionsCount,
     AsyncValue<double> totalRevenue,
   ) {
-    final currencyFormatter = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
+    final currencyFormatter = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: '₹',
+    );
     final tiles = [
       CompactStatTile(
         icon: Icons.people_outline_rounded,
@@ -422,8 +452,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 600;
         if (isMobile) {
-    return Column(
-      children: [
+          return Column(
+            children: [
               Row(children: [Expanded(child: tiles[0])]),
               const SizedBox(height: 8),
               Row(children: [Expanded(child: tiles[1])]),
@@ -515,8 +545,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       final crossAxisCount = width < 900
           ? 2
           : width < 1200
-              ? 3
-              : 4;
+          ? 3
+          : 4;
       // Slightly wider aspect on tablets for better balance
       final aspect = isTablet ? 1.35 : 1.2;
       return GridView.builder(
@@ -562,7 +592,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 ),
               ),
             ),
-            
+
             _buildExportOption(
               icon: Icons.download_outlined,
               title: 'Export All Data',
@@ -572,7 +602,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 _showExportSheet(ExportType.all);
               },
             ),
-            
+
             _buildExportOption(
               icon: Icons.people_outline,
               title: 'Export Students Only',
@@ -582,7 +612,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 _showExportSheet(ExportType.students);
               },
             ),
-            
+
             _buildExportOption(
               icon: Icons.card_membership_outlined,
               title: 'Export Subscriptions Only',
@@ -592,7 +622,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 _showExportSheet(ExportType.subscriptions);
               },
             ),
-            
+
             _buildExportOption(
               icon: Icons.history_outlined,
               title: 'Export Activity Logs Only',
@@ -602,7 +632,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 _showExportSheet(ExportType.activityLogs);
               },
             ),
-            
+
             const SizedBox(height: 16),
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
@@ -622,15 +652,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   }) {
     final theme = Theme.of(context);
     return ListTile(
-      leading: Icon(
-        icon,
-        color: theme.colorScheme.primary,
-      ),
+      leading: Icon(icon, color: theme.colorScheme.primary),
       title: Text(
         title,
-        style: theme.textTheme.bodyLarge?.copyWith(
-          fontWeight: FontWeight.w500,
-        ),
+        style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
       ),
       subtitle: Text(
         subtitle,
@@ -656,7 +681,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           builder: (context, ref, child) {
             final exportState = ref.watch(exportNotifierProvider);
             final exportNotifier = ref.read(exportNotifierProvider.notifier);
-            
+
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -669,18 +694,18 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     ),
                   ),
                 ),
-                
-                if (exportState.status == ExportStatus.loading) ...
-                  _buildExportProgress(exportState, theme)
-                else if (exportState.status == ExportStatus.success) ...
-                  _buildExportSuccess(exportState, exportNotifier, theme)
-                else if (exportState.status == ExportStatus.error) ...
-                  _buildExportError(exportState, exportNotifier, theme)
-                else ...
-                  _buildExportIdle(exportType, exportNotifier, theme),
-                
+
+                if (exportState.status == ExportStatus.loading)
+                  ..._buildExportProgress(exportState, theme)
+                else if (exportState.status == ExportStatus.success)
+                  ..._buildExportSuccess(exportState, exportNotifier, theme)
+                else if (exportState.status == ExportStatus.error)
+                  ..._buildExportError(exportState, exportNotifier, theme)
+                else
+                  ..._buildExportIdle(exportType, exportNotifier, theme),
+
                 const SizedBox(height: 16),
-                
+
                 if (exportState.status != ExportStatus.loading)
                   TextButton(
                     onPressed: () {
@@ -724,7 +749,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     ];
   }
 
-  List<Widget> _buildExportSuccess(ExportState state, ExportNotifier notifier, ThemeData theme) {
+  List<Widget> _buildExportSuccess(
+    ExportState state,
+    ExportNotifier notifier,
+    ThemeData theme,
+  ) {
     return [
       Icon(
         Icons.check_circle_outline,
@@ -734,9 +763,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       const SizedBox(height: 16),
       Text(
         'Export completed successfully!',
-        style: theme.textTheme.bodyLarge?.copyWith(
-          fontWeight: FontWeight.w500,
-        ),
+        style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
       ),
       const SizedBox(height: 8),
       Text(
@@ -755,13 +782,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     ];
   }
 
-  List<Widget> _buildExportError(ExportState state, ExportNotifier notifier, ThemeData theme) {
+  List<Widget> _buildExportError(
+    ExportState state,
+    ExportNotifier notifier,
+    ThemeData theme,
+  ) {
     return [
-      Icon(
-        Icons.error_outline,
-        color: theme.colorScheme.error,
-        size: 48,
-      ),
+      Icon(Icons.error_outline, color: theme.colorScheme.error, size: 48),
       const SizedBox(height: 16),
       Text(
         'Export failed',
@@ -786,19 +813,17 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     ];
   }
 
-  List<Widget> _buildExportIdle(ExportType type, ExportNotifier notifier, ThemeData theme) {
+  List<Widget> _buildExportIdle(
+    ExportType type,
+    ExportNotifier notifier,
+    ThemeData theme,
+  ) {
     return [
-      Icon(
-        Icons.download_outlined,
-        color: theme.colorScheme.primary,
-        size: 48,
-      ),
+      Icon(Icons.download_outlined, color: theme.colorScheme.primary, size: 48),
       const SizedBox(height: 16),
       Text(
         'Ready to export ${_getExportDescription(type)}',
-        style: theme.textTheme.bodyLarge?.copyWith(
-          fontWeight: FontWeight.w500,
-        ),
+        style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
         textAlign: TextAlign.center,
       ),
       const SizedBox(height: 8),
