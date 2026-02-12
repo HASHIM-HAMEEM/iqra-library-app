@@ -1149,10 +1149,12 @@ class _AddSubscriptionSheetState extends ConsumerState<_AddSubscriptionSheet> {
       if (mounted) {
         Navigator.pop(context);
         await widget.onSaved();
-        CustomNotification.show(
-          context,
-          message: 'Created successfully',
-        );
+        if (mounted) {
+          CustomNotification.show(
+            context,
+            message: 'Created successfully',
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
