@@ -3,7 +3,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:library_registration_app/core/responsive/responsive.dart';
@@ -112,7 +111,7 @@ class _MainLayoutState extends ConsumerState<MainLayout>
     ThemeData theme,
     bool showSideNav,
   ) {
-    return Container(
+    return ColoredBox(
       color: Colors.transparent,
       child: SafeArea(
         bottom: false,
@@ -179,13 +178,13 @@ class _MainLayoutState extends ConsumerState<MainLayout>
         widget.currentRoute == route ||
         widget.currentRoute.startsWith('$route/');
 
-    final Color chipBg = isActive
+    final chipBg = isActive
         ? theme.colorScheme.primary.withValues(alpha: 0.18)
         : theme.colorScheme.onSurface.withValues(alpha: 0.06);
-    final Color textColor = isActive
+    final textColor = isActive
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurface.withValues(alpha: 0.80);
-    final Color borderColor = isActive
+    final borderColor = isActive
         ? theme.colorScheme.primary.withValues(alpha: 0.22)
         : Colors.transparent;
 
@@ -701,7 +700,7 @@ class _MainLayoutState extends ConsumerState<MainLayout>
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
-                    onPressed: () => exportNotifier.shareExportedFile(),
+                    onPressed: exportNotifier.shareExportedFile,
                     icon: const Icon(Icons.share),
                     label: const Text('Share File'),
                   ),
@@ -729,7 +728,7 @@ class _MainLayoutState extends ConsumerState<MainLayout>
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () => exportNotifier.resetState(),
+                    onPressed: exportNotifier.resetState,
                     child: const Text('Try Again'),
                   ),
                 ] else ...[

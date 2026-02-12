@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
 import 'package:library_registration_app/core/theme/app_colors.dart';
 import 'package:library_registration_app/core/theme/design_tokens.dart';
-
-import 'package:library_registration_app/core/responsive/responsive.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 
 class SubscriptionFilters extends StatelessWidget {

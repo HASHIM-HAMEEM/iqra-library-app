@@ -1,12 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:library_registration_app/data/services/supabase_service.dart';
 import 'package:library_registration_app/domain/entities/activity_log.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/domain/repositories/activity_log_repository.dart';
 import 'package:library_registration_app/domain/repositories/student_repository.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
-import 'package:library_registration_app/data/services/supabase_service.dart';
 import 'package:uuid/uuid.dart';
 
 class StudentsNotifier extends StateNotifier<AsyncValue<List<Student>>> {

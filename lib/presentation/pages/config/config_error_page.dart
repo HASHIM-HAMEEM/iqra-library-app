@@ -81,7 +81,7 @@ class ConfigErrorPage extends StatelessWidget {
                     _IssueList(issues: issues),
                     const SizedBox(height: 16),
                   ],
-                  _CommandCard(
+                  const _CommandCard(
                     title: 'Run (development)',
                     command:
                         'flutter run -d chrome \\\n'
@@ -89,7 +89,7 @@ class ConfigErrorPage extends StatelessWidget {
                         '  --dart-define=SUPABASE_ANON_KEY=<YOUR_SUPABASE_ANON_KEY>',
                   ),
                   const SizedBox(height: 12),
-                  _CommandCard(
+                  const _CommandCard(
                     title: 'Build (web release)',
                     command:
                         'flutter build web --release \\\n'

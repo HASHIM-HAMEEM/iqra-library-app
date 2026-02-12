@@ -49,15 +49,15 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
         .animate(CurvedAnimation(parent: _controller, curve: const Interval(0.05, 0.22, curve: curve)));
 
     // Logo scale faster
-    _logoScale = Tween<double>(begin: 0.95, end: 1.0)
+    _logoScale = Tween<double>(begin: 0.95, end: 1)
         .animate(CurvedAnimation(parent: _controller, curve: const Interval(0.28, 0.42, curve: curve)));
 
     // Line progress faster
     _lineProgress = CurvedAnimation(parent: _controller, curve: const Interval(0.32, 0.50, curve: curve));
     // Iris reveal faster
-    _iris = CurvedAnimation(parent: _controller, curve: const Interval(0.92, 1.0, curve: curve));
+    _iris = CurvedAnimation(parent: _controller, curve: const Interval(0.92, 1, curve: curve));
     // Glow faster
-    _glow = CurvedAnimation(parent: _controller, curve: const Interval(0.00, 0.35, curve: Curves.easeOut));
+    _glow = CurvedAnimation(parent: _controller, curve: const Interval(0, 0.35, curve: Curves.easeOut));
     // Grid faster
     _gridOpacity = CurvedAnimation(parent: _controller, curve: const Interval(0.05, 0.22, curve: curve));
     // Squares faster
@@ -95,7 +95,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
         value: overlayStyle,
         child: LayoutBuilder(builder: (context, constraints) {
           final width = constraints.maxWidth;
-          final lineWidth = math.min(160.0, math.max(90.0, width * 0.42));
+          final lineWidth = math.min(160, math.max(90, width * 0.42));
 
           return AnimatedBuilder(
             animation: _controller,
@@ -188,7 +188,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
                           // Underline sweep
                           SizedBox(
                             height: 1,
-                            width: math.min(120.0, w * 0.25),
+                            width: math.min(120, w * 0.25),
                             child: CustomPaint(
                               painter: _HairlinePainter(
                                 progress: _lineProgress.value,
@@ -206,8 +206,8 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
                         children: [
                           const SizedBox(height: 60), // Align with IQRA baseline
                           SizedBox(
-                            width: math.min(200.0, w * 0.25),
-                            height: math.min(80.0, h * 0.12),
+                            width: math.min(200, w * 0.25),
+                            height: math.min(80, h * 0.12),
                             child: CustomPaint(
                               painter: _DotsPainter(
                                 progress: _dotsProgress.value,
@@ -276,7 +276,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
                     // Underline sweep
                     SizedBox(
                       height: 1,
-                      width: lineWidth,
+                      width: lineWidth.toDouble(),
                       child: CustomPaint(
                         painter: _HairlinePainter(
                           progress: _lineProgress.value,
@@ -287,7 +287,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
                     const SizedBox(height: 24),
                     // Floating dots
                     SizedBox(
-                      width: lineWidth,
+                      width: lineWidth.toDouble(),
                       height: 40,
                       child: CustomPaint(
                         painter: _DotsPainter(
@@ -335,11 +335,13 @@ class _IrisPainter extends CustomPainter {
     final radius = (size.longestSide * 0.9) * progress * 1.2;
 
     // Draw background then clear circle using destinationOut
-    canvas.saveLayer(rect, Paint());
-    canvas.drawRect(rect, paint);
+    canvas
+      ..saveLayer(rect, Paint())
+      ..drawRect(rect, paint);
     final clear = Paint()..blendMode = BlendMode.clear;
-    canvas.drawCircle(size.center(Offset.zero), radius, clear);
-    canvas.restore();
+    canvas
+      ..drawCircle(size.center(Offset.zero), radius, clear)
+      ..restore();
   }
 
   @override
@@ -357,10 +359,10 @@ class _GlowPainter extends CustomPainter {
     if (progress <= 0) return;
     final center = size.center(Offset.zero);
     final radius = size.shortestSide * (0.40 + 0.25 * progress);
-    HSLColor hsl = HSLColor.fromColor(baseColor);
-    final inner = hsl.withLightness((isLight ? 0.66 : 0.48)).toColor().withValues(alpha: 0.35 * progress);
-    final mid = hsl.withLightness((isLight ? 0.58 : 0.40)).toColor().withValues(alpha: 0.22 * progress);
-    final outer = hsl.withLightness((isLight ? 0.50 : 0.32)).toColor().withValues(alpha: 0.0);
+    final hsl = HSLColor.fromColor(baseColor);
+    final inner = hsl.withLightness(isLight ? 0.66 : 0.48).toColor().withValues(alpha: 0.35 * progress);
+    final mid = hsl.withLightness(isLight ? 0.58 : 0.40).toColor().withValues(alpha: 0.22 * progress);
+    final outer = hsl.withLightness(isLight ? 0.50 : 0.32).toColor().withValues(alpha: 0);
     final gradient = RadialGradient(colors: [inner, mid, outer], stops: const [0.0, 0.55, 1.0]);
     final paint = Paint()..shader = gradient.createShader(Rect.fromCircle(center: center, radius: radius));
     canvas.drawCircle(center, radius, paint);
@@ -430,7 +432,7 @@ class _LogoSquaresPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     // Draw 4 concentric squares with staggered alpha/scale
-    for (int i = 0; i < 4; i++) {
+    for (var i = 0; i < 4; i++) {
       final tStart = i * 0.08;
       final t = ((p - tStart) / 0.32).clamp(0.0, 1.0);
       if (t <= 0) continue;
@@ -457,7 +459,7 @@ class _DotsPainter extends CustomPainter {
   // Each character uses a 7-row grid with small circular dots
   List<Offset> _getTargetPositions(Size size) {
     // 7 rows high; columns vary per letter - Fixed patterns for proper readability
-    const List<String> fPattern = <String>[
+    const fPattern = <String>[
       '0111',
       '0100',
       '1110',
@@ -466,7 +468,7 @@ class _DotsPainter extends CustomPainter {
       '0100',
       '0100',
     ];
-    const List<String> iPattern = <String>[
+    const iPattern = <String>[
       '010',
       '000',
       '010',
@@ -475,7 +477,7 @@ class _DotsPainter extends CustomPainter {
       '010',
       '010',
     ];
-    const List<String> nPattern = <String>[
+    const nPattern = <String>[
       '0000',
       '0000',
       '1110',
@@ -485,7 +487,7 @@ class _DotsPainter extends CustomPainter {
       '1001',
     ];
     // Stylish dot after "fin"
-    const List<String> dotPattern = <String>[
+    const dotPattern = <String>[
       '00',
       '00',
       '00',
@@ -496,32 +498,32 @@ class _DotsPainter extends CustomPainter {
     ];
     
     // Add 1 blank column between letters for better spacing
-    const List<String> gap1 = <String>['0','0','0','0','0','0','0'];
+    const gap1 = <String>['0','0','0','0','0','0','0'];
     // const List<String> gap2 = <String>['00','00','00','00','00','00','00'];
 
     // Compose the full word grid across rows: f + gap + i + gap + n + gap + .
-    final int rows = 7;
-    final List<String> full = List<String>.generate(rows, (int r) {
+    const rows = 7;
+    final full = List<String>.generate(rows, (int r) {
       return fPattern[r] + gap1[r] + iPattern[r] + gap1[r] + nPattern[r] + gap1[r] + dotPattern[r];
     });
 
-    final int cols = full.isEmpty ? 0 : full.first.length;
+    final cols = full.isEmpty ? 0 : full.first.length;
     if (cols == 0) return <Offset>[];
 
     // Determine cell step to fit within the available size
-    final double stepW = size.width / cols;
-    final double stepH = size.height / rows;
+    final stepW = size.width / cols;
+    final stepH = size.height / rows;
     final double step = math.min(stepW, stepH);
 
-    final double usedW = step * cols;
-    final double usedH = step * rows;
-    final double x0 = (size.width - usedW) / 2 + step / 2;
-    final double y0 = (size.height - usedH) / 2 + step / 2;
+    final usedW = step * cols;
+    final usedH = step * rows;
+    final x0 = (size.width - usedW) / 2 + step / 2;
+    final y0 = (size.height - usedH) / 2 + step / 2;
 
-    final List<Offset> positions = <Offset>[];
-    for (int r = 0; r < rows; r++) {
-      final String row = full[r];
-      for (int c = 0; c < cols; c++) {
+    final positions = <Offset>[];
+    for (var r = 0; r < rows; r++) {
+      final row = full[r];
+      for (var c = 0; c < cols; c++) {
         if (row[c] == '1') {
           positions.add(Offset(x0 + c * step, y0 + r * step));
         }
@@ -539,34 +541,34 @@ class _DotsPainter extends CustomPainter {
     // Use only the number of dots we need for "fin."
     final dotsToUse = math.min(seeds.length, targetPositions.length);
     
-    for (int i = 0; i < dotsToUse; i++) {
-      final Offset s = seeds[i];
-      final Offset target = targetPositions[i];
-      final double appearT = (i / dotsToUse) * 0.18; // subtle stagger
-      final double t = ((progress - appearT) / 0.82).clamp(0.0, 1.0);
+    for (var i = 0; i < dotsToUse; i++) {
+      final s = seeds[i];
+      final target = targetPositions[i];
+      final appearT = (i / dotsToUse) * 0.18; // subtle stagger
+      final t = ((progress - appearT) / 0.82).clamp(0.0, 1.0);
       if (t <= 0) continue;
 
-      final double easedT = Curves.easeOutCubic.transform(t);
+      final easedT = Curves.easeOutCubic.transform(t);
 
       // Interpolate from random start to target grid
-      final double startX = s.dx * size.width;
-      final double startY = s.dy * size.height;
-      final double x = startX + (target.dx - startX) * easedT;
-      final double y = startY + (target.dy - startY) * easedT;
+      final startX = s.dx * size.width;
+      final startY = s.dy * size.height;
+      final x = startX + (target.dx - startX) * easedT;
+      final y = startY + (target.dy - startY) * easedT;
 
       // Small, crisp dots like Nothing's style with subtle entrance scale and glow
       final double baseR = math.max(0.8, (size.height / 7) * 0.20);
-      final double r = baseR * (0.7 + 0.3 * easedT);
-      final double alpha = (0.25 + 0.75 * easedT).clamp(0.0, 1.0);
+      final r = baseR * (0.7 + 0.3 * easedT);
+      final alpha = (0.25 + 0.75 * easedT).clamp(0.0, 1.0);
 
       // Glow behind dot
-      final Paint glow = Paint()
+      final glow = Paint()
         ..color = color.withValues(alpha: alpha * 0.2)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-      canvas.drawCircle(Offset(x, y), r * 1.8, glow);
-
-      // Main dot
-      canvas.drawCircle(Offset(x, y), r, paint..color = color.withValues(alpha: alpha));
+      canvas
+        ..drawCircle(Offset(x, y), r * 1.8, glow)
+        // Main dot
+        ..drawCircle(Offset(x, y), r, paint..color = color.withValues(alpha: alpha));
     }
   }
 

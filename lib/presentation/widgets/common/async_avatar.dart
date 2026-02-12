@@ -5,9 +5,7 @@ import 'package:library_registration_app/presentation/providers/database_provide
 /// An avatar widget that handles async signed URL generation for storage paths
 class AsyncAvatar extends ConsumerWidget {
   const AsyncAvatar({
-    super.key,
-    required this.imagePath,
-    required this.initials,
+    required this.imagePath, required this.initials, super.key,
     this.size = 48,
     this.fallbackIcon,
     this.backgroundColor,
@@ -99,7 +97,7 @@ class AsyncAvatar extends ConsumerWidget {
         radius: size / 2,
         backgroundColor: backgroundColor ?? theme.colorScheme.primaryContainer,
         child: Icon(
-          fallbackIcon!,
+          fallbackIcon,
           size: size * 0.6,
           color: foregroundColor ?? theme.colorScheme.onPrimaryContainer,
         ),

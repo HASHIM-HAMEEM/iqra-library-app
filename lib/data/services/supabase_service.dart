@@ -96,7 +96,7 @@ class SupabaseService {
       }
     }
 
-    int attempts = 0;
+    var attempts = 0;
     while (attempts < maxRetries) {
       try {
         return await operation();
@@ -121,7 +121,7 @@ class SupabaseService {
           debugPrint('  - code: "${e.code}"');
           debugPrint('  - details: "${e.details}"');
           debugPrint('  - hint: "${e.hint}"');
-          debugPrint('  - toString(): "${e.toString()}"');
+          debugPrint('  - toString(): "$e"');
 
           // Don't retry for client errors (4xx)
           if (e.code != null && (e.code == '400' || e.code!.startsWith('4'))) {
@@ -290,11 +290,11 @@ class SupabaseService {
         imageToUpload = imageBytes;
       }
 
-      final String ext = fileExtension.replaceAll('.', '').toLowerCase().trim();
-      final String safeExt = ext.isEmpty ? 'jpg' : ext;
-      final String fileName =
+      final ext = fileExtension.replaceAll('.', '').toLowerCase().trim();
+      final safeExt = ext.isEmpty ? 'jpg' : ext;
+      final fileName =
           '${DateTime.now().millisecondsSinceEpoch}.$safeExt';
-      final String storagePath = '$studentId/$fileName';
+      final storagePath = '$studentId/$fileName';
       await _client.storage
           .from('profile-images')
           .uploadBinary(
@@ -302,7 +302,6 @@ class SupabaseService {
             imageToUpload,
             fileOptions: FileOptions(
               upsert: true,
-              cacheControl: '3600',
               contentType:
                   contentType ??
                   ImageCompressionService.mimeTypeForExtension(safeExt),
@@ -569,7 +568,7 @@ class SupabaseService {
     if (id.trim().isEmpty) {
       throw const ValidationException('Student ID cannot be empty');
     }
-    final String key = 'student_$id';
+    final key = 'student_$id';
     final cached = await _cache.getItem<Student>(
       key: key,
       maxAge: const Duration(minutes: 15),
@@ -702,7 +701,7 @@ class SupabaseService {
       fromJson: Student.fromJson,
     );
     if (cached != null) {
-      () async {
+      unawaited(() async {
         try {
           final fresh = await _executeWithRetry(() async {
             final response = await _client
@@ -720,7 +719,7 @@ class SupabaseService {
             toJson: (s) => s.toJson(),
           );
         } catch (_) {}
-      }();
+      }());
       return cached;
     }
     final fresh = await _executeWithRetry(() async {
@@ -745,14 +744,14 @@ class SupabaseService {
     if (!_enabled) return <Student>[];
     if (query.trim().isEmpty) return <Student>[];
 
-    final String key = 'students_search_${query.toLowerCase()}';
+    final key = 'students_search_${query.toLowerCase()}';
     final cached = await _cache.getList<Student>(
       key: key,
       maxAge: const Duration(minutes: 2),
-      fromJson: (m) => Student.fromJson(m),
+      fromJson: Student.fromJson,
     );
     if (cached != null) {
-      () async {
+      unawaited(() async {
         try {
           final fresh = await _executeWithRetry(() async {
             final response = await _client
@@ -775,7 +774,7 @@ class SupabaseService {
             toJson: (s) => s.toJson(),
           );
         } catch (_) {}
-      }();
+      }());
       return cached;
     }
     final fresh = await _executeWithRetry(() async {
@@ -803,14 +802,14 @@ class SupabaseService {
 
   Future<List<Student>> getStudentsPaginated(int offset, int limit) async {
     if (!_enabled) return <Student>[];
-    final String key = 'students_page_${offset}_$limit';
+    final key = 'students_page_${offset}_$limit';
     final cached = await _cache.getList<Student>(
       key: key,
       maxAge: const Duration(minutes: 3),
-      fromJson: (m) => Student.fromJson(m),
+      fromJson: Student.fromJson,
     );
     if (cached != null) {
-      () async {
+      unawaited(() async {
         try {
           final fresh = await _executeWithRetry(() async {
             final response = await _client
@@ -831,7 +830,7 @@ class SupabaseService {
             toJson: (s) => s.toJson(),
           );
         } catch (_) {}
-      }();
+      }());
       return cached;
     }
     final fresh = await _executeWithRetry(() async {
@@ -860,7 +859,7 @@ class SupabaseService {
     int limit,
   ) async {
     if (!_enabled) return <Student>[];
-    final String key = 'students_discarded_page_${offset}_$limit';
+    final key = 'students_discarded_page_${offset}_$limit';
     final cached = await _cache.getList<Student>(
       key: key,
       maxAge: const Duration(minutes: 3),
@@ -914,7 +913,7 @@ class SupabaseService {
 
   Future<int> getStudentsCount() async {
     if (!_enabled) return 0;
-    const String key = 'students_count';
+    const key = 'students_count';
     final cached = await _cache.getItem<int>(
       key: key,
       maxAge: const Duration(minutes: 2),
@@ -1053,7 +1052,7 @@ class SupabaseService {
         .map(
           (List<Map<String, dynamic>> data) => data
               .where((json) => json['is_deleted'] == false)
-              .map((json) => Student.fromJson(json))
+              .map(Student.fromJson)
               .toList(),
         );
   }
@@ -1067,7 +1066,7 @@ class SupabaseService {
         .map(
           (List<Map<String, dynamic>> data) => data
               .where((json) => json['is_deleted'] == false)
-              .map((json) => Student.fromJson(json))
+              .map(Student.fromJson)
               .toList(),
         );
   }
@@ -1249,7 +1248,7 @@ class SupabaseService {
 
   Future<List<Subscription>> getActiveSubscriptions() async {
     if (!_enabled) return <Subscription>[];
-    const String key = 'subscriptions_active';
+    const key = 'subscriptions_active';
     final cached = await _cache.getList<Subscription>(
       key: key,
       maxAge: const Duration(minutes: 3),
@@ -1311,7 +1310,7 @@ class SupabaseService {
 
   Future<List<Subscription>> getExpiredSubscriptions() async {
     if (!_enabled) return <Subscription>[];
-    const String key = 'subscriptions_expired';
+    const key = 'subscriptions_expired';
     final cached = await _cache.getList<Subscription>(
       key: key,
       maxAge: const Duration(minutes: 5),
@@ -1476,7 +1475,7 @@ class SupabaseService {
     int limit,
   ) async {
     if (!_enabled) return <Subscription>[];
-    final String key = 'subscriptions_page_${offset}_$limit';
+    final key = 'subscriptions_page_${offset}_$limit';
     final cached = await _cache.getList<Subscription>(
       key: key,
       maxAge: const Duration(minutes: 3),
@@ -1535,7 +1534,7 @@ class SupabaseService {
     int limit,
   ) async {
     if (!_enabled) return <Subscription>[];
-    final String key = 'subscriptions_discarded_page_${offset}_$limit';
+    final key = 'subscriptions_discarded_page_${offset}_$limit';
     final cached = await _cache.getList<Subscription>(
       key: key,
       maxAge: const Duration(minutes: 3),
@@ -1591,7 +1590,7 @@ class SupabaseService {
 
   Future<int> getSubscriptionsCount() async {
     if (!_enabled) return 0;
-    const String key = 'subscriptions_count';
+    const key = 'subscriptions_count';
     final cached = await _cache.getItem<int>(
       key: key,
       maxAge: const Duration(minutes: 2),
@@ -1666,7 +1665,7 @@ class SupabaseService {
         .map(
           (List<Map<String, dynamic>> data) => data
               .where((json) => json['is_deleted'] == false)
-              .map((json) => Subscription.fromJson(json))
+              .map(Subscription.fromJson)
               .toList(),
         );
   }
@@ -1708,7 +1707,7 @@ class SupabaseService {
                     json['student_id'] == studentId &&
                     json['is_deleted'] == false,
               )
-              .map((json) => Subscription.fromJson(json))
+              .map(Subscription.fromJson)
               .toList(),
         );
   }
@@ -1799,9 +1798,10 @@ class SupabaseService {
           .select('amount')
           .eq('is_deleted', false);
 
-      double total = 0.0;
+      var total = 0.0;
       for (final row in response as List) {
-        total += (row['amount'] as num).toDouble();
+        final map = row as Map<String, dynamic>;
+        total += (map['amount'] as num).toDouble();
       }
       return total;
     }, operationName: 'getTotalRevenue');
@@ -1822,9 +1822,10 @@ class SupabaseService {
           .gte('created_at', startDate.toUtc().toIso8601String())
           .lte('created_at', endDate.toUtc().toIso8601String());
 
-      double total = 0.0;
+      var total = 0.0;
       for (final row in response as List) {
-        total += (row['amount'] as num).toDouble();
+        final map = row as Map<String, dynamic>;
+        total += (map['amount'] as num).toDouble();
       }
       return total;
     }, operationName: 'getRevenueByDateRange');
@@ -1838,11 +1839,12 @@ class SupabaseService {
           .select('status, amount')
           .eq('is_deleted', false);
 
-      final Map<String, Map<String, dynamic>> stats = {};
+      final stats = <String, Map<String, dynamic>>{};
 
       for (final row in response as List) {
-        final status = row['status'] as String;
-        final amount = (row['amount'] as num).toDouble();
+        final map = row as Map<String, dynamic>;
+        final status = map['status'] as String;
+        final amount = (map['amount'] as num).toDouble();
 
         if (!stats.containsKey(status)) {
           stats[status] = {'count': 0, 'total_amount': 0.0};
@@ -1909,7 +1911,7 @@ class SupabaseService {
         'Activity log description cannot be empty',
       );
     }
-    if (activityLog.entityType?.trim().isEmpty == true) {
+    if (activityLog.entityType?.trim().isEmpty ?? false) {
       throw const ValidationException(
         'Activity log entity type cannot be empty',
       );
@@ -2015,21 +2017,19 @@ class SupabaseService {
     if (!_enabled) {
       throw StateError('Supabase realtime is disabled in this build');
     }
-    final channel = _client.channel('students_channel');
-
-    channel.onPostgresChanges(
-      event: PostgresChangeEvent.all,
-      schema: 'public',
-      table: 'students',
-      callback: (payload) {
-        // Trigger a refetch of all students
-        getAllStudents().then(onUpdate).catchError((Object error) {
-          debugPrint('Error updating students from realtime: $error');
-        });
-      },
-    );
-
-    channel.subscribe();
+    final channel = _client.channel('students_channel')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'students',
+        callback: (payload) {
+          // Trigger a refetch of all students
+          getAllStudents().then(onUpdate).catchError((Object error) {
+            debugPrint('Error updating students from realtime: $error');
+          });
+        },
+      )
+      ..subscribe();
     return channel;
   }
 
@@ -2039,21 +2039,19 @@ class SupabaseService {
     if (!_enabled) {
       throw StateError('Supabase realtime is disabled in this build');
     }
-    final channel = _client.channel('subscriptions_channel');
-
-    channel.onPostgresChanges(
-      event: PostgresChangeEvent.all,
-      schema: 'public',
-      table: 'subscriptions',
-      callback: (payload) {
-        // Trigger a refetch of all subscriptions
-        getAllSubscriptions().then(onUpdate).catchError((Object error) {
-          debugPrint('Error updating subscriptions from realtime: $error');
-        });
-      },
-    );
-
-    channel.subscribe();
+    final channel = _client.channel('subscriptions_channel')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'subscriptions',
+        callback: (payload) {
+          // Trigger a refetch of all subscriptions
+          getAllSubscriptions().then(onUpdate).catchError((Object error) {
+            debugPrint('Error updating subscriptions from realtime: $error');
+          });
+        },
+      )
+      ..subscribe();
     return channel;
   }
 
@@ -2342,9 +2340,9 @@ class SupabaseService {
     return _client
         .from('activity_logs')
         .stream(primaryKey: ['id'])
-        .order('timestamp', ascending: false)
+        .order('timestamp')
         .limit(limit)
-        .map((data) => data.map((json) => ActivityLog.fromJson(json)).toList());
+        .map((data) => data.map(ActivityLog.fromJson).toList());
   }
 
   Stream<List<ActivityLog>> watchAllActivityLogs() {
@@ -2355,8 +2353,8 @@ class SupabaseService {
     return _client
         .from('activity_logs')
         .stream(primaryKey: ['id'])
-        .order('timestamp', ascending: false)
+        .order('timestamp')
         .limit(1000) // Limit to avoid performance issues
-        .map((data) => data.map((json) => ActivityLog.fromJson(json)).toList());
+        .map((data) => data.map(ActivityLog.fromJson).toList());
   }
 }

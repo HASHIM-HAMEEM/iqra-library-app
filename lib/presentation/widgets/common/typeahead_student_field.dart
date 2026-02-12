@@ -4,11 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:library_registration_app/core/theme/app_colors.dart';
 import 'package:library_registration_app/core/theme/design_tokens.dart';
-import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
-
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
+import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
 
 class TypeaheadStudentField extends ConsumerStatefulWidget {
   const TypeaheadStudentField({
@@ -148,7 +147,7 @@ class _TypeaheadStudentFieldState extends ConsumerState<TypeaheadStudentField> {
           decoration: InputDecoration(
             labelText: widget.label,
             prefixIcon: _selectedStudent != null
-                ? Icon(Icons.person, color: AppColors.success)
+                ? const Icon(Icons.person, color: AppColors.success)
                 : _isSearching
                 ? const SizedBox(
                     width: 16,
@@ -218,7 +217,6 @@ class _TypeaheadStudentFieldState extends ConsumerState<TypeaheadStudentField> {
     if (!mounted) return;
     await showAppBottomSheet<void>(
       context,
-      isScrollControlled: true,
       builder: (ctx) {
         // Local state helpers
         Future<void> runSearch(String q) async {

@@ -2,20 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:library_registration_app/domain/entities/student.dart';
-import 'package:library_registration_app/domain/entities/subscription.dart';
-import 'package:library_registration_app/core/utils/error_mapper.dart';
 import 'package:library_registration_app/core/responsive/responsive.dart';
 import 'package:library_registration_app/core/theme/design_tokens.dart';
+import 'package:library_registration_app/core/utils/error_mapper.dart';
 import 'package:library_registration_app/core/utils/telemetry_service.dart';
+import 'package:library_registration_app/domain/entities/student.dart';
+import 'package:library_registration_app/domain/entities/subscription.dart';
+import 'package:library_registration_app/presentation/pages/students/profile_photo_view_page.dart';
 import 'package:library_registration_app/presentation/providers/activity_logs/activity_logs_provider.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
-import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_provider.dart';
 import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_notifier.dart';
-import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
+import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_provider.dart';
 // cached_network_image removed; using Image.network with errorBuilder
 import 'package:library_registration_app/presentation/widgets/common/async_avatar.dart';
-import 'package:library_registration_app/presentation/pages/students/profile_photo_view_page.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 import 'package:library_registration_app/presentation/widgets/common/page_header.dart';
 
 class StudentDetailsPage extends ConsumerWidget {
@@ -134,12 +134,11 @@ Widget _buildResponsiveSections(
 
   return LayoutBuilder(
     builder: (context, constraints) {
-      final double maxW = constraints.maxWidth;
-      final bool isDesktop = maxW >= 900;
+      final maxW = constraints.maxWidth;
+      final isDesktop = maxW >= 900;
 
       if (!isDesktop) {
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             profileHeader,
             const SizedBox(height: 24),
@@ -215,7 +214,6 @@ Widget _buildProfileHero(BuildContext context, Student student) {
           onTap: () {
             Navigator.of(context).push(
               PageRouteBuilder<void>(
-                transitionDuration: const Duration(milliseconds: 300),
                 opaque: false,
                 pageBuilder: (ctx, anim, _) => FadeTransition(
                   opacity: anim,
@@ -327,7 +325,7 @@ Future<void> _renewSubscriptionForStudent(
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(ctx).pop(null),
+          onPressed: () => Navigator.of(ctx).pop(),
           child: const Text('Cancel'),
         ),
         FilledButton(
@@ -362,7 +360,6 @@ Future<void> _renewSubscriptionForStudent(
       CustomNotification.show(
         context,
         message: 'Subscription renewed successfully',
-        type: NotificationType.success,
       );
       // refresh widgets that display subscription
       ref.invalidate(activeSubscriptionByStudentProvider(sub.studentId));
@@ -401,7 +398,7 @@ Future<void> _renewSubscriptionForStudent(
             ),
           )
         : false;
-    if (proceedOverlap == true) {
+    if (proceedOverlap ?? false) {
       await ref
           .read(subscriptionsNotifierProvider.notifier)
           .renewSubscription(sub.id, picked, amount, allowOverlap: true);
@@ -409,7 +406,6 @@ Future<void> _renewSubscriptionForStudent(
       CustomNotification.show(
         context,
         message: 'Subscription renewed successfully',
-        type: NotificationType.success,
       );
       ref.invalidate(activeSubscriptionByStudentProvider(sub.studentId));
       return;

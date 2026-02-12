@@ -1,14 +1,13 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 
 import 'package:excel/excel.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
-
 import 'package:library_registration_app/core/platform/export_file_saver.dart';
 import 'package:library_registration_app/domain/entities/activity_log.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
+import 'package:share_plus/share_plus.dart';
 
 class ExportService {
   static const String _dateFormat = 'yyyy-MM-dd HH:mm:ss';
@@ -178,12 +177,8 @@ class ExportService {
           s.seatNumber ?? '',
           s.subscriptionPlan ?? '',
           s.subscriptionStatus ?? '',
-          s.subscriptionStartDate != null
-              ? _formatDate(s.subscriptionStartDate!, _dateOnlyFormat)
-              : '',
-          s.subscriptionEndDate != null
-              ? _formatDate(s.subscriptionEndDate!, _dateOnlyFormat)
-              : '',
+          if (s.subscriptionStartDate != null) _formatDate(s.subscriptionStartDate!, _dateOnlyFormat) else '',
+          if (s.subscriptionEndDate != null) _formatDate(s.subscriptionEndDate!, _dateOnlyFormat) else '',
           s.subscriptionAmount?.toString() ?? '',
           _formatDate(s.createdAt, _dateFormat),
           _formatDate(s.updatedAt, _dateFormat),
@@ -290,15 +285,16 @@ class ExportService {
       final cell = sheet.cell(
         CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0),
       );
-      cell.value = TextCellValue(headers[i]);
-      cell.cellStyle = CellStyle(
-        bold: true,
-        backgroundColorHex: ExcelColor.blue200,
-      );
+      cell
+        ..value = TextCellValue(headers[i])
+        ..cellStyle = CellStyle(
+          bold: true,
+          backgroundColorHex: ExcelColor.blue200,
+        );
     }
 
     // Add data
-    for (int i = 0; i < students.length; i++) {
+    for (var i = 0; i < students.length; i++) {
       final student = students[i];
       final row = i + 1;
 
@@ -331,7 +327,7 @@ class ExportService {
         final cell = sheet.cell(
           CellIndex.indexByColumnRow(columnIndex: j, rowIndex: row),
         );
-        cell.value = TextCellValue(data[j].toString());
+        cell.value = TextCellValue(data[j]);
       }
     }
 
@@ -358,19 +354,20 @@ class ExportService {
     ];
 
     // Add headers
-    for (int i = 0; i < headers.length; i++) {
+    for (var i = 0; i < headers.length; i++) {
       final cell = sheet.cell(
         CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0),
       );
-      cell.value = TextCellValue(headers[i]);
-      cell.cellStyle = CellStyle(
-        bold: true,
-        backgroundColorHex: ExcelColor.green200,
-      );
+      cell
+        ..value = TextCellValue(headers[i])
+        ..cellStyle = CellStyle(
+          bold: true,
+          backgroundColorHex: ExcelColor.green200,
+        );
     }
 
     // Add data
-    for (int i = 0; i < subscriptions.length; i++) {
+    for (var i = 0; i < subscriptions.length; i++) {
       final subscription = subscriptions[i];
       final row = i + 1;
 
@@ -390,7 +387,7 @@ class ExportService {
         final cell = sheet.cell(
           CellIndex.indexByColumnRow(columnIndex: j, rowIndex: row),
         );
-        cell.value = TextCellValue(data[j].toString());
+        cell.value = TextCellValue(data[j]);
       }
     }
 
@@ -415,12 +412,12 @@ class ExportService {
     for (var i = 0; i < headers.length; i++) {
       final cell = sheet.cell(
         CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0),
-      );
-      cell.value = TextCellValue(headers[i]);
-      cell.cellStyle = CellStyle(
-        bold: true,
-        backgroundColorHex: ExcelColor.orange200,
-      );
+      )
+        ..value = TextCellValue(headers[i])
+        ..cellStyle = CellStyle(
+          bold: true,
+          backgroundColorHex: ExcelColor.orange200,
+        );
     }
 
     // Add data
@@ -441,8 +438,8 @@ class ExportService {
       for (var j = 0; j < data.length; j++) {
         final cell = sheet.cell(
           CellIndex.indexByColumnRow(columnIndex: j, rowIndex: row),
-        );
-        cell.value = TextCellValue(data[j].toString());
+        )
+          ..value = TextCellValue(data[j].toString());
       }
     }
 
@@ -461,12 +458,13 @@ class ExportService {
     final titleCell = sheet.cell(
       CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0),
     );
-    titleCell.value = TextCellValue('IQRA Library Data Export Summary');
-    titleCell.cellStyle = CellStyle(
-      bold: true,
-      fontSize: 16,
-      backgroundColorHex: ExcelColor.blue300,
-    );
+    titleCell
+      ..value = TextCellValue('IQRA Library Data Export Summary')
+      ..cellStyle = CellStyle(
+        bold: true,
+        fontSize: 16,
+        backgroundColorHex: ExcelColor.blue300,
+      );
 
     // Export info
     final exportDate = sheet.cell(
@@ -499,8 +497,9 @@ class ExportService {
         CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 4 + i),
       );
 
-      labelCell.value = TextCellValue(stats[i][0]);
-      labelCell.cellStyle = CellStyle(bold: true);
+      labelCell
+        ..value = TextCellValue(stats[i][0])
+        ..cellStyle = CellStyle(bold: true);
       valueCell.value = TextCellValue(stats[i][1]);
     }
 
@@ -519,7 +518,7 @@ class ExportService {
 
   int _calculateAge(DateTime birthDate) {
     final now = DateTime.now();
-    int age = now.year - birthDate.year;
+    var age = now.year - birthDate.year;
     if (now.month < birthDate.month ||
         (now.month == birthDate.month && now.day < birthDate.day)) {
       age--;
@@ -532,7 +531,7 @@ class ExportService {
   }
 
   Future<String> _saveExcelFile(Excel excel, String fileName) async {
-    final List<int> bytes = excel.save()!;
+    final bytes = excel.save()!;
     return saveExportBytes(bytes, fileName);
   }
 }

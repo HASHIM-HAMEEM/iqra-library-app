@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
@@ -62,12 +61,12 @@ class IdCardPdfService {
                     style: pw.TextStyle(
                       fontSize: 18,
                       fontWeight: pw.FontWeight.bold,
-                      color: PdfColor.fromInt(0xFF0D253F),
+                      color: const PdfColor.fromInt(0xFF0D253F),
                     ),
                   ),
                   pw.Text(
                     'Print at 100% / Actual size',
-                    style: pw.TextStyle(
+                    style: const pw.TextStyle(
                       fontSize: 9,
                       color: PdfColor.fromInt(0xFF5A6772),
                     ),
@@ -82,7 +81,6 @@ class IdCardPdfService {
                   children: [
                     pw.Column(
                       mainAxisSize: pw.MainAxisSize.min,
-                      crossAxisAlignment: pw.CrossAxisAlignment.center,
                       children: [
                         _label('FRONT'),
                         pw.SizedBox(height: 6),
@@ -101,7 +99,6 @@ class IdCardPdfService {
                     pw.SizedBox(width: 22),
                     pw.Column(
                       mainAxisSize: pw.MainAxisSize.min,
-                      crossAxisAlignment: pw.CrossAxisAlignment.center,
                       children: [
                         _label('BACK'),
                         pw.SizedBox(height: 6),
@@ -118,7 +115,7 @@ class IdCardPdfService {
               pw.SizedBox(height: 18),
               pw.Text(
                 'Tip: For best results, use thicker paper, cut along the card border, then laminate.',
-                style: pw.TextStyle(
+                style: const pw.TextStyle(
                   fontSize: 9,
                   color: PdfColor.fromInt(0xFF5A6772),
                 ),
@@ -137,9 +134,9 @@ class IdCardPdfService {
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: pw.BoxDecoration(
-        color: PdfColor.fromInt(0xFFEFF3F6),
+        color: const PdfColor.fromInt(0xFFEFF3F6),
         borderRadius: pw.BorderRadius.circular(100),
-        border: pw.Border.all(color: PdfColor.fromInt(0xFFD0D8DF), width: 1),
+        border: pw.Border.all(color: const PdfColor.fromInt(0xFFD0D8DF)),
       ),
       child: pw.Text(
         text,
@@ -147,7 +144,7 @@ class IdCardPdfService {
           fontSize: 9,
           fontWeight: pw.FontWeight.bold,
           letterSpacing: 1.5,
-          color: PdfColor.fromInt(0xFF0D253F),
+          color: const PdfColor.fromInt(0xFF0D253F),
         ),
       ),
     );
@@ -169,19 +166,19 @@ class IdCardPdfService {
     const gold = 0xFFD4A843;
     const gold2 = 0xFFF0C75E;
 
-    final cGold = PdfColor.fromInt(gold);
-    final cGold2 = PdfColor.fromInt(gold2);
+    const cGold = PdfColor.fromInt(gold);
+    const cGold2 = PdfColor.fromInt(gold2);
 
-    final photoW = 20 * PdfPageFormat.mm;
-    final photoH = 26 * PdfPageFormat.mm;
+    const photoW = 20 * PdfPageFormat.mm;
+    const photoH = 26 * PdfPageFormat.mm;
 
     return pw.Container(
       width: cardWidth,
       height: cardHeight,
       decoration: pw.BoxDecoration(
         borderRadius: pw.BorderRadius.circular(10),
-        border: pw.Border.all(color: PdfColor.fromInt(0xFF0E1E2C), width: 1),
-        gradient: pw.LinearGradient(
+        border: pw.Border.all(color: const PdfColor.fromInt(0xFF0E1E2C)),
+        gradient: const pw.LinearGradient(
           begin: pw.Alignment.topLeft,
           end: pw.Alignment.bottomRight,
           colors: [
@@ -199,10 +196,8 @@ class IdCardPdfService {
             right: 0,
             child: pw.Container(
               height: 3,
-              decoration: pw.BoxDecoration(
+              decoration: const pw.BoxDecoration(
                 gradient: pw.LinearGradient(
-                  begin: pw.Alignment.centerLeft,
-                  end: pw.Alignment.centerRight,
                   colors: [
                     PdfColor.fromInt(gold),
                     PdfColor.fromInt(gold2),
@@ -218,7 +213,6 @@ class IdCardPdfService {
               crossAxisAlignment: pw.CrossAxisAlignment.stretch,
               children: [
                 pw.Row(
-                  crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
                     pw.Container(
                       width: 22,
@@ -226,13 +220,13 @@ class IdCardPdfService {
                       padding: const pw.EdgeInsets.all(3),
                       decoration: pw.BoxDecoration(
                         borderRadius: pw.BorderRadius.circular(6),
-                        gradient: pw.LinearGradient(
+                        gradient: const pw.LinearGradient(
                           colors: [cGold, cGold2],
                           begin: pw.Alignment.topLeft,
                           end: pw.Alignment.bottomRight,
                         ),
                       ),
-                      child: pw.Image(logoImage, fit: pw.BoxFit.contain),
+                      child: pw.Image(logoImage),
                     ),
                     pw.SizedBox(width: 8),
                     pw.Expanded(
@@ -293,7 +287,7 @@ class IdCardPdfService {
                           color: _withOpacity(cGold, 0.7),
                           width: 2,
                         ),
-                        color: PdfColor.fromInt(navy2),
+                        color: const PdfColor.fromInt(navy2),
                       ),
                       child: pw.ClipRRect(
                         horizontalRadius: 6,
@@ -364,7 +358,6 @@ class IdCardPdfService {
                 pw.SizedBox(height: 6),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
                     pw.Text(
                       'Issued: $issuedAt',
@@ -378,7 +371,7 @@ class IdCardPdfService {
                       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: pw.BoxDecoration(
                         borderRadius: pw.BorderRadius.circular(5),
-                        border: pw.Border.all(color: _withOpacity(cGold, 0.5), width: 1),
+                        border: pw.Border.all(color: _withOpacity(cGold, 0.5)),
                         color: _withOpacity(cGold, 0.12),
                       ),
                       child: pw.Text(
@@ -406,10 +399,10 @@ class IdCardPdfService {
     required double cardWidth,
     required double cardHeight,
   }) {
-    final cNavy = PdfColor.fromInt(0xFF0D253F);
-    final cGold = PdfColor.fromInt(0xFFD4A843);
+    const cNavy = PdfColor.fromInt(0xFF0D253F);
+    const cGold = PdfColor.fromInt(0xFFD4A843);
 
-    final qrSize = 34 * PdfPageFormat.mm;
+    const qrSize = 34 * PdfPageFormat.mm;
 
     return pw.Container(
       width: cardWidth,
@@ -417,7 +410,7 @@ class IdCardPdfService {
       decoration: pw.BoxDecoration(
         color: PdfColors.white,
         borderRadius: pw.BorderRadius.circular(10),
-        border: pw.Border.all(color: PdfColor.fromInt(0xFFE0E0E0), width: 1),
+        border: pw.Border.all(color: const PdfColor.fromInt(0xFFE0E0E0)),
       ),
       child: pw.Padding(
         padding: const pw.EdgeInsets.fromLTRB(10, 10, 10, 10),
@@ -429,7 +422,7 @@ class IdCardPdfService {
               style: pw.TextStyle(
                 color: cNavy,
                 fontWeight: pw.FontWeight.bold,
-                letterSpacing: 2.0,
+                letterSpacing: 2,
                 fontSize: 8,
               ),
             ),
@@ -453,7 +446,7 @@ class IdCardPdfService {
             pw.SizedBox(height: 8),
             pw.Text(
               'This card is the property of IQRA Library.',
-              style: pw.TextStyle(
+              style: const pw.TextStyle(
                 color: PdfColor.fromInt(0xFF6B7280),
                 fontSize: 6.5,
               ),
@@ -462,7 +455,7 @@ class IdCardPdfService {
             pw.SizedBox(height: 2),
             pw.Text(
               'If found, please return to the nearest branch.',
-              style: pw.TextStyle(
+              style: const pw.TextStyle(
                 color: PdfColor.fromInt(0xFF8A94A0),
                 fontSize: 6.5,
               ),
@@ -489,7 +482,7 @@ class IdCardPdfService {
             color: _withOpacity(labelColor, 0.9),
             fontSize: 5.5,
             fontWeight: pw.FontWeight.bold,
-            letterSpacing: 1.0,
+            letterSpacing: 1,
           ),
           maxLines: 1,
           overflow: pw.TextOverflow.clip,

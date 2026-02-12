@@ -15,8 +15,9 @@ Future<String> saveExportBytesImpl(List<int> bytes, String fileName) async {
     ..style.display = 'none';
 
   web.document.body?.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
+  anchor
+    ..click()
+    ..remove();
   web.URL.revokeObjectURL(url);
   return fileName;
 }

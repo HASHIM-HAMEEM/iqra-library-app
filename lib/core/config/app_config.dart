@@ -114,6 +114,5 @@ class AppConfig {
   // NOTE: In production, keep signing in trusted backend when possible.
   static const String idCardVerificationBaseUrl = String.fromEnvironment(
     'ID_CARD_VERIFY_URL',
-    defaultValue: '',
   );
 }

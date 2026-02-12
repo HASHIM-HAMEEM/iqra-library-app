@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:library_registration_app/core/config/app_config.dart';
+import 'package:library_registration_app/core/services/cache_service.dart';
 import 'package:library_registration_app/data/repositories/activity_log_repository_impl.dart';
 import 'package:library_registration_app/data/repositories/student_repository_impl.dart';
 import 'package:library_registration_app/data/repositories/subscription_repository_impl.dart';
-import 'package:library_registration_app/core/config/app_config.dart';
-import 'package:library_registration_app/core/services/cache_service.dart';
-import 'package:library_registration_app/data/services/supabase_service.dart';
 import 'package:library_registration_app/data/services/app_settings_service.dart';
+import 'package:library_registration_app/data/services/supabase_service.dart';
 import 'package:library_registration_app/domain/repositories/activity_log_repository.dart';
 import 'package:library_registration_app/domain/repositories/student_repository.dart';
 import 'package:library_registration_app/domain/repositories/subscription_repository.dart';
@@ -43,7 +43,7 @@ final activityLogRepositoryProvider = Provider<ActivityLogRepository>((ref) {
 // Supabase service provider
 final supabaseServiceProvider = Provider<SupabaseService>((ref) {
   // Use the initialized Supabase instance with session persistence
-  final bool hasConfig = AppConfig.supabaseConfigIssues.isEmpty;
+  final hasConfig = AppConfig.supabaseConfigIssues.isEmpty;
 
   if (!hasConfig) {
     // Disabled service when not configured
@@ -54,11 +54,11 @@ final supabaseServiceProvider = Provider<SupabaseService>((ref) {
   // Use the initialized Supabase client with session persistence
   try {
     final client = Supabase.instance.client;
-    return SupabaseService(client: client, enabled: true, cache: CacheService());
+    return SupabaseService(client: client, cache: CacheService());
   } catch (e) {
     // Fallback to direct client creation if initialization failed
     final client = SupabaseClient(AppConfig.supabaseUrl, AppConfig.supabaseAnonKey);
-    return SupabaseService(client: client, enabled: true, cache: CacheService());
+    return SupabaseService(client: client, cache: CacheService());
   }
 });
 

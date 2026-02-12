@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:library_registration_app/core/theme/app_colors.dart';
-import 'package:library_registration_app/core/theme/design_tokens.dart';
 import 'package:library_registration_app/core/theme/app_theme.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 
 enum NotificationType { success, error, warning, info }
 
@@ -34,9 +34,7 @@ class CustomNotification {
     overlay.insert(_currentOverlay!);
 
     // Auto-dismiss after duration
-    Future.delayed(duration, () {
-      hide();
-    });
+    Future.delayed(duration, hide);
   }
 
   static void hide() {
@@ -46,19 +44,18 @@ class CustomNotification {
 }
 
 class _NotificationWidget extends StatefulWidget {
-  final String message;
-  final NotificationType type;
-  final ThemeData theme;
-  final IconData? icon;
-  final VoidCallback onDismiss;
 
   const _NotificationWidget({
     required this.message,
     required this.type,
     required this.theme,
-    this.icon,
-    required this.onDismiss,
+    required this.onDismiss, this.icon,
   });
+  final String message;
+  final NotificationType type;
+  final ThemeData theme;
+  final IconData? icon;
+  final VoidCallback onDismiss;
 
   @override
   State<_NotificationWidget> createState() => _NotificationWidgetState();
@@ -78,11 +75,11 @@ class _NotificationWidgetState extends State<_NotificationWidget>
       vsync: this,
     );
 
-    _slideAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
+    _slideAnimation = Tween<double>(begin: 1, end: 0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOutBack),
     );
 
-    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+    _opacityAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
 

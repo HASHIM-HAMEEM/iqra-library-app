@@ -76,11 +76,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
   Future<void> _onRefresh() async {
     // Refresh all providers
-    ref.invalidate(studentsCountProvider);
-    ref.invalidate(activeSubscriptionsCountProvider);
-    ref.invalidate(totalRevenueProvider);
-    ref.invalidate(studentsProvider);
-    ref.invalidate(subscriptionsProvider);
+    ref
+      ..invalidate(studentsCountProvider)
+      ..invalidate(activeSubscriptionsCountProvider)
+      ..invalidate(totalRevenueProvider)
+      ..invalidate(studentsProvider)
+      ..invalidate(subscriptionsProvider);
 
     _showNotification('Dashboard refreshed');
   }
@@ -330,7 +331,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             color: bgColor,
             border: Border.all(
               color: theme.colorScheme.outline.withValues(alpha: 0.6),
-              width: 1,
             ),
           ),
           alignment: Alignment.center,
@@ -396,9 +396,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       CompactStatTile(
         icon: Icons.payments_outlined,
         color: AppColors.warning,
-        label: 'Revenue · ' + _selectedRange,
+        label: 'Revenue · $_selectedRange',
         value: totalRevenue.when(
-          data: (v) => currencyFormatter.format(v),
+          data: currencyFormatter.format,
           loading: () => '...',
           error: (_, __) => '—',
         ),
@@ -469,9 +469,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         'subtitle': 'Download reports',
         'icon': CupertinoIcons.square_arrow_down,
         'color': AppColors.warning,
-        'onTap': () {
-          _showExportOptionsSheet();
-        },
+        'onTap': _showExportOptionsSheet,
       },
     ];
 

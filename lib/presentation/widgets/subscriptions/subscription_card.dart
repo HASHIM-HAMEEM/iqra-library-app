@@ -60,7 +60,7 @@ class SubscriptionCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final bool wide = constraints.maxWidth > 520;
+                final wide = constraints.maxWidth > 520;
                 final avatar = _buildAvatar(theme, size: wide ? 40 : 36);
                 final planStyle = theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w700,
@@ -72,7 +72,6 @@ class SubscriptionCard extends StatelessWidget {
                   children: [
                     // Top row: avatar + plan + status + menu
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         avatar,
                         const SizedBox(width: 10),
@@ -179,10 +178,10 @@ class SubscriptionCard extends StatelessWidget {
       imagePath: studentAvatarPath,
       initials: (studentInitials != null && studentInitials!.isNotEmpty)
           ? studentInitials!
-          : (studentName?.isNotEmpty == true
+          : (studentName?.isNotEmpty ?? false
                 ? studentName!
                       .trim()
-                      .split(RegExp(r"\s+"))
+                      .split(RegExp(r'\s+'))
                       .map((e) => e.isNotEmpty ? e[0].toUpperCase() : '')
                       .take(2)
                       .join()
@@ -292,40 +291,35 @@ class SubscriptionCard extends StatelessWidget {
       onSelected: (value) {
         switch (value) {
           case 'edit':
-            if (onEdit != null) onEdit!();
-            break;
+            onEdit?.call();
           case 'renew':
-            if (onRenew != null) onRenew!();
-            break;
+            onRenew?.call();
           case 'cancel':
-            if (onCancel != null) onCancel!();
-            break;
+            onCancel?.call();
           case 'delete':
-            if (onDelete != null) onDelete!();
-            break;
+            onDelete?.call();
         }
       },
       itemBuilder: (ctx) {
-        final items = <PopupMenuEntry<String>>[];
-        items.add(
-          PopupMenuItem<String>(
+        final items = <PopupMenuEntry<String>>[
+          const PopupMenuItem<String>(
             value: 'edit',
             child: Row(
-              children: const [
+              children: [
                 Icon(Icons.edit_outlined, size: 18),
                 SizedBox(width: 8),
                 Text('Edit'),
               ],
             ),
           ),
-        );
+        ];
         if (onRenew != null &&
             subscription.status == SubscriptionStatus.expired) {
           items.add(
-            PopupMenuItem<String>(
+            const PopupMenuItem<String>(
               value: 'renew',
               child: Row(
-                children: const [
+                children: [
                   Icon(Icons.refresh_outlined, size: 18),
                   SizedBox(width: 8),
                   Text('Renew'),
@@ -337,10 +331,10 @@ class SubscriptionCard extends StatelessWidget {
         if (onCancel != null &&
             subscription.status == SubscriptionStatus.active) {
           items.add(
-            PopupMenuItem<String>(
+            const PopupMenuItem<String>(
               value: 'cancel',
               child: Row(
-                children: const [
+                children: [
                   Icon(Icons.cancel_outlined, size: 18),
                   SizedBox(width: 8),
                   Text('Cancel'),
@@ -350,26 +344,27 @@ class SubscriptionCard extends StatelessWidget {
           );
         }
         if (onDelete != null) {
-          items.add(const PopupMenuDivider());
-          items.add(
-            PopupMenuItem<String>(
-              value: 'delete',
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.delete_outline,
-                    size: 18,
-                    color: theme.colorScheme.error,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Delete',
-                    style: TextStyle(color: theme.colorScheme.error),
-                  ),
-                ],
+          items
+            ..add(const PopupMenuDivider())
+            ..add(
+              PopupMenuItem<String>(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.delete_outline,
+                      size: 18,
+                      color: theme.colorScheme.error,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Delete',
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
+            );
         }
         return items;
       },

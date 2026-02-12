@@ -42,8 +42,9 @@ class _DiscardedStudentsPageState extends ConsumerState<DiscardedStudentsPage> {
   @override
   void dispose() {
     _debounce?.cancel();
-    _searchCtrl.removeListener(_onSearchChanged);
-    _searchCtrl.dispose();
+    _searchCtrl
+      ..removeListener(_onSearchChanged)
+      ..dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -135,7 +136,6 @@ class _DiscardedStudentsPageState extends ConsumerState<DiscardedStudentsPage> {
       CustomNotification.show(
         context,
         message: 'Student restored',
-        type: NotificationType.success,
       );
     } catch (e) {
       if (!mounted) return;
@@ -162,7 +162,7 @@ class _DiscardedStudentsPageState extends ConsumerState<DiscardedStudentsPage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Delete', style: TextStyle(color: AppColors.error)),
+            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -178,7 +178,6 @@ class _DiscardedStudentsPageState extends ConsumerState<DiscardedStudentsPage> {
       CustomNotification.show(
         context,
         message: 'Student permanently deleted',
-        type: NotificationType.success,
       );
     } catch (e) {
       if (!mounted) return;

@@ -48,6 +48,72 @@ class Subscription extends Equatable {
     required this.createdAt,
     required this.updatedAt,
   });
+
+  // JSON mapping for Supabase rows
+  factory Subscription.fromJson(Map<String, dynamic> json) {
+    String readString(List<String> keys, {String fallback = ''}) {
+      for (final key in keys) {
+        final raw = json[key];
+        if (raw == null) continue;
+        final text = raw.toString().trim();
+        if (text.isEmpty) continue;
+        return text;
+      }
+      return fallback;
+    }
+
+    DateTime readDate(List<String> keys, {required DateTime fallback}) {
+      for (final key in keys) {
+        final raw = json[key];
+        if (raw == null) continue;
+        if (raw is DateTime) return raw;
+        final parsed = DateTime.tryParse(raw.toString());
+        if (parsed != null) return parsed;
+      }
+      return fallback;
+    }
+
+    double readDouble(List<String> keys, {double fallback = 0.0}) {
+      for (final key in keys) {
+        final raw = json[key];
+        if (raw == null) continue;
+        if (raw is num) return raw.toDouble();
+        final parsed = double.tryParse(raw.toString());
+        if (parsed != null) return parsed;
+      }
+      return fallback;
+    }
+
+    final nowUtc = DateTime.now().toUtc();
+    final startDate = readDate(
+      const ['start_date', 'subscription_start_date', 'startDate'],
+      fallback: nowUtc,
+    );
+    final endDate = readDate(
+      const ['end_date', 'subscription_end_date', 'endDate'],
+      fallback: startDate,
+    );
+
+    return Subscription(
+      id: readString(const ['id']),
+      studentId: readString(const ['student_id', 'studentId']),
+      planName: readString(const ['plan_name', 'planName']),
+      startDate: startDate,
+      endDate: endDate,
+      amount: readDouble(const ['amount', 'subscription_amount']),
+      status: SubscriptionStatus.fromString(
+        readString(const ['status', 'subscription_status'], fallback: 'pending'),
+      ),
+      createdAt: readDate(
+        const ['created_at', 'createdAt'],
+        fallback: nowUtc,
+      ),
+      updatedAt: readDate(
+        const ['updated_at', 'updatedAt'],
+        fallback: nowUtc,
+      ),
+    );
+  }
   final String id;
   final String studentId;
   final String planName;
@@ -116,72 +182,6 @@ class Subscription extends Equatable {
   @override
   String toString() {
     return 'Subscription(id: $id, planName: $planName, status: ${status.displayName}, daysRemaining: $daysRemaining)';
-  }
-
-  // JSON mapping for Supabase rows
-  factory Subscription.fromJson(Map<String, dynamic> json) {
-    String readString(List<String> keys, {String fallback = ''}) {
-      for (final key in keys) {
-        final raw = json[key];
-        if (raw == null) continue;
-        final text = raw.toString().trim();
-        if (text.isEmpty) continue;
-        return text;
-      }
-      return fallback;
-    }
-
-    DateTime readDate(List<String> keys, {required DateTime fallback}) {
-      for (final key in keys) {
-        final raw = json[key];
-        if (raw == null) continue;
-        if (raw is DateTime) return raw;
-        final parsed = DateTime.tryParse(raw.toString());
-        if (parsed != null) return parsed;
-      }
-      return fallback;
-    }
-
-    double readDouble(List<String> keys, {double fallback = 0.0}) {
-      for (final key in keys) {
-        final raw = json[key];
-        if (raw == null) continue;
-        if (raw is num) return raw.toDouble();
-        final parsed = double.tryParse(raw.toString());
-        if (parsed != null) return parsed;
-      }
-      return fallback;
-    }
-
-    final nowUtc = DateTime.now().toUtc();
-    final startDate = readDate(
-      const ['start_date', 'subscription_start_date', 'startDate'],
-      fallback: nowUtc,
-    );
-    final endDate = readDate(
-      const ['end_date', 'subscription_end_date', 'endDate'],
-      fallback: startDate,
-    );
-
-    return Subscription(
-      id: readString(const ['id']),
-      studentId: readString(const ['student_id', 'studentId']),
-      planName: readString(const ['plan_name', 'planName']),
-      startDate: startDate,
-      endDate: endDate,
-      amount: readDouble(const ['amount', 'subscription_amount']),
-      status: SubscriptionStatus.fromString(
-        readString(const ['status', 'subscription_status'], fallback: 'pending'),
-      ),
-      createdAt: readDate(
-        const ['created_at', 'createdAt'],
-        fallback: nowUtc,
-      ),
-      updatedAt: readDate(
-        const ['updated_at', 'updatedAt'],
-        fallback: nowUtc,
-      ),
-    );
   }
 
   Map<String, dynamic> toJson() {

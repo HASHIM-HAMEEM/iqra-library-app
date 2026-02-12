@@ -12,22 +12,6 @@ class IdCardVerification extends Equatable {
     this.activeEndDate,
   });
 
-  final String studentId;
-  final String firstName;
-  final String lastName;
-  final String? seatNumber;
-  final DateTime? issuedAt;
-
-  /// `true` = active, `false` = not active, `null` = not provided by backend.
-  final bool? hasActiveSubscription;
-  final String? activePlanName;
-  final DateTime? activeEndDate;
-
-  String get fullName => '$firstName $lastName';
-
-  String get shortStudentId =>
-      studentId.length >= 8 ? studentId.substring(0, 8).toUpperCase() : studentId.toUpperCase();
-
   factory IdCardVerification.fromJson(Map<String, dynamic> json) {
     String? readString(List<String> keys) {
       for (final key in keys) {
@@ -81,6 +65,22 @@ class IdCardVerification extends Equatable {
       activeEndDate: parseDate(json['active_end_date'] ?? json['activeEndDate']),
     );
   }
+
+  final String studentId;
+  final String firstName;
+  final String lastName;
+  final String? seatNumber;
+  final DateTime? issuedAt;
+
+  /// `true` = active, `false` = not active, `null` = not provided by backend.
+  final bool? hasActiveSubscription;
+  final String? activePlanName;
+  final DateTime? activeEndDate;
+
+  String get fullName => '$firstName $lastName';
+
+  String get shortStudentId =>
+      studentId.length >= 8 ? studentId.substring(0, 8).toUpperCase() : studentId.toUpperCase();
 
   @override
   List<Object?> get props => [

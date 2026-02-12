@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:library_registration_app/core/theme/app_colors.dart';
@@ -26,7 +26,6 @@ class _VerifyStudentCardPageState extends ConsumerState<VerifyStudentCardPage> {
   final TextEditingController _manualTokenController = TextEditingController();
   final MobileScannerController _scannerController = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
-    returnImage: false,
   );
 
   @override
@@ -231,12 +230,12 @@ class _VerifyStudentCardPageState extends ConsumerState<VerifyStudentCardPage> {
           actions: [
             IconButton(
               icon: const Icon(Icons.flash_on),
-              onPressed: () => _scannerController.toggleTorch(),
+              onPressed: _scannerController.toggleTorch,
               tooltip: 'Toggle Flash',
             ),
             IconButton(
               icon: const Icon(Icons.flip_camera_ios),
-              onPressed: () => _scannerController.switchCamera(),
+              onPressed: _scannerController.switchCamera,
               tooltip: 'Switch Camera',
             ),
           ],
@@ -409,7 +408,7 @@ class _VerifyStudentCardPageState extends ConsumerState<VerifyStudentCardPage> {
     final theme = Theme.of(context);
     final issuedAt = v.issuedAt;
     final hasActive = v.hasActiveSubscription;
-    final bool hasSummary = hasActive != null;
+    final hasSummary = hasActive != null;
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -532,7 +531,7 @@ class _VerifyStudentCardPageState extends ConsumerState<VerifyStudentCardPage> {
                             ),
                           ],
                         ),
-                        if (hasActive == true) ...[
+                        if (hasActive ?? false) ...[
                           const SizedBox(height: 16),
                           if ((v.activePlanName ?? '').trim().isNotEmpty)
                             Text(
@@ -677,7 +676,6 @@ class ScannerOverlay extends StatelessWidget {
                     ),
                   ),
                   Align(
-                    alignment: Alignment.center,
                     child: Container(
                       height: cutoutSize,
                       width: cutoutSize,
@@ -692,7 +690,6 @@ class ScannerOverlay extends StatelessWidget {
             ),
             // Border overlay
             Align(
-              alignment: Alignment.center,
               child: Container(
                 height: cutoutSize,
                 width: cutoutSize,

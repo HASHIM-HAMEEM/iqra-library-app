@@ -1,14 +1,13 @@
-import 'dart:typed_data';
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:library_registration_app/core/config/app_config.dart';
 import 'package:library_registration_app/core/platform/export_file_saver.dart';
-import 'package:library_registration_app/core/services/id_card_service.dart';
-import 'package:library_registration_app/core/services/id_card_pdf_service.dart';
 import 'package:library_registration_app/core/responsive/responsive.dart';
+import 'package:library_registration_app/core/services/id_card_pdf_service.dart';
+import 'package:library_registration_app/core/services/id_card_service.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
@@ -41,7 +40,6 @@ class _StudentIdCardPageState extends ConsumerState<StudentIdCardPage> {
       CustomNotification.show(
         context,
         message: 'Secure token issued for ID card.',
-        type: NotificationType.success,
       );
     } catch (e) {
       if (!mounted) return;
@@ -58,7 +56,7 @@ class _StudentIdCardPageState extends ConsumerState<StudentIdCardPage> {
   Future<void> _downloadCard() async {
     setState(() => _isDownloading = true);
     try {
-      final Uint8List? image = await _screenshotController.capture(
+      final image = await _screenshotController.capture(
         // High pixel ratio keeps printable PNG exports sharp.
         pixelRatio: 4,
         delay: const Duration(milliseconds: 250),
@@ -82,7 +80,6 @@ class _StudentIdCardPageState extends ConsumerState<StudentIdCardPage> {
       CustomNotification.show(
         context,
         message: 'ID card downloaded successfully!',
-        type: NotificationType.success,
       );
     } catch (e) {
       if (!mounted) return;
@@ -118,7 +115,6 @@ class _StudentIdCardPageState extends ConsumerState<StudentIdCardPage> {
       CustomNotification.show(
         context,
         message: 'ID card PDF downloaded successfully!',
-        type: NotificationType.success,
       );
     } catch (e) {
       if (!mounted) return;
@@ -300,7 +296,6 @@ class _StudentIdCardPageState extends ConsumerState<StudentIdCardPage> {
                       CustomNotification.show(
                         context,
                         message: 'Verification URL copied to clipboard.',
-                        type: NotificationType.success,
                       );
                     },
                     icon: const Icon(Icons.copy_outlined),
@@ -467,7 +462,7 @@ class _StudentIdCardPageState extends ConsumerState<StudentIdCardPage> {
                                     style: TextStyle(
                                       color: const Color(0xFFD4A843).withValues(alpha: 0.9),
                                       fontWeight: FontWeight.w600,
-                                      letterSpacing: 1.0,
+                                      letterSpacing: 1,
                                       fontSize: 9,
                                     ),
                                   ),
@@ -483,9 +478,9 @@ class _StudentIdCardPageState extends ConsumerState<StudentIdCardPage> {
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
-                                Colors.white.withValues(alpha: 0.0),
+                                Colors.white.withValues(alpha: 0),
                                 Colors.white.withValues(alpha: 0.15),
-                                Colors.white.withValues(alpha: 0.0),
+                                Colors.white.withValues(alpha: 0),
                               ],
                             ),
                           ),
@@ -556,9 +551,9 @@ class _StudentIdCardPageState extends ConsumerState<StudentIdCardPage> {
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
-                                Colors.white.withValues(alpha: 0.0),
+                                Colors.white.withValues(alpha: 0),
                                 Colors.white.withValues(alpha: 0.1),
-                                Colors.white.withValues(alpha: 0.0),
+                                Colors.white.withValues(alpha: 0),
                               ],
                             ),
                           ),
@@ -635,12 +630,12 @@ class _StudentIdCardPageState extends ConsumerState<StudentIdCardPage> {
           ),
           child: Column(
             children: [
-              Text(
+              const Text(
                 'SCAN TO VERIFY',
                 style: TextStyle(
-                  color: const Color(0xFF0D253F),
+                  color: Color(0xFF0D253F),
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 2.0,
+                  letterSpacing: 2,
                   fontSize: 12,
                 ),
               ),
@@ -657,10 +652,8 @@ class _StudentIdCardPageState extends ConsumerState<StudentIdCardPage> {
                 ),
                 child: QrImageView(
                   data: payload.qrData,
-                  version: QrVersions.auto,
                   size: 140,
                   padding: EdgeInsets.zero,
-                  gapless: true,
                   eyeStyle: const QrEyeStyle(
                     eyeShape: QrEyeShape.square,
                     color: Color(0xFF0D253F),

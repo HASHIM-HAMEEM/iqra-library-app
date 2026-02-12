@@ -529,14 +529,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _clearSession();
       state = state.copyWith(
         requiresReauth: true,
-        user: null,
       );
     } catch (e) {
       await _clearSession();
       state = state.copyWith(
-        user: null,
         requiresReauth: true,
-        error: null,
       );
     }
   }
@@ -577,7 +574,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = state.copyWith(
           isAuthenticated: false,
           requiresReauth: true,
-          user: null,
         );
         return;
       }
@@ -635,7 +631,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = state.copyWith(
           isAuthenticated: false,
           requiresReauth: true,
-          user: null,
         );
         return;
       }
@@ -652,7 +647,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
           state = state.copyWith(
             isAuthenticated: false,
             requiresReauth: true,
-            user: null,
           );
           return;
         }
@@ -679,7 +673,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
             state = state.copyWith(
               isAuthenticated: false,
               requiresReauth: true,
-              user: null,
             );
             return;
           }

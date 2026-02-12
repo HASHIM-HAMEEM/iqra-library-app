@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:library_registration_app/core/responsive/responsive.dart';
 import 'package:library_registration_app/core/theme/app_colors.dart';
@@ -561,7 +561,7 @@ class _ActivityTableRowState extends State<_ActivityTableRow> {
   Widget build(BuildContext context) {
     final theme = widget.theme;
     final typeName = widget.log.activityType.name
-        .replaceAllMapped(RegExp(r'[A-Z]'), (m) => ' ${m[0]}')
+        .replaceAllMapped(RegExp('[A-Z]'), (m) => ' ${m[0]}')
         .trim();
 
     return MouseRegion(

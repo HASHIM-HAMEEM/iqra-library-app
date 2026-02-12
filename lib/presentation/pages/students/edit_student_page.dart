@@ -4,18 +4,18 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:library_registration_app/core/utils/permission_service.dart';
 import 'package:library_registration_app/core/responsive/responsive.dart';
+import 'package:library_registration_app/core/services/image_compression_service.dart';
 import 'package:library_registration_app/core/theme/app_colors.dart';
 import 'package:library_registration_app/core/theme/design_tokens.dart';
-import 'package:library_registration_app/core/services/image_compression_service.dart';
+import 'package:library_registration_app/core/utils/permission_service.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
+import 'package:library_registration_app/presentation/providers/database_provider.dart';
 import 'package:library_registration_app/presentation/providers/students/students_notifier.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
-import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
-import 'package:library_registration_app/presentation/providers/database_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
 import 'package:library_registration_app/presentation/widgets/common/async_avatar.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 import 'package:library_registration_app/presentation/widgets/common/page_header.dart';
 
 class EditStudentPage extends ConsumerStatefulWidget {
@@ -118,7 +118,7 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
                   final img = await picker.pickImage(
                     source: ImageSource.gallery,
                   );
-                  if (img != null) _processSelectedImage(img);
+                  if (img != null) unawaited(_processSelectedImage(img));
                 }
               },
             ),
@@ -131,14 +131,14 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
                   final img = await picker.pickImage(
                     source: ImageSource.camera,
                   );
-                  if (img != null) _processSelectedImage(img);
+                  if (img != null) unawaited(_processSelectedImage(img));
                 }
               },
             ),
             if (_selectedImageBytes != null || _profileImagePath != null)
               ListTile(
-                leading: Icon(Icons.delete, color: AppColors.error),
-                title: Text(
+                leading: const Icon(Icons.delete, color: AppColors.error),
+                title: const Text(
                   'Remove Photo',
                   style: TextStyle(color: AppColors.error),
                 ),
@@ -183,12 +183,13 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
         _hasChanges = true;
       });
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         CustomNotification.show(
           context,
           message: 'Error processing image: $e',
           type: NotificationType.error,
         );
+      }
     } finally {
       if (mounted) setState(() => _isCompressingImage = false);
     }
@@ -208,7 +209,7 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Discard', style: TextStyle(color: AppColors.error)),
+            child: const Text('Discard', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -230,7 +231,7 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
     setState(() => _isLoading = true);
     try {
       // 1. Upload image if new
-      String? finalImagePath = _profileImagePath;
+      var finalImagePath = _profileImagePath;
       if (_selectedImageBytes != null) {
         final supabase = ref.read(supabaseServiceProvider);
         finalImagePath = await supabase.uploadProfileImage(
@@ -256,7 +257,7 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
         seatNumber: _seatNumberController.text.trim().isEmpty
             ? null
             : _seatNumberController.text.trim(),
-        dateOfBirth: _selectedDate!,
+        dateOfBirth: _selectedDate,
         profileImagePath: finalImagePath,
         // Subscriptions processed separately now - retain old values if they existed to play safe
         subscriptionPlan: _loadedStudent!.subscriptionPlan,
@@ -273,17 +274,17 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
         CustomNotification.show(
           context,
           message: 'Student updated successfully',
-          type: NotificationType.success,
         );
         Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         CustomNotification.show(
           context,
           message: 'Update failed: $e',
           type: NotificationType.error,
         );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -305,8 +306,9 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
         backgroundColor: theme.colorScheme.surface,
         body: studentAsync.when(
           data: (student) {
-            if (student == null)
+            if (student == null) {
               return const Center(child: Text('Student not found'));
+            }
 
             // Initialization
             if (_loadedStudent == null || _loadedStudent!.id != student.id) {
@@ -567,7 +569,7 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
           _firstNameController,
           'First Name',
           Icons.person_outline,
-          validator: (v) => v?.isEmpty == true ? 'Required' : null,
+          validator: (v) => v?.isEmpty ?? false ? 'Required' : null,
         ),
         const SizedBox(height: 16),
         _buildModernTextField(
@@ -575,7 +577,7 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
           _lastNameController,
           'Last Name',
           Icons.person_outline,
-          validator: (v) => v?.isEmpty == true ? 'Required' : null,
+          validator: (v) => v?.isEmpty ?? false ? 'Required' : null,
         ),
         const SizedBox(height: 16),
         InkWell(
@@ -633,7 +635,7 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
           'Email',
           Icons.email_outlined,
           keyboardType: TextInputType.emailAddress,
-          validator: (v) => v?.contains('@') == true ? null : 'Invalid email',
+          validator: (v) => v?.contains('@') ?? false ? null : 'Invalid email',
         ),
         const SizedBox(height: 16),
         _buildModernTextField(

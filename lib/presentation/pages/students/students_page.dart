@@ -619,7 +619,6 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                               color: selected
                                   ? theme.colorScheme.secondary
                                   : Colors.transparent,
-                              width: 1,
                             ),
                           ),
                           child: Text(
@@ -771,15 +770,15 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
       return SliverToBoxAdapter(child: _buildStudentsDataTable(students));
     }
 
-    final columns = 2;
-    final aspect = 2.2;
+    const columns = 2;
+    const aspect = 2.2;
     return SliverGrid(
       delegate: SliverChildBuilderDelegate(
         (context, index) =>
             RepaintBoundary(child: _buildModernStudentCard(students[index])),
         childCount: students.length,
       ),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: columns,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
@@ -1232,7 +1231,6 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                         CustomNotification.show(
                           context,
                           message: '${student.fullName} deleted successfully',
-                          type: NotificationType.success,
                         );
                       }
                     } catch (e) {

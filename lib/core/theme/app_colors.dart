@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:library_registration_app/core/theme/app_theme.dart' show AppTheme;
 
 /// Single source of truth for semantic colour constants used across the app.
 ///

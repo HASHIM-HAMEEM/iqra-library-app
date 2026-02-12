@@ -5,10 +5,7 @@ import 'package:library_registration_app/presentation/providers/database_provide
 
 class ProfilePhotoViewPage extends ConsumerStatefulWidget {
   const ProfilePhotoViewPage({
-    super.key,
-    required this.imagePath,
-    required this.fallbackInitials,
-    required this.heroTag,
+    required this.imagePath, required this.fallbackInitials, required this.heroTag, super.key,
     this.title,
   });
 
@@ -57,16 +54,19 @@ class _ProfilePhotoViewPageState extends ConsumerState<ProfilePhotoViewPage> {
   void _handleDoubleTap() {
     final details = _doubleTapDetails;
     if (details == null) return;
-    const double zoomScale = 2.0;
+    const zoomScale = 2;
     final current = _controller.value;
     final isZoomed = current.getMaxScaleOnAxis() > 1.01;
     if (isZoomed) {
       _controller.value = Matrix4.identity();
     } else {
       final tapPosition = details.localPosition;
+      // ignore: deprecated_member_use
       final zoomed = Matrix4.identity()
+        // ignore: deprecated_member_use
         ..translate(-tapPosition.dx * (zoomScale - 1), -tapPosition.dy * (zoomScale - 1))
-        ..scale(zoomScale);
+        // ignore: deprecated_member_use
+        ..scale(zoomScale.toDouble());
       _controller.value = zoomed;
     }
   }
@@ -101,8 +101,6 @@ class _ProfilePhotoViewPageState extends ConsumerState<ProfilePhotoViewPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   alignment: Alignment.centerLeft,
                   child: Row(
-                    mainAxisSize: MainAxisSize.max,
-                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       IconButton(
                         onPressed: () => Navigator.of(context).maybePop(),
@@ -151,8 +149,8 @@ class _ProfilePhotoViewPageState extends ConsumerState<ProfilePhotoViewPage> {
       onDoubleTap: _handleDoubleTap,
       child: InteractiveViewer(
         transformationController: _controller,
-        minScale: 1.0,
-        maxScale: 4.0,
+        minScale: 1,
+        maxScale: 4,
         clipBehavior: Clip.none,
         child: imageWidget,
       ),
@@ -179,4 +177,3 @@ class _ProfilePhotoViewPageState extends ConsumerState<ProfilePhotoViewPage> {
     );
   }
 }
-

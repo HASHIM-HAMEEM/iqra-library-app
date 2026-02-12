@@ -4,16 +4,14 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-
-import 'package:library_registration_app/core/utils/permission_service.dart';
-
 import 'package:library_registration_app/core/services/image_compression_service.dart';
-import 'package:library_registration_app/presentation/providers/students/students_notifier.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
+import 'package:library_registration_app/core/utils/permission_service.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
-import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
+import 'package:library_registration_app/presentation/providers/students/students_notifier.dart';
 import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
 import 'package:library_registration_app/presentation/widgets/common/async_avatar.dart';
-import 'package:library_registration_app/core/theme/design_tokens.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 import 'package:library_registration_app/presentation/widgets/common/page_header.dart';
 
 class AddStudentPage extends ConsumerStatefulWidget {
@@ -103,7 +101,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
       ),
     );
 
-    if (shouldDiscard == true && mounted) {
+    if ((shouldDiscard ?? false) && mounted) {
       Navigator.of(context).pop();
     }
   }
@@ -251,7 +249,6 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
           context,
           message:
               'Image optimized! Size reduced by $savings% (${ImageCompressionService.formatFileSize(originalSize)} → ${ImageCompressionService.formatFileSize(compressedSize)})',
-          type: NotificationType.success,
         );
       }
 
@@ -402,12 +399,6 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
             seatNumber: _seatNumberController.text.trim().isEmpty
                 ? null
                 : _seatNumberController.text.trim(),
-            profileImagePath: null, // will be set after uploading to storage
-            subscriptionPlan: null,
-            subscriptionStartDate: null,
-            subscriptionEndDate: null,
-            subscriptionAmount: null,
-            subscriptionStatus: null,
           );
       // If there is a local photo, upload to Supabase Storage and update student row with public URL
       if (studentId != null && _selectedImageBytes != null) {
@@ -437,7 +428,6 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
           context,
           message:
               'Student added successfully. You can add a subscription from the Subscriptions screen.',
-          type: NotificationType.success,
         );
         Navigator.of(context).pop();
       }
@@ -499,7 +489,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
       return null; // Phone is optional
     }
 
-    final digitsOnly = value.replaceAll(RegExp(r'[^0-9]'), '');
+    final digitsOnly = value.replaceAll(RegExp('[^0-9]'), '');
     if (digitsOnly.length != 10) {
       return 'Phone number must be 10 digits';
     }
@@ -512,7 +502,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
   void _nextPage() {
     // Only advance from page 0 -> 1 (there are exactly 2 pages now)
     if (_currentPage == 0) {
-      final bool ok = _formKey.currentState?.validate() ?? false;
+      final ok = _formKey.currentState?.validate() ?? false;
       if (_selectedDate == null) {
         setState(() => _dobError = true);
       }
@@ -800,7 +790,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
   }
 
   Widget _buildMobileLayout(BuildContext context, ThemeData theme) {
-    final double progress = (_currentPage + 1) / 2;
+    final progress = (_currentPage + 1) / 2;
 
     return _wrapWithDiscardGuard(
       Scaffold(
@@ -865,11 +855,11 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
                     },
                     children: [
                       SingleChildScrollView(
-                        padding: EdgeInsets.fromLTRB(16, 8, 16, 100),
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                         child: _buildPersonalInfoPage(),
                       ),
                       SingleChildScrollView(
-                        padding: EdgeInsets.fromLTRB(16, 8, 16, 100),
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                         child: _buildProfilePhotoPage(),
                       ),
                     ],
@@ -973,7 +963,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Enter the student\'s basic details',
+                "Enter the student's basic details",
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -1296,11 +1286,9 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
                           initials:
                               ((_firstNameController.text.trim().isNotEmpty ||
                                   _lastNameController.text.trim().isNotEmpty)
-                              ? (_firstNameController.text.trim() +
-                                        ' ' +
-                                        _lastNameController.text.trim())
+                              ? '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}'
                                     .trim()
-                                    .split(RegExp(r"\s+"))
+                                    .split(RegExp(r'\s+'))
                                     .map(
                                       (e) => e.isNotEmpty
                                           ? e[0].toUpperCase()

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:library_registration_app/core/utils/error_mapper.dart';
 import 'package:library_registration_app/core/responsive/responsive.dart';
+import 'package:library_registration_app/core/utils/error_mapper.dart';
 import 'package:library_registration_app/core/utils/telemetry_service.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
@@ -35,9 +35,8 @@ class SubscriptionDetailsPage extends ConsumerWidget {
                   _showEdit(
                     context,
                     ref,
-                    (ref.read(subscriptionByIdProvider(id)).value)!,
+                    ref.read(subscriptionByIdProvider(id)).value!,
                   );
-                  break;
                 case 'renew':
                   {
                     final s = ref.read(subscriptionByIdProvider(id)).value;
@@ -214,8 +213,9 @@ class SubscriptionDetailsPage extends ConsumerWidget {
                       validator: (v) {
                         if (v == null || v.isEmpty) return 'Required';
                         final parsed = double.tryParse(v);
-                        if (parsed == null || parsed < 0)
+                        if (parsed == null || parsed < 0) {
                           return 'Invalid amount';
+                        }
                         return null;
                       },
                     ),
@@ -254,19 +254,15 @@ class SubscriptionDetailsPage extends ConsumerWidget {
                                       sub.copyWith(startDate: newStart),
                                     );
                                 // Invalidate specific providers for immediate UI update
-                                ref.invalidate(subscriptionsProvider);
-                                ref.invalidate(
-                                  subscriptionsByStudentProvider(sub.studentId),
-                                );
-                                ref.invalidate(
-                                  subscriptionByIdProvider(sub.id),
-                                );
+                                ref
+                                  ..invalidate(subscriptionsProvider)
+                                  ..invalidate(subscriptionsByStudentProvider(sub.studentId))
+                                  ..invalidate(subscriptionByIdProvider(sub.id));
                                 if (sheetCtx.mounted) {
                                   Navigator.of(sheetCtx).pop();
                                   CustomNotification.show(
                                     context,
                                     message: 'Start date updated',
-                                    type: NotificationType.success,
                                   );
                                 }
                               }
@@ -311,7 +307,7 @@ class SubscriptionDetailsPage extends ConsumerWidget {
                                 ),
                               );
                           // Ensure list tiles and counters reflect instantly
-                          ref
+                          await ref
                               .read(subscriptionsNotifierProvider.notifier)
                               .refresh();
                           ref.invalidate(subscriptionByIdProvider(sub.id));
@@ -359,7 +355,7 @@ class SubscriptionDetailsPage extends ConsumerWidget {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(ctx).pop(null),
+              onPressed: () => Navigator.of(ctx).pop(),
               child: const Text('Cancel'),
             ),
             FilledButton(
@@ -392,12 +388,14 @@ class SubscriptionDetailsPage extends ConsumerWidget {
         context: {'subscription_id': id, 'picked': picked.toIso8601String()},
       );
       if (!context.mounted) return;
+      if (context.mounted) {
       final msg = ErrorMapper.friendly(e);
       CustomNotification.show(
         context,
         message: msg,
         type: NotificationType.error,
       );
+    }
       if (ErrorMapper.isOverlap(e)) {
         final proceed = await showDialog<bool>(
           context: context,

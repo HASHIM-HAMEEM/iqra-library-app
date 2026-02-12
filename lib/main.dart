@@ -23,8 +23,8 @@ import 'package:flutter/material.dart';
 // Release builds: avoid importing ui we don't need
 import 'package:flutter/services.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
-import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:library_registration_app/core/config/app_config.dart';
 import 'package:library_registration_app/core/routing/app_router.dart';
 import 'package:library_registration_app/core/services/connectivity_service.dart';

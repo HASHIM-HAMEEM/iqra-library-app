@@ -1,11 +1,11 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:library_registration_app/core/config/app_config.dart';
-import 'package:library_registration_app/core/theme/design_tokens.dart';
-import 'package:library_registration_app/core/theme/app_theme.dart';
 import 'package:library_registration_app/core/responsive/responsive.dart';
+import 'package:library_registration_app/core/theme/app_theme.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
 import 'package:library_registration_app/presentation/providers/auth/setup_provider.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';

@@ -1,6 +1,3 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
-
 import 'package:library_registration_app/data/services/export_service.dart';
 import 'package:library_registration_app/domain/entities/activity_log.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
@@ -8,6 +5,7 @@ import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/presentation/providers/activity_logs/activity_logs_provider.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
 import 'package:library_registration_app/presentation/providers/subscriptions/subscriptions_provider.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'export_provider.g.dart';
 
@@ -57,7 +55,7 @@ class ExportNotifier extends _$ExportNotifier {
 
   Future<void> exportData(ExportType type) async {
     try {
-      state = state.copyWith(status: ExportStatus.loading, progress: 0.0);
+      state = state.copyWith(status: ExportStatus.loading, progress: 0);
 
       final exportService = ref.read(exportServiceProvider);
       String filePath;
@@ -76,20 +74,20 @@ class ExportNotifier extends _$ExportNotifier {
       state = state.copyWith(
         status: ExportStatus.success,
         filePath: filePath,
-        progress: 1.0,
+        progress: 1,
       );
     } catch (e) {
       state = state.copyWith(
         status: ExportStatus.error,
         errorMessage: e.toString(),
-        progress: 0.0,
+        progress: 0,
       );
     }
   }
 
   Future<void> exportDataCsv(ExportType type) async {
     try {
-      state = state.copyWith(status: ExportStatus.loading, progress: 0.0);
+      state = state.copyWith(status: ExportStatus.loading, progress: 0);
 
       final exportService = ref.read(exportServiceProvider);
       String filePath;
@@ -108,13 +106,13 @@ class ExportNotifier extends _$ExportNotifier {
       state = state.copyWith(
         status: ExportStatus.success,
         filePath: filePath,
-        progress: 1.0,
+        progress: 1,
       );
     } catch (e) {
       state = state.copyWith(
         status: ExportStatus.error,
         errorMessage: e.toString(),
-        progress: 0.0,
+        progress: 0,
       );
     }
   }

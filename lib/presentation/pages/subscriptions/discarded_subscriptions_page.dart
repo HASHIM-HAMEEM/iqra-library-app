@@ -45,8 +45,9 @@ class _DiscardedSubscriptionsPageState
   @override
   void dispose() {
     _debounce?.cancel();
-    _searchCtrl.removeListener(_onSearchChanged);
-    _searchCtrl.dispose();
+    _searchCtrl
+      ..removeListener(_onSearchChanged)
+      ..dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -142,7 +143,6 @@ class _DiscardedSubscriptionsPageState
       CustomNotification.show(
         context,
         message: 'Subscription restored',
-        type: NotificationType.success,
       );
     } catch (e) {
       if (!mounted) return;
@@ -169,7 +169,7 @@ class _DiscardedSubscriptionsPageState
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Delete', style: TextStyle(color: AppColors.error)),
+            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -185,7 +185,6 @@ class _DiscardedSubscriptionsPageState
       CustomNotification.show(
         context,
         message: 'Subscription permanently deleted',
-        type: NotificationType.success,
       );
     } catch (e) {
       if (!mounted) return;
@@ -226,7 +225,6 @@ class _DiscardedSubscriptionsPageState
       CustomNotification.show(
         context,
         message: 'Moved to trash',
-        type: NotificationType.success,
       );
     } catch (e) {
       if (!mounted) return;
@@ -253,7 +251,7 @@ class _DiscardedSubscriptionsPageState
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Delete', style: TextStyle(color: AppColors.error)),
+            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -267,7 +265,6 @@ class _DiscardedSubscriptionsPageState
       CustomNotification.show(
         context,
         message: 'Subscription permanently deleted',
-        type: NotificationType.success,
       );
     } catch (e) {
       if (!mounted) return;

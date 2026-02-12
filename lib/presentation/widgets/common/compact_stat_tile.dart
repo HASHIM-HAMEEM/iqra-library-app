@@ -65,7 +65,7 @@ class CompactStatTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.12),
               borderRadius: AppRadius.borderMd,
-              border: Border.all(color: color.withValues(alpha: 0.1), width: 1),
+              border: Border.all(color: color.withValues(alpha: 0.1)),
             ),
             child: TweenAnimationBuilder<double>(
               tween: Tween<double>(begin: 0.95, end: 1),

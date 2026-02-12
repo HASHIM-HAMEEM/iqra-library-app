@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
 import 'package:library_registration_app/core/theme/app_theme.dart';
 import 'package:library_registration_app/core/theme/design_tokens.dart';
-import 'package:library_registration_app/core/responsive/responsive.dart';
 
 class PrimaryButton extends StatefulWidget {
   const PrimaryButton({

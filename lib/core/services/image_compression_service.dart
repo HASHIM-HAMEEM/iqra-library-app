@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -72,7 +71,6 @@ class ImageCompressionService {
           quality: a.quality,
           minWidth: a.minSize,
           minHeight: a.minSize,
-          format: CompressFormat.jpeg,
         );
         if (out.isEmpty) continue;
         last = out;

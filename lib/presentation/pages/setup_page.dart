@@ -1,13 +1,13 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:library_registration_app/core/responsive/responsive.dart';
 import 'package:library_registration_app/core/theme/design_tokens.dart';
 // import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
 import 'package:library_registration_app/presentation/providers/auth/setup_provider.dart';
+import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_text_field.dart';
 import 'package:library_registration_app/presentation/widgets/common/primary_button.dart';
-import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 import 'package:local_auth/local_auth.dart';
 
 class SetupPage extends ConsumerStatefulWidget {
@@ -130,7 +130,6 @@ class _SetupPageState extends ConsumerState<SetupPage>
       CustomNotification.show(
         context,
         message: 'Setup completed successfully! Please sign in.',
-        type: NotificationType.success,
       );
     }
   }
@@ -230,7 +229,7 @@ class _SetupPageState extends ConsumerState<SetupPage>
               mobile: 96,
               tablet: 120,
               desktop: 140,
-            ).toDouble();
+            );
             final isLight = theme.brightness == Brightness.light;
             final bgColor = isLight
                 ? theme.colorScheme.surface

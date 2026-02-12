@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,7 +7,6 @@ import 'package:intl/intl.dart';
 import 'package:library_registration_app/core/responsive/responsive.dart';
 import 'package:library_registration_app/core/theme/app_colors.dart';
 import 'package:library_registration_app/core/theme/design_tokens.dart';
-
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
@@ -15,11 +15,11 @@ import 'package:library_registration_app/presentation/providers/subscriptions/su
 import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 import 'package:library_registration_app/presentation/widgets/common/modern_text_field.dart';
+import 'package:library_registration_app/presentation/widgets/common/page_header.dart';
 import 'package:library_registration_app/presentation/widgets/common/primary_button.dart';
 import 'package:library_registration_app/presentation/widgets/common/typeahead_student_field.dart';
 import 'package:library_registration_app/presentation/widgets/subscriptions/subscription_card.dart';
 import 'package:library_registration_app/presentation/widgets/subscriptions/subscription_filters.dart';
-import 'package:library_registration_app/presentation/widgets/common/page_header.dart';
 import 'package:library_registration_app/presentation/widgets/subscriptions/subscription_timeline.dart';
 
 String _getStatusDisplayName(SubscriptionStatus status) {
@@ -291,7 +291,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
 
   Widget _buildAnimatedFAB(ThemeData theme) {
     return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
+      tween: Tween(begin: 0, end: 1),
       duration: const Duration(milliseconds: 500),
       curve: Curves.easeOutBack,
       builder: (context, value, child) {
@@ -438,7 +438,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
         ),
       );
     } else {
-      final int crossAxisCount = (screenWidth / 360).floor().clamp(2, 4);
+      final crossAxisCount = (screenWidth / 360).floor().clamp(2, 4);
       return SliverPadding(
         padding: padding,
         sliver: SliverGrid(
@@ -670,7 +670,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
         ],
       ),
     );
-    if (confirmed == true) {
+    if (confirmed ?? false) {
       try {
         await ref
             .read(subscriptionsNotifierProvider.notifier)
@@ -680,7 +680,6 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
           CustomNotification.show(
             context,
             message: 'Subscription moved to trash',
-            type: NotificationType.success,
           );
         }
       } catch (e) {
@@ -710,7 +709,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
+            child: const Text(
               'Cancel Subscription',
               style: TextStyle(color: AppColors.error),
             ),
@@ -719,7 +718,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
       ),
     );
 
-    if (confirmed == true) {
+    if (confirmed ?? false) {
       try {
         await ref
             .read(subscriptionsNotifierProvider.notifier)
@@ -729,7 +728,6 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
           CustomNotification.show(
             context,
             message: 'Subscription cancelled',
-            type: NotificationType.success,
           );
         }
       } catch (e) {
@@ -799,7 +797,6 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
           CustomNotification.show(
             context,
             message: 'Renewed successfully',
-            type: NotificationType.success,
           );
         }
       } catch (e) {
@@ -845,9 +842,6 @@ class _AddSubscriptionSheetState extends ConsumerState<_AddSubscriptionSheet> {
     return SingleChildScrollView(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-        left: 0,
-        right: 0,
-        top: 0, // Reset top padding as we'll use a container
       ),
       child: Container(
         decoration: BoxDecoration(
@@ -943,7 +937,7 @@ class _AddSubscriptionSheetState extends ConsumerState<_AddSubscriptionSheet> {
                       label: 'Plan Name',
                       icon: Icons.badge_outlined,
                       isRequired: true,
-                      validator: (v) => v?.isEmpty == true ? 'Required' : null,
+                      validator: (v) => v?.isEmpty ?? false ? 'Required' : null,
                     ),
                     const SizedBox(height: 16),
                     ModernTextField(
@@ -1158,7 +1152,6 @@ class _AddSubscriptionSheetState extends ConsumerState<_AddSubscriptionSheet> {
         CustomNotification.show(
           context,
           message: 'Created successfully',
-          type: NotificationType.success,
         );
       }
     } catch (e) {
@@ -1210,9 +1203,6 @@ class _EditSubscriptionSheetState
     return SingleChildScrollView(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-        left: 0,
-        right: 0,
-        top: 0, // Reset top padding as we'll use a container
       ),
       child: Container(
         decoration: BoxDecoration(
@@ -1298,7 +1288,7 @@ class _EditSubscriptionSheetState
                       label: 'Plan Name',
                       icon: Icons.badge_outlined,
                       isRequired: true,
-                      validator: (v) => v?.isEmpty == true ? 'Required' : null,
+                      validator: (v) => v?.isEmpty ?? false ? 'Required' : null,
                     ),
                     const SizedBox(height: 16),
                     ModernTextField(
@@ -1316,7 +1306,7 @@ class _EditSubscriptionSheetState
                     const SizedBox(height: 16),
 
                     DropdownButtonFormField<SubscriptionStatus>(
-                      value: _status,
+                      initialValue: _status,
                       decoration: InputDecoration(
                         labelText: 'Status',
                         prefixIcon: Icon(
@@ -1414,7 +1404,6 @@ class _EditSubscriptionSheetState
         CustomNotification.show(
           context,
           message: 'Updated successfully',
-          type: NotificationType.success,
         );
       }
     } catch (e) {

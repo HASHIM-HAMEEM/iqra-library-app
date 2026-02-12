@@ -66,7 +66,7 @@ class SubscriptionsNotifier
       // Log activity
       await _logActivity(
         ActivityType.subscriptionCreated,
-        'Subscription "$planName" was created for student',
+        'Subscription "$planName" was created for $studentId',
         entityId: subscriptionId,
         entityType: 'subscription',
         metadata: {
@@ -79,8 +79,9 @@ class SubscriptionsNotifier
 
       await _loadSubscriptions();
       // Force-refresh streams for immediate UI reflection
-      _ref.invalidate(subscriptionsProvider);
-      _ref.invalidate(subscriptionsByStudentProvider(studentId));
+      _ref
+        ..invalidate(subscriptionsProvider)
+        ..invalidate(subscriptionsByStudentProvider(studentId));
       return subscriptionId;
     } catch (error) {
       rethrow;
@@ -112,8 +113,9 @@ class SubscriptionsNotifier
       );
 
       await _loadSubscriptions();
-      _ref.invalidate(subscriptionsProvider);
-      _ref.invalidate(subscriptionsByStudentProvider(subscription.studentId));
+      _ref
+        ..invalidate(subscriptionsProvider)
+        ..invalidate(subscriptionsByStudentProvider(subscription.studentId));
     } catch (error) {
       rethrow;
     }
@@ -142,8 +144,9 @@ class SubscriptionsNotifier
       );
 
       await _loadSubscriptions();
-      _ref.invalidate(subscriptionsProvider);
-      _ref.invalidate(subscriptionsByStudentProvider(subscription.studentId));
+      _ref
+        ..invalidate(subscriptionsProvider)
+        ..invalidate(subscriptionsByStudentProvider(subscription.studentId));
     } catch (error) {
       rethrow;
     }
@@ -184,8 +187,9 @@ class SubscriptionsNotifier
       );
 
       await _loadSubscriptions();
-      _ref.invalidate(subscriptionsProvider);
-      _ref.invalidate(subscriptionsByStudentProvider(subscription.studentId));
+      _ref
+        ..invalidate(subscriptionsProvider)
+        ..invalidate(subscriptionsByStudentProvider(subscription.studentId));
     } catch (error) {
       rethrow;
     }
@@ -214,8 +218,9 @@ class SubscriptionsNotifier
       );
 
       await _loadSubscriptions();
-      _ref.invalidate(subscriptionsProvider);
-      _ref.invalidate(subscriptionsByStudentProvider(subscription.studentId));
+      _ref
+        ..invalidate(subscriptionsProvider)
+        ..invalidate(subscriptionsByStudentProvider(subscription.studentId));
     } catch (error) {
       rethrow;
     }
