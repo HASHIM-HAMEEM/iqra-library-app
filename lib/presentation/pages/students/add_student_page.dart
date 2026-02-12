@@ -1,19 +1,20 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
 
 import 'package:library_registration_app/core/utils/permission_service.dart';
-import 'package:library_registration_app/core/utils/responsive_utils.dart';
+
 import 'package:library_registration_app/core/services/image_compression_service.dart';
 import 'package:library_registration_app/presentation/providers/students/students_notifier.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
+import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
 import 'package:library_registration_app/presentation/widgets/common/async_avatar.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
+import 'package:library_registration_app/presentation/widgets/common/page_header.dart';
 
 class AddStudentPage extends ConsumerStatefulWidget {
   const AddStudentPage({super.key});
@@ -25,7 +26,6 @@ class AddStudentPage extends ConsumerStatefulWidget {
 class _AddStudentPageState extends ConsumerState<AddStudentPage> {
   final _formKey = GlobalKey<FormState>();
   final _pageController = PageController();
-  static const double _footerHeight = 80;
 
   // Personal Information Controllers
   final _firstNameController = TextEditingController();
@@ -37,7 +37,9 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
 
   DateTime? _selectedDate;
 
-  File? _selectedImage;
+  Uint8List? _selectedImageBytes;
+  String _selectedImageExtension = 'jpg';
+  String? _selectedImageMimeType;
 
   bool _isLoading = false;
   bool _isCompressingImage = false;
@@ -48,21 +50,6 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
   Timer? _emailDebounce;
 
   // Subscription removed from Add flow: handled in Subscriptions screen after student creation
-
-  double _footerTotalHeight(BuildContext context) {
-    final safeBottom = MediaQuery.of(context).padding.bottom;
-    return _footerHeight + safeBottom + 16;
-  }
-
-  EdgeInsets _pagePadding(BuildContext context) {
-    final keyboard = MediaQuery.of(context).viewInsets.bottom;
-    return EdgeInsets.fromLTRB(
-      16,
-      16,
-      16,
-      _footerTotalHeight(context) + keyboard,
-    );
-  }
 
   @override
   void dispose() {
@@ -76,6 +63,60 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
     // No subscription controllers in add flow
     _pageController.dispose();
     super.dispose();
+  }
+
+  bool get _hasUnsavedChanges {
+    return _firstNameController.text.trim().isNotEmpty ||
+        _lastNameController.text.trim().isNotEmpty ||
+        _emailController.text.trim().isNotEmpty ||
+        _phoneController.text.trim().isNotEmpty ||
+        _addressController.text.trim().isNotEmpty ||
+        _seatNumberController.text.trim().isNotEmpty ||
+        _selectedDate != null ||
+        _selectedImageBytes != null;
+  }
+
+  Future<void> _onRequestExit() async {
+    if (_isLoading) return;
+    if (!_hasUnsavedChanges) {
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+
+    final shouldDiscard = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Discard changes?'),
+        content: const Text(
+          'You have unsaved changes in this form. Do you want to discard them?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep editing'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDiscard == true && mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Widget _wrapWithDiscardGuard(Widget child) {
+    return PopScope(
+      canPop: !_hasUnsavedChanges || _isLoading,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        unawaited(_onRequestExit());
+      },
+      child: child,
+    );
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -99,8 +140,8 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
     final picker = ImagePicker();
 
     unawaited(
-      showModalBottomSheet<void>(
-        context: context,
+      showAppBottomSheet<void>(
+        context,
         builder: (BuildContext context) {
           return SafeArea(
             child: Wrap(
@@ -137,14 +178,14 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
                     }
                   },
                 ),
-                if (_selectedImage != null)
+                if (_selectedImageBytes != null)
                   ListTile(
                     leading: const Icon(Icons.delete),
                     title: const Text('Remove Photo'),
                     onTap: () {
                       Navigator.of(context).pop();
                       setState(() {
-                        _selectedImage = null;
+                        _selectedImageBytes = null;
                       });
                     },
                   ),
@@ -160,25 +201,13 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
     setState(() => _isCompressingImage = true);
 
     try {
-      final appDir = await getApplicationDocumentsDirectory();
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_${path.basename(image.path)}';
-      final savedPath = path.join(appDir.path, 'profile_images', fileName);
-
-      // Create directory if it doesn't exist
-      final profileDir = Directory(path.dirname(savedPath));
-      if (!await profileDir.exists()) {
-        await profileDir.create(recursive: true);
-      }
-
-      // Copy original image first
-      final tempImage = await File(image.path).copy(savedPath);
+      final originalBytes = await image.readAsBytes();
 
       // Compress the image
-      File compressedImage;
+      Uint8List compressedImage;
       try {
-        compressedImage = await ImageCompressionService.compressImage(
-          tempImage,
+        compressedImage = await ImageCompressionService.compressImageData(
+          originalBytes,
         );
       } catch (e) {
         // Check if this is our custom ImageTooLargeException
@@ -194,11 +223,11 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
           return;
         }
         // If compression fails, try to use original but still validate size
-        final isValidSize = await ImageCompressionService.validateImageSize(
-          tempImage,
+        final isValidSize = ImageCompressionService.validateImageSizeBytes(
+          originalBytes,
         );
         if (!isValidSize) {
-          final fileSize = await tempImage.length();
+          final fileSize = originalBytes.length;
           if (mounted) {
             CustomNotification.show(
               context,
@@ -209,12 +238,12 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
           }
           return;
         }
-        compressedImage = tempImage;
+        compressedImage = originalBytes;
       }
 
       // Show compression success message if image was actually compressed
-      final originalSize = await tempImage.length();
-      final compressedSize = await compressedImage.length();
+      final originalSize = originalBytes.length;
+      final compressedSize = compressedImage.length;
       if (originalSize != compressedSize && mounted) {
         final savings = ((originalSize - compressedSize) / originalSize * 100)
             .round();
@@ -227,7 +256,19 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
       }
 
       setState(() {
-        _selectedImage = compressedImage;
+        _selectedImageBytes = compressedImage;
+        final fileName = image.name.isNotEmpty ? image.name : image.path;
+        final dot = fileName.lastIndexOf('.');
+        final fallbackExt = dot >= 0
+            ? fileName.substring(dot + 1).toLowerCase()
+            : 'jpg';
+        _selectedImageExtension = ImageCompressionService.detectFileExtension(
+          compressedImage,
+          fallback: fallbackExt,
+        );
+        _selectedImageMimeType = ImageCompressionService.mimeTypeForExtension(
+          _selectedImageExtension,
+        );
       });
     } catch (e) {
       if (mounted) {
@@ -369,12 +410,14 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
             subscriptionStatus: null,
           );
       // If there is a local photo, upload to Supabase Storage and update student row with public URL
-      if (studentId != null && _selectedImage != null) {
+      if (studentId != null && _selectedImageBytes != null) {
         try {
           final supabase = ref.read(supabaseServiceProvider);
           final publicUrl = await supabase.uploadProfileImage(
             studentId: studentId,
-            file: _selectedImage!,
+            imageBytes: _selectedImageBytes!,
+            fileExtension: _selectedImageExtension,
+            contentType: _selectedImageMimeType,
           );
           await supabase.updateStudentProfileImage(studentId, publicUrl);
         } catch (e) {
@@ -497,36 +540,11 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
   }
 
   Widget _buildModernHeader(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      children: [
-        IconButton(
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.arrow_back),
-          tooltip: 'Back',
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Add Student',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.6,
-                ),
-              ),
-              Text(
-                'Create new student profile',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
+    return PageHeader(
+      title: 'Add Student',
+      subtitle: 'Create new student profile',
+      onBack: _onRequestExit,
+      actions: [
         if (_isLoading)
           const Padding(
             padding: EdgeInsets.all(8),
@@ -551,208 +569,395 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // isMobile unused variable removed
+    final width = MediaQuery.of(context).size.width;
 
-    // Calculate progress (0.0 to 1.0)
-    final double progress = (_currentPage + 1) / 2;
+    if (width >= 1200) return _buildDesktopLayout(context, theme);
+    if (width >= 600) return _buildTabletLayout(context, theme);
+    return _buildMobileLayout(context, theme);
+  }
 
-    return Scaffold(
-      resizeToAvoidBottomInset: false,
+  Widget _buildTabletLayout(BuildContext context, ThemeData theme) {
+    return _wrapWithDiscardGuard(
+      Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: theme.colorScheme.surface,
-      body: Stack(
-        children: [
-          // Background Gradient decoration (subtle)
-          Positioned(
-            top: -100,
-            left: -100,
-            child: Container(
-              width: 300,
-              height: 300,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: theme.colorScheme.primary.withValues(alpha: 0.05),
-                boxShadow: [
-                  BoxShadow(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.05),
-                    blurRadius: 100,
-                    spreadRadius: 20,
-                  ),
-                ],
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                child: _buildModernHeader(context),
               ),
-            ),
-          ),
-
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => FocusScope.of(context).unfocus(),
-              child: CustomScrollView(
-                slivers: [
-                  // Modern Header
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: ResponsiveUtils.getResponsivePadding(
-                        context,
-                      ).copyWith(top: 8, bottom: 0),
-                      child: _buildModernHeader(context),
-                    ),
-                  ),
-
-                  // Progress Indicator
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 16,
-                      ),
-                      child: Row(
+              const SizedBox(height: 16),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 100),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 680),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value: progress,
-                                minHeight: 6,
-                                backgroundColor:
-                                    theme.colorScheme.surfaceContainerHighest,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  theme.colorScheme.primary,
-                                ),
-                              ),
+                          _buildProfilePhotoPage(),
+                          const SizedBox(height: 32),
+                          Divider(
+                            color: theme.colorScheme.outlineVariant.withValues(
+                              alpha: 0.3,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Text(
-                            'Step ${_currentPage + 1} of 2',
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          const SizedBox(height: 32),
+                          _buildPersonalInfoPage(),
                         ],
                       ),
                     ),
                   ),
-
-                  // Form Content (PageView within CustomScrollView tricky, usually needs fixed height)
-                  // For better UX, we'll use SliverFillRemaining to fill space
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Form(
-                      key: _formKey,
-                      child: SizedBox(
-                        // Explicit height for PageView inside scroll view if needed,
-                        // but SliverFillRemaining creates constraints.
-                        // However, PageView usually needs bounded height.
-                        // Let's use Expanded logic carefully.
-                        height: MediaQuery.of(context).size.height - 200,
-                        child: PageView(
-                          controller: _pageController,
-                          physics:
-                              const NeverScrollableScrollPhysics(), // Managed navigation
-                          onPageChanged: (index) {
-                            setState(() {
-                              _currentPage = index;
-                            });
-                          },
-                          children: [
-                            _buildPersonalInfoPage(),
-                            _buildProfilePhotoPage(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
-
-          // Bottom Action Bar
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface.withValues(alpha: 0.95),
-                border: Border(
-                  top: BorderSide(
-                    color: theme.colorScheme.outlineVariant.withValues(
-                      alpha: 0.3,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 16,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface.withValues(alpha: 0.95),
+                  border: Border(
+                    top: BorderSide(
+                      color: theme.colorScheme.outlineVariant.withValues(
+                        alpha: 0.3,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              child: SafeArea(
-                top: false,
                 child: Row(
                   children: [
-                    if (_currentPage > 0)
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _isLoading ? null : _previousPage,
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            side: BorderSide(
-                              color: theme.colorScheme.outlineVariant,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          child: const Text('Previous'),
+                    OutlinedButton(
+                      onPressed: _onRequestExit,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: AppRadius.borderMd,
                         ),
                       ),
-                    if (_currentPage > 0) const SizedBox(width: 16),
-                    Expanded(
-                      flex: 2,
-                      child: FilledButton(
-                        onPressed: _isLoading
-                            ? null
-                            : (_currentPage == 0 ? _nextPage : _saveStudent),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          elevation: 0,
-                        ),
-                        child: _isLoading
-                            ? SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  color: theme.colorScheme.onPrimary,
-                                ),
-                              )
-                            : Text(
-                                _currentPage == 0
-                                    ? 'Next Step'
-                                    : 'Create Student',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                      child: const Text('Cancel'),
+                    ),
+                    const Spacer(),
+                    FilledButton.icon(
+                      onPressed: _isLoading ? null : _saveStudent,
+                      icon: _isLoading
+                          ? SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: theme.colorScheme.onPrimary,
                               ),
+                            )
+                          : const Icon(Icons.check_rounded),
+                      label: Text(_isLoading ? 'Saving...' : 'Create Student'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: AppRadius.borderMd,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    ),
+    );
+  }
+
+  Widget _buildDesktopLayout(BuildContext context, ThemeData theme) {
+    return _wrapWithDiscardGuard(
+      Scaffold(
+      resizeToAvoidBottomInset: true,
+      backgroundColor: theme.colorScheme.surface,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                    child: _buildModernHeader(context),
+                  ),
+                  const SizedBox(height: 16),
+                  // Two-column body
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Left: Photo picker + preview card
+                        SizedBox(
+                          width: 340,
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.fromLTRB(24, 8, 16, 100),
+                            child: _buildProfilePhotoPage(),
+                          ),
+                        ),
+                        // Divider
+                        Container(
+                          width: 1,
+                          color: theme.colorScheme.outlineVariant.withValues(
+                            alpha: 0.3,
+                          ),
+                        ),
+                        // Right: All form fields
+                        Expanded(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.fromLTRB(24, 8, 24, 100),
+                            child: _buildPersonalInfoPage(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Bottom action bar
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface.withValues(alpha: 0.95),
+                      border: Border(
+                        top: BorderSide(
+                          color: theme.colorScheme.outlineVariant.withValues(
+                            alpha: 0.3,
+                          ),
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        OutlinedButton(
+                          onPressed: _onRequestExit,
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: AppRadius.borderMd,
+                            ),
+                          ),
+                          child: const Text('Cancel'),
+                        ),
+                        const Spacer(),
+                        FilledButton.icon(
+                          onPressed: _isLoading ? null : _saveStudent,
+                          icon: _isLoading
+                              ? SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: theme.colorScheme.onPrimary,
+                                  ),
+                                )
+                              : const Icon(Icons.check_rounded),
+                          label: Text(
+                            _isLoading ? 'Saving...' : 'Create Student',
+                          ),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: AppRadius.borderMd,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ],
+        ),
       ),
+    ),
+    );
+  }
+
+  Widget _buildMobileLayout(BuildContext context, ThemeData theme) {
+    final double progress = (_currentPage + 1) / 2;
+
+    return _wrapWithDiscardGuard(
+      Scaffold(
+      resizeToAvoidBottomInset: true,
+      backgroundColor: theme.colorScheme.surface,
+      body: SafeArea(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: Column(
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: _buildModernHeader(context),
+              ),
+              const SizedBox(height: 8),
+              // Progress Indicator
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: AppRadius.borderXs,
+                        child: LinearProgressIndicator(
+                          value: progress,
+                          minHeight: 6,
+                          backgroundColor:
+                              theme.colorScheme.surfaceContainerHighest,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Step ${_currentPage + 1} of 2',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Form Content
+              Expanded(
+                child: Form(
+                  key: _formKey,
+                  child: PageView(
+                    controller: _pageController,
+                    physics: const NeverScrollableScrollPhysics(),
+                    onPageChanged: (index) {
+                      setState(() {
+                        _currentPage = index;
+                      });
+                    },
+                    children: [
+                      SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(16, 8, 16, 100),
+                        child: _buildPersonalInfoPage(),
+                      ),
+                      SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(16, 8, 16, 100),
+                        child: _buildProfilePhotoPage(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Bottom Action Bar
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface.withValues(alpha: 0.95),
+                  border: Border(
+                    top: BorderSide(
+                      color: theme.colorScheme.outlineVariant.withValues(
+                        alpha: 0.3,
+                      ),
+                    ),
+                  ),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Row(
+                    children: [
+                      if (_currentPage > 0)
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _isLoading ? null : _previousPage,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: BorderSide(
+                                color: theme.colorScheme.outlineVariant,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: AppRadius.borderMd,
+                              ),
+                            ),
+                            child: const Text('Previous'),
+                          ),
+                        ),
+                      if (_currentPage > 0) const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton(
+                          onPressed: _isLoading
+                              ? null
+                              : (_currentPage == 0 ? _nextPage : _saveStudent),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: AppRadius.borderMd,
+                            ),
+                            elevation: 0,
+                          ),
+                          child: _isLoading
+                              ? SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: theme.colorScheme.onPrimary,
+                                  ),
+                                )
+                              : Text(
+                                  _currentPage == 0
+                                      ? 'Next Step'
+                                      : 'Create Student',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
     );
   }
 
   Widget _buildPersonalInfoPage() {
-    return ListView(
-      padding: _pagePadding(context),
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 24),
@@ -802,14 +1007,14 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
         // Date of Birth
         InkWell(
           onTap: () => _selectDate(context),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Theme.of(
                 context,
               ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: AppRadius.borderLg,
               border: Border.all(
                 color: _dobError
                     ? Theme.of(context).colorScheme.error
@@ -946,6 +1151,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
           textCapitalization: TextCapitalization.characters,
           helperText: 'Optional (e.g. A12)',
         ),
+        const SizedBox(height: 20),
 
         // Extra padding at bottom for FAB/Footer
         const SizedBox(height: 40),
@@ -989,21 +1195,21 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
           alpha: 0.3,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           borderSide: BorderSide(
             color: theme.colorScheme.outlineVariant.withValues(alpha: 0.2),
           ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           borderSide: BorderSide(color: theme.colorScheme.error),
         ),
         errorText: errorText,
@@ -1022,8 +1228,8 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
 
   Widget _buildProfilePhotoPage() {
     final theme = Theme.of(context);
-    return ListView(
-      padding: _pagePadding(context),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 24),
@@ -1075,10 +1281,10 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
                     alignment: Alignment.center,
                     children: [
                       // Image or Fallback
-                      if (_selectedImage != null)
+                      if (_selectedImageBytes != null)
                         ClipOval(
-                          child: Image.file(
-                            _selectedImage!,
+                          child: Image.memory(
+                            _selectedImageBytes!,
                             width: 192,
                             height: 192,
                             fit: BoxFit.cover,
@@ -1155,7 +1361,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
                             ),
                           ),
                           child: Icon(
-                            _selectedImage == null
+                            _selectedImageBytes == null
                                 ? Icons.add_a_photo_rounded
                                 : Icons.edit_rounded,
                             color: theme.colorScheme.onPrimary,
@@ -1169,7 +1375,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
               ),
               const SizedBox(height: 32),
 
-              if (_selectedImage == null) ...[
+              if (_selectedImageBytes == null) ...[
                 Text(
                   'No photo selected',
                   style: theme.textTheme.titleMedium?.copyWith(
@@ -1191,7 +1397,7 @@ class _AddStudentPageState extends ConsumerState<AddStudentPage> {
                 TextButton.icon(
                   onPressed: () {
                     setState(() {
-                      _selectedImage = null;
+                      _selectedImageBytes = null;
                     });
                   },
                   icon: const Icon(Icons.delete_outline_rounded),

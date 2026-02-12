@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:library_registration_app/core/utils/responsive_utils.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
+import 'package:library_registration_app/core/theme/app_colors.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 // import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
 import 'package:library_registration_app/presentation/providers/export/export_provider.dart';
@@ -14,6 +16,7 @@ import 'package:library_registration_app/presentation/widgets/common/app_bottom_
 import 'package:library_registration_app/presentation/widgets/common/compact_stat_tile.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 import 'package:library_registration_app/presentation/widgets/common/filter_chips.dart';
+import 'package:library_registration_app/presentation/widgets/common/page_header.dart';
 import 'package:library_registration_app/presentation/widgets/common/quick_action_card.dart';
 import 'package:library_registration_app/presentation/widgets/common/recent_activity_card.dart';
 import 'package:library_registration_app/presentation/widgets/common/section_header.dart';
@@ -103,128 +106,140 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       backgroundColor: theme.colorScheme.surface,
       body: RefreshIndicator(
         onRefresh: _onRefresh,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            // Modern Header
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: ResponsiveUtils.getResponsivePadding(
-                  context,
-                ).copyWith(top: 8),
-                child: _buildModernHeader(theme),
-              ),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: ResponsiveUtils.getMaxContentWidth(context),
             ),
-
-            // Time Filter Chips
-            SliverToBoxAdapter(
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                child: FilterChipsRow(
-                  options: const ['Today', 'Week', 'Month'],
-                  selected: _selectedRange,
-                  onSelected: (v) => setState(() => _selectedRange = v),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                // Modern Header
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: ResponsiveUtils.getResponsivePadding(
+                      context,
+                    ).copyWith(top: 8),
+                    child: _buildModernHeader(theme),
+                  ),
                 ),
-              ),
-            ),
 
-            // Compact Stats Row
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: ResponsiveUtils.getResponsivePadding(
-                  context,
-                ).copyWith(top: 12),
-                child: _buildCompactStats(
-                  theme,
-                  studentsCount,
-                  activeSubscriptionsCount,
-                  totalRevenue,
+                // Time Filter Chips
+                SliverToBoxAdapter(
+                  child: Container(
+                    margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    child: FilterChipsRow(
+                      options: const ['Today', 'Week', 'Month'],
+                      selected: _selectedRange,
+                      onSelected: (v) => setState(() => _selectedRange = v),
+                    ),
+                  ),
                 ),
-              ),
-            ),
 
-            // Quick Actions Section
-            SliverToBoxAdapter(
-              child: Container(
-                padding: ResponsiveUtils.getResponsivePadding(context),
-                child: const SectionHeader(
-                  title: 'Quick Actions',
-                  subtitle: 'Common tasks and shortcuts',
+                // Compact Stats Row
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: ResponsiveUtils.getResponsivePadding(
+                      context,
+                    ).copyWith(top: 12),
+                    child: _buildCompactStats(
+                      theme,
+                      studentsCount,
+                      activeSubscriptionsCount,
+                      totalRevenue,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: ResponsiveUtils.getResponsivePadding(context),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: RepaintBoundary(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 150),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          // Glassmorphism effect
-                          gradient: LinearGradient(
-                            colors: [
-                              theme.colorScheme.surfaceContainerHighest
-                                  .withValues(alpha: 0.4),
-                              theme.colorScheme.surface.withValues(alpha: 0.6),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.08,
+
+                // Quick Actions Section
+                SliverToBoxAdapter(
+                  child: Container(
+                    padding: ResponsiveUtils.getResponsivePadding(context),
+                    child: const SectionHeader(
+                      title: 'Quick Actions',
+                      subtitle: 'Common tasks and shortcuts',
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: ResponsiveUtils.getResponsivePadding(context),
+                    child: ClipRRect(
+                      borderRadius: AppRadius.borderLg,
+                      child: RepaintBoundary(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 150),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              // Glassmorphism effect
+                              gradient: LinearGradient(
+                                colors: [
+                                  theme.colorScheme.surfaceContainerHighest
+                                      .withValues(alpha: 0.4),
+                                  theme.colorScheme.surface.withValues(
+                                    alpha: 0.6,
+                                  ),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: AppRadius.borderXl,
+                              border: Border.all(
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.08,
+                                ),
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: theme.shadowColor.withValues(
+                                    alpha: 0.04,
+                                  ),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
                             ),
-                            width: 1.5,
+                            padding: const EdgeInsets.all(16),
+                            child: ResponsiveUtils.isMobile(context)
+                                ? SizedBox(
+                                    height: 166,
+                                    child: _buildQuickActionsGrid(context),
+                                  )
+                                : _buildQuickActionsGrid(context),
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: theme.shadowColor.withValues(alpha: 0.04),
-                              blurRadius: 16,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
                         ),
-                        padding: const EdgeInsets.all(16),
-                        child: ResponsiveUtils.isMobile(context)
-                            ? SizedBox(
-                                height: 166,
-                                child: _buildQuickActionsGrid(context),
-                              )
-                            : _buildQuickActionsGrid(context),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
 
-            // Recent Activity Section
-            SliverToBoxAdapter(
-              child: Container(
-                padding: ResponsiveUtils.getResponsivePadding(context),
-                child: SectionHeader(
-                  title: 'Recent Activity',
-                  subtitle: 'Latest updates and changes',
-                  action: TextButton.icon(
-                    onPressed: () => GoRouter.of(context).go('/activity'),
-                    icon: const Icon(Icons.chevron_right, size: 18),
-                    label: const Text('View all'),
+                // Recent Activity Section
+                SliverToBoxAdapter(
+                  child: Container(
+                    padding: ResponsiveUtils.getResponsivePadding(context),
+                    child: SectionHeader(
+                      title: 'Recent Activity',
+                      subtitle: 'Latest updates and changes',
+                      action: TextButton.icon(
+                        onPressed: () => GoRouter.of(context).go('/activity'),
+                        icon: const Icon(Icons.chevron_right, size: 18),
+                        label: const Text('View all'),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+                SliverToBoxAdapter(
+                  child: Container(
+                    padding: ResponsiveUtils.getResponsivePadding(context),
+                    margin: const EdgeInsets.only(top: 16, bottom: 32),
+                    child: const RecentActivityCard(),
+                  ),
+                ),
+              ],
             ),
-            SliverToBoxAdapter(
-              child: Container(
-                padding: ResponsiveUtils.getResponsivePadding(context),
-                margin: const EdgeInsets.only(top: 16, bottom: 32),
-                child: const RecentActivityCard(),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -235,40 +250,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final greeting = _getGreeting(now.hour);
     final dateStr = DateFormat('EEEE, MMMM d').format(now);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  greeting,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  dateStr,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _buildLoggedInUser(theme),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          _buildHeaderProfileAvatar(theme),
-        ],
-      ),
+    return PageHeader(
+      title: greeting,
+      subtitle: dateStr,
+      showBack: false,
+      actions: [_buildHeaderProfileAvatar(theme)],
     );
   }
 
@@ -334,14 +320,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             color: cs.primary.withValues(alpha: 0.65),
             width: 2,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: cs.primary.withValues(alpha: 0.20),
-              blurRadius: 16,
-              spreadRadius: 1,
-              offset: const Offset(0, 4),
-            ),
-          ],
         ),
         alignment: Alignment.center,
         child: Container(
@@ -362,31 +340,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     );
   }
 
-  Widget _buildLoggedInUser(ThemeData theme) {
-    final auth = ref.watch(authProvider);
-    final email = auth.user?.email ?? auth.lastKnownEmail;
-    if (email == null || email.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Row(
-      children: [
-        Icon(
-          Icons.verified_user_outlined,
-          size: 16,
-          color: theme.colorScheme.primary,
-        ),
-        const SizedBox(width: 6),
-        Text(
-          'Admin: $email',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildProfileDialogContent(ThemeData theme) {
     final auth = ref.watch(authProvider);
     final email = auth.user?.email ?? auth.lastKnownEmail ?? 'unknown';
@@ -398,7 +351,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           children: [
             Icon(Icons.person_outline, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
-            Text('Admin: $email', style: theme.textTheme.bodyMedium),
+            Expanded(
+              child: Text(
+                'Admin: $email',
+                style: theme.textTheme.bodyMedium,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
       ],
@@ -411,10 +370,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     AsyncValue<int> activeSubscriptionsCount,
     AsyncValue<double> totalRevenue,
   ) {
-    final currencyFormatter = NumberFormat.currency(
-      locale: 'en_IN',
-      symbol: '₹',
-    );
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    final currencyFormatter = NumberFormat.simpleCurrency(locale: locale);
     final tiles = [
       CompactStatTile(
         icon: Icons.people_outline_rounded,
@@ -428,7 +385,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       ),
       CompactStatTile(
         icon: Icons.card_membership_outlined,
-        color: const Color(0xFF10B981),
+        color: AppColors.success,
         label: 'Active Subs',
         value: activeSubscriptionsCount.when(
           data: (v) => '$v',
@@ -437,8 +394,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         ),
       ),
       CompactStatTile(
-        icon: Icons.currency_rupee,
-        color: const Color(0xFFF59E0B),
+        icon: Icons.payments_outlined,
+        color: AppColors.warning,
         label: 'Revenue · ' + _selectedRange,
         value: totalRevenue.when(
           data: (v) => currencyFormatter.format(v),
@@ -481,7 +438,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         'title': 'Add Student',
         'subtitle': 'Register new student',
         'icon': CupertinoIcons.person_add,
-        'color': const Color(0xFF3B82F6),
+        'color': AppColors.info,
         'onTap': () {
           GoRouter.of(context).go('/students/add');
           _showNotification('Navigating to Add Student');
@@ -491,7 +448,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         'title': 'New Subscription',
         'subtitle': 'Create subscription plan',
         'icon': CupertinoIcons.creditcard,
-        'color': const Color(0xFF10B981),
+        'color': AppColors.success,
         'onTap': () {
           GoRouter.of(context).go('/subscriptions');
           _showNotification('Navigating to Subscriptions');
@@ -501,7 +458,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         'title': 'View Students',
         'subtitle': 'Manage all students',
         'icon': CupertinoIcons.person_2,
-        'color': const Color(0xFF8B5CF6),
+        'color': AppColors.purple,
         'onTap': () {
           GoRouter.of(context).go('/students');
           _showNotification('Navigating to Students List');
@@ -511,7 +468,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         'title': 'Export Data',
         'subtitle': 'Download reports',
         'icon': CupertinoIcons.square_arrow_down,
-        'color': const Color(0xFFF59E0B),
+        'color': AppColors.warning,
         'onTap': () {
           _showExportOptionsSheet();
         },

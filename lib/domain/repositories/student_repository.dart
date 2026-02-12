@@ -3,6 +3,7 @@ import 'package:library_registration_app/domain/entities/student.dart';
 abstract class StudentRepository {
   Future<List<Student>> getAllStudents();
   Future<List<Student>> getActiveStudents();
+  Future<List<Student>> getDiscardedStudentsPaginated(int offset, int limit);
   Future<Student?> getStudentById(String id);
   Future<List<Student>> searchStudents(String query);
   Future<List<Student>> getStudentsPaginated(int offset, int limit);

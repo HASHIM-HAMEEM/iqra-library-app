@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:library_registration_app/core/theme/app_colors.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 import 'package:library_registration_app/core/theme/app_theme.dart';
 
-enum NotificationType {
-  success,
-  error,
-  warning,
-  info,
-}
+enum NotificationType { success, error, warning, info }
 
 class CustomNotification {
   static OverlayEntry? _currentOverlay;
@@ -23,7 +20,7 @@ class CustomNotification {
 
     final overlay = Overlay.of(context);
     final theme = Theme.of(context);
-    
+
     _currentOverlay = OverlayEntry(
       builder: (context) => _NotificationWidget(
         message: message,
@@ -81,21 +78,13 @@ class _NotificationWidgetState extends State<_NotificationWidget>
       vsync: this,
     );
 
-    _slideAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutBack,
-    ));
+    _slideAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutBack),
+    );
 
-    _opacityAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOut,
-    ));
+    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+    );
 
     _animationController.forward();
   }
@@ -108,22 +97,22 @@ class _NotificationWidgetState extends State<_NotificationWidget>
 
   Color _getBackgroundColor() {
     final isDark = widget.theme.brightness == Brightness.dark;
-    
+
     switch (widget.type) {
       case NotificationType.success:
-        return isDark 
-            ? const Color(0xFF10B981).withValues(alpha: 0.9)
-            : const Color(0xFF10B981).withValues(alpha: 0.95);
+        return isDark
+            ? AppColors.success.withValues(alpha: 0.9)
+            : AppColors.success.withValues(alpha: 0.95);
       case NotificationType.error:
-        return isDark 
-            ? const Color(0xFFEF4444).withValues(alpha: 0.9)
-            : const Color(0xFFEF4444).withValues(alpha: 0.95);
+        return isDark
+            ? AppColors.error.withValues(alpha: 0.9)
+            : AppColors.error.withValues(alpha: 0.95);
       case NotificationType.warning:
-        return isDark 
-            ? const Color(0xFFF59E0B).withValues(alpha: 0.9)
-            : const Color(0xFFF59E0B).withValues(alpha: 0.95);
+        return isDark
+            ? AppColors.warning.withValues(alpha: 0.9)
+            : AppColors.warning.withValues(alpha: 0.95);
       case NotificationType.info:
-        return isDark 
+        return isDark
             ? widget.theme.colorScheme.primary.withValues(alpha: 0.9)
             : widget.theme.colorScheme.primary.withValues(alpha: 0.95);
     }
@@ -135,7 +124,7 @@ class _NotificationWidgetState extends State<_NotificationWidget>
 
   IconData _getIcon() {
     if (widget.icon != null) return widget.icon!;
-    
+
     switch (widget.type) {
       case NotificationType.success:
         return Icons.check_circle_outline;
@@ -154,7 +143,7 @@ class _NotificationWidgetState extends State<_NotificationWidget>
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     // Position notification above keyboard when visible, otherwise use default position
     final bottomPosition = keyboardHeight > 0 ? keyboardHeight + 16 : 100.0;
-    
+
     return Positioned(
       bottom: bottomPosition,
       left: 16,
@@ -175,7 +164,7 @@ class _NotificationWidgetState extends State<_NotificationWidget>
                   ),
                   decoration: BoxDecoration(
                     color: _getBackgroundColor(),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppRadius.borderMd,
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.1),
@@ -187,11 +176,7 @@ class _NotificationWidgetState extends State<_NotificationWidget>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        _getIcon(),
-                        color: _getTextColor(),
-                        size: 20,
-                      ),
+                      Icon(_getIcon(), color: _getTextColor(), size: 20),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(

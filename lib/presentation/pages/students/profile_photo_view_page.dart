@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -38,7 +37,7 @@ class _ProfilePhotoViewPageState extends ConsumerState<ProfilePhotoViewPage> {
     final path = widget.imagePath;
     if (path == null || path.isEmpty) return;
     final lower = path.toLowerCase();
-    if (lower.startsWith('http://') || lower.startsWith('https://') || path.startsWith('/')) {
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
       setState(() => _resolvedUrl = path);
       return;
     }
@@ -141,16 +140,11 @@ class _ProfilePhotoViewPageState extends ConsumerState<ProfilePhotoViewPage> {
 
   Widget _buildZoomableImage(ThemeData theme) {
     final url = _resolvedUrl!;
-    final Widget imageWidget;
-    if (url.startsWith('/')) {
-      imageWidget = Image.file(File(url), fit: BoxFit.contain);
-    } else {
-      imageWidget = Image.network(
-        url,
-        fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => _buildFallbackInitials(theme),
-      );
-    }
+    final imageWidget = Image.network(
+      url,
+      fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) => _buildFallbackInitials(theme),
+    );
     return GestureDetector(
       onTap: () => Navigator.of(context).maybePop(),
       onDoubleTapDown: (d) => _doubleTapDetails = d,
@@ -185,5 +179,4 @@ class _ProfilePhotoViewPageState extends ConsumerState<ProfilePhotoViewPage> {
     );
   }
 }
-
 

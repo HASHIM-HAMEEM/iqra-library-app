@@ -1,0 +1,65 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.activity_logs (
+  id text NOT NULL,
+  action text NOT NULL CHECK (length(TRIM(BOTH FROM action)) > 0 AND length(action) <= 100),
+  entity_type text NOT NULL CHECK (entity_type = ANY (ARRAY['student'::text, 'subscription'::text, 'backup'::text, 'settings'::text, 'auth'::text, 'system'::text])),
+  entity_id text,
+  details text,
+  timestamp timestamp with time zone DEFAULT now(),
+  user_id text,
+  CONSTRAINT activity_logs_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.app_settings (
+  id text NOT NULL DEFAULT (gen_random_uuid())::text,
+  key text NOT NULL UNIQUE CHECK (length(TRIM(BOTH FROM key)) > 0),
+  value text,
+  description text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  user_id uuid,
+  CONSTRAINT app_settings_pkey PRIMARY KEY (id),
+  CONSTRAINT app_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.students (
+  id text NOT NULL,
+  first_name text NOT NULL CHECK (length(TRIM(BOTH FROM first_name)) > 0),
+  last_name text NOT NULL CHECK (length(TRIM(BOTH FROM last_name)) > 0),
+  seat_number text,
+  date_of_birth timestamp with time zone NOT NULL,
+  email text NOT NULL UNIQUE CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'::text),
+  phone text CHECK (phone IS NULL OR length(phone) >= 10),
+  address text CHECK (address IS NULL OR length(address) <= 200),
+  subscription_plan text,
+  subscription_start_date timestamp with time zone,
+  subscription_end_date timestamp with time zone,
+  subscription_amount numeric,
+  subscription_status text,
+  profile_image_path text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  is_deleted boolean DEFAULT false,
+  CONSTRAINT students_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.subscriptions (
+  id text NOT NULL,
+  student_id text NOT NULL,
+  plan_name text NOT NULL CHECK (length(TRIM(BOTH FROM plan_name)) > 0 AND length(plan_name) <= 100),
+  start_date timestamp with time zone NOT NULL,
+  end_date timestamp with time zone NOT NULL,
+  amount numeric DEFAULT 0.00 CHECK (amount::double precision >= 0::double precision),
+  status text NOT NULL CHECK (status = ANY (ARRAY['active'::text, 'expired'::text, 'cancelled'::text, 'pending'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  is_deleted boolean DEFAULT false,
+  CONSTRAINT subscriptions_pkey PRIMARY KEY (id),
+  CONSTRAINT subscriptions_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id)
+);
+CREATE TABLE public.sync_metadata (
+  user_id text NOT NULL,
+  last_sync timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT sync_metadata_pkey PRIMARY KEY (user_id)
+);

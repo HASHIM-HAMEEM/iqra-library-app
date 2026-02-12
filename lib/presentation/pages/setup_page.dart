@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:library_registration_app/core/utils/responsive_utils.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 // import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
 import 'package:library_registration_app/presentation/providers/auth/setup_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_text_field.dart';
@@ -60,6 +62,10 @@ class _SetupPageState extends ConsumerState<SetupPage>
 
   Future<void> _checkBiometricAvailability() async {
     try {
+      if (kIsWeb) {
+        if (mounted) setState(() => _isBiometricAvailable = false);
+        return;
+      }
       final isAvailable = await _localAuth.canCheckBiometrics;
       final availableBiometrics = await _localAuth.getAvailableBiometrics();
 
@@ -352,7 +358,7 @@ class _SetupPageState extends ConsumerState<SetupPage>
         border: Border.all(
           color: theme.colorScheme.outline.withValues(alpha: 0.3),
         ),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppRadius.borderMd,
       ),
       child: Row(
         children: [
@@ -400,7 +406,7 @@ class _SetupPageState extends ConsumerState<SetupPage>
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: theme.colorScheme.error.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppRadius.borderSm,
         border: Border.all(
           color: theme.colorScheme.error.withValues(alpha: 0.3),
         ),

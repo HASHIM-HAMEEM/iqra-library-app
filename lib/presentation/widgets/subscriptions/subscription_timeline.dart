@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:library_registration_app/core/theme/app_colors.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 
-import 'package:library_registration_app/core/utils/responsive_utils.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 
 class SubscriptionTimeline extends StatelessWidget {
@@ -141,8 +143,11 @@ class SubscriptionTimeline extends StatelessWidget {
 
                 // Subscriptions for this month
                 ...subscriptions.map(
-                  (subscription) =>
-                      _buildTimelineSubscriptionCard(theme, subscription),
+                  (subscription) => _buildTimelineSubscriptionCard(
+                    context,
+                    theme,
+                    subscription,
+                  ),
                 ),
               ],
             ),
@@ -153,21 +158,20 @@ class SubscriptionTimeline extends StatelessWidget {
   }
 
   Widget _buildTimelineSubscriptionCard(
+    BuildContext context,
     ThemeData theme,
     Subscription subscription,
   ) {
     final dateFormatter = DateFormat('MMM dd');
-    final currencyFormatter = NumberFormat.currency(
-      locale: 'en_IN',
-      symbol: '₹',
-    );
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    final currencyFormatter = NumberFormat.simpleCurrency(locale: locale);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppRadius.borderMd,
         border: Border.all(
           color: theme.colorScheme.outline.withValues(alpha: 0.2),
         ),
@@ -272,7 +276,7 @@ class SubscriptionTimeline extends StatelessWidget {
 
     switch (status) {
       case SubscriptionStatus.active:
-        color = const Color(0xFF10B981);
+        color = AppColors.success;
         icon = Icons.check_circle;
       case SubscriptionStatus.expired:
         color = theme.colorScheme.error;
@@ -281,7 +285,7 @@ class SubscriptionTimeline extends StatelessWidget {
         color = theme.colorScheme.onSurfaceVariant;
         icon = Icons.block;
       case SubscriptionStatus.pending:
-        color = const Color(0xFFF59E0B);
+        color = AppColors.warning;
         icon = Icons.pending;
     }
 
@@ -314,9 +318,9 @@ class SubscriptionTimeline extends StatelessWidget {
     if (remainingDays <= 7) {
       progressColor = theme.colorScheme.error;
     } else if (remainingDays <= 30) {
-      progressColor = const Color(0xFFF59E0B);
+      progressColor = AppColors.warning;
     } else {
-      progressColor = const Color(0xFF10B981);
+      progressColor = AppColors.success;
     }
 
     return Column(

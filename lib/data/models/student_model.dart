@@ -9,10 +9,10 @@ class StudentModel {
     required this.lastName,
     required this.dateOfBirth,
     required this.email,
-    this.seatNumber,
     required this.createdAt,
     required this.updatedAt,
     required this.isDeleted,
+    this.seatNumber,
     this.phone,
     this.address,
     this.profileImagePath,
@@ -21,6 +21,8 @@ class StudentModel {
     this.subscriptionEndDate,
     this.subscriptionAmount,
     this.subscriptionStatus,
+    this.idCardToken,
+    this.idCardIssuedAt,
   });
 
   // JSON mapping for Supabase
@@ -51,6 +53,12 @@ class StudentModel {
         return (raw as num).toDouble();
       })(),
       subscriptionStatus: (json['subscription_status'] ?? json['subscriptionStatus']) as String?,
+      idCardToken: (json['id_card_token'] ?? json['idCardToken']) as String?,
+      idCardIssuedAt: (() {
+        final Object? raw = json['id_card_issued_at'] ?? json['idCardIssuedAt'];
+        if (raw == null) return null;
+        return DateTime.parse(raw as String);
+      })(),
     );
   }
 
@@ -76,6 +84,8 @@ class StudentModel {
       subscriptionEndDate: student.subscriptionEndDate,
       subscriptionAmount: student.subscriptionAmount,
       subscriptionStatus: student.subscriptionStatus,
+      idCardToken: student.idCardToken,
+      idCardIssuedAt: student.idCardIssuedAt,
     );
   }
   final String id;
@@ -97,6 +107,8 @@ class StudentModel {
   final DateTime? subscriptionEndDate;
   final double? subscriptionAmount;
   final String? subscriptionStatus;
+  final String? idCardToken;
+  final DateTime? idCardIssuedAt;
 
   // toDrift method removed - using Supabase only
 
@@ -120,6 +132,8 @@ class StudentModel {
       subscriptionEndDate: subscriptionEndDate,
       subscriptionAmount: subscriptionAmount,
       subscriptionStatus: subscriptionStatus,
+      idCardToken: idCardToken,
+      idCardIssuedAt: idCardIssuedAt,
     );
   }
 
@@ -141,6 +155,8 @@ class StudentModel {
     DateTime? subscriptionEndDate,
     double? subscriptionAmount,
     String? subscriptionStatus,
+    String? idCardToken,
+    DateTime? idCardIssuedAt,
   }) {
     return StudentModel(
       id: id ?? this.id,
@@ -161,6 +177,8 @@ class StudentModel {
       subscriptionEndDate: subscriptionEndDate ?? this.subscriptionEndDate,
       subscriptionAmount: subscriptionAmount ?? this.subscriptionAmount,
       subscriptionStatus: subscriptionStatus ?? this.subscriptionStatus,
+      idCardToken: idCardToken ?? this.idCardToken,
+      idCardIssuedAt: idCardIssuedAt ?? this.idCardIssuedAt,
     );
   }
 
@@ -183,6 +201,8 @@ class StudentModel {
       'subscription_end_date': subscriptionEndDate?.toUtc().toIso8601String(),
       'subscription_amount': subscriptionAmount,
       'subscription_status': subscriptionStatus,
+      'id_card_token': idCardToken,
+      'id_card_issued_at': idCardIssuedAt?.toUtc().toIso8601String(),
     };
   }
 }

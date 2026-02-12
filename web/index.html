@@ -113,7 +113,25 @@
   
   
   
-  
+  <script>
+    // Backward-compat for old hash URLs like `/#/dashboard` or `/#/verify-card?tok=...`.
+    // With path URL strategy enabled, we want to transparently rewrite those to clean paths.
+    (function () {
+      try {
+        var hash = window.location.hash || '';
+        if (window.location.pathname === '/' && hash.indexOf('#/') === 0) {
+          // Remove leading '#', keep the rest (path + optional query).
+          var target = hash.substring(1);
+          if (target && target.charAt(0) !== '/') target = '/' + target;
+          // If the hash route has no querystring, preserve any existing search.
+          if (window.location.search && target.indexOf('?') === -1) {
+            target = target + window.location.search;
+          }
+          window.history.replaceState(null, '', target);
+        }
+      } catch (_) {}
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async=""></script>
 
 

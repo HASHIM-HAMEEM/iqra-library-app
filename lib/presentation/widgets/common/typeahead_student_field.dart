@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:library_registration_app/core/theme/app_colors.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
+import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
 
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
@@ -9,7 +12,8 @@ import 'package:library_registration_app/presentation/providers/students/student
 
 class TypeaheadStudentField extends ConsumerStatefulWidget {
   const TypeaheadStudentField({
-    required this.onSelected, super.key,
+    required this.onSelected,
+    super.key,
     this.initial,
     this.label = 'Student',
   });
@@ -144,7 +148,7 @@ class _TypeaheadStudentFieldState extends ConsumerState<TypeaheadStudentField> {
           decoration: InputDecoration(
             labelText: widget.label,
             prefixIcon: _selectedStudent != null
-                ? const Icon(Icons.person, color: Colors.green)
+                ? Icon(Icons.person, color: AppColors.success)
                 : _isSearching
                 ? const SizedBox(
                     width: 16,
@@ -168,7 +172,7 @@ class _TypeaheadStudentFieldState extends ConsumerState<TypeaheadStudentField> {
                     icon: const Icon(Icons.arrow_drop_down_rounded),
                     onPressed: _openPickerDialog,
                   ),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            border: OutlineInputBorder(borderRadius: AppRadius.borderMd),
             filled: true,
             fillColor: Theme.of(
               context,
@@ -212,8 +216,8 @@ class _TypeaheadStudentFieldState extends ConsumerState<TypeaheadStudentField> {
     final focusNode = FocusNode();
     var didFocus = false;
     if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
+    await showAppBottomSheet<void>(
+      context,
       isScrollControlled: true,
       builder: (ctx) {
         // Local state helpers
@@ -253,7 +257,10 @@ class _TypeaheadStudentFieldState extends ConsumerState<TypeaheadStudentField> {
             child: FractionallySizedBox(
               heightFactor: heightFactor,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
                 child: StatefulBuilder(
                   builder: (ctx, setSheetState) {
                     if (!didFocus) {
@@ -282,38 +289,46 @@ class _TypeaheadStudentFieldState extends ConsumerState<TypeaheadStudentField> {
                           const SizedBox(height: 12),
                           Expanded(
                             child: _isSearching
-                                ? const Center(child: CircularProgressIndicator())
+                                ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
                                 : _results.isEmpty
-                                    ? Center(
-                                        child: Text(
-                                          'No students found',
-                                          style: Theme.of(context).textTheme.bodyMedium,
+                                ? Center(
+                                    child: Text(
+                                      'No students found',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodyMedium,
+                                    ),
+                                  )
+                                : ListView.separated(
+                                    itemCount: _results.length,
+                                    separatorBuilder: (_, __) =>
+                                        const Divider(height: 1),
+                                    itemBuilder: (context, index) {
+                                      final s = _results[index];
+                                      return ListTile(
+                                        leading: const Icon(
+                                          Icons.person_outline,
                                         ),
-                                      )
-                                    : ListView.separated(
-                                        itemCount: _results.length,
-                                        separatorBuilder: (_, __) => const Divider(height: 1),
-                                        itemBuilder: (context, index) {
-                                          final s = _results[index];
-                                          return ListTile(
-                                            leading: const Icon(Icons.person_outline),
-                                            title: Text(s.fullName),
-                                            subtitle: Text(s.email),
-                                            onTap: () {
-                                              widget.onSelected(s);
-                                              setState(() {
-                                                _selectedStudent = s;
-                                                final seat = s.seatNumber;
-                                                _controller.text = seat == null || seat.isEmpty
-                                                    ? '${s.fullName} · ${s.email}'
-                                                    : '${s.fullName} · ${s.email} · Seat $seat';
-                                                _results = [];
-                                              });
-                                              Navigator.of(ctx).pop();
-                                            },
-                                          );
+                                        title: Text(s.fullName),
+                                        subtitle: Text(s.email),
+                                        onTap: () {
+                                          widget.onSelected(s);
+                                          setState(() {
+                                            _selectedStudent = s;
+                                            final seat = s.seatNumber;
+                                            _controller.text =
+                                                seat == null || seat.isEmpty
+                                                ? '${s.fullName} · ${s.email}'
+                                                : '${s.fullName} · ${s.email} · Seat $seat';
+                                            _results = [];
+                                          });
+                                          Navigator.of(ctx).pop();
                                         },
-                                      ),
+                                      );
+                                    },
+                                  ),
                           ),
                         ],
                       ),

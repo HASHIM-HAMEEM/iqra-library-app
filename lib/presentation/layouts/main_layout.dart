@@ -1,12 +1,16 @@
 // ignore_for_file: unused_element
 
-import 'package:flutter/foundation.dart'
-    show TargetPlatform, defaultTargetPlatform, kIsWeb;
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:library_registration_app/core/utils/responsive_utils.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
+import 'package:library_registration_app/presentation/providers/export/export_provider.dart';
+import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
 
 class MainLayout extends ConsumerStatefulWidget {
   const MainLayout({
@@ -44,7 +48,7 @@ class _MainLayoutState extends ConsumerState<MainLayout>
       try {
         final authNotifier = ref.read(authProvider.notifier);
         if (authNotifier.currentSession != null) {
-          authNotifier.refreshSession();
+          unawaited(authNotifier.refreshSession());
         }
       } catch (_) {}
       // No validateSession call - user stays logged in
@@ -59,8 +63,11 @@ class _MainLayoutState extends ConsumerState<MainLayout>
     final width = MediaQuery.of(context).size.width;
     final path = widget.currentRoute;
     final hideNavForActivity = path.startsWith('/activity');
+    final isStudentEditPath = RegExp(r'^/students/[^/]+/edit$').hasMatch(path);
     final isFullScreenForm =
-        path.startsWith('/students/add') || path.startsWith('/students/edit');
+        path.startsWith('/students/add') ||
+        path.startsWith('/students/edit') ||
+        isStudentEditPath;
     // Show side navigation only on wide tablets and desktop
     final showSideNav =
         !hideNavForActivity && ((isTablet && width >= 900) || isDesktop);
@@ -71,15 +78,6 @@ class _MainLayoutState extends ConsumerState<MainLayout>
         (!isDesktop &&
             (ResponsiveUtils.isMobile(context) || (isTablet && width < 900))) &&
         !isFullScreenForm;
-    // Only show the top center nav on true desktop platforms (or web),
-    // and never when a side nav is already visible (prevents duplicate navs on tablets in landscape).
-    final isDesktopOS =
-        kIsWeb ||
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.linux;
-    final showCenterTopNav = isDesktopOS && !hideNavForActivity && !showSideNav;
-
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: theme.colorScheme.surface,
@@ -87,7 +85,7 @@ class _MainLayoutState extends ConsumerState<MainLayout>
         children: [
           // Top Navigation Bar
           if (!hideNavForActivity)
-            _buildTopNavigationBar(context, theme, showCenterTopNav),
+            _buildTopNavigationBar(context, theme, showSideNav),
 
           // Main Content
           Expanded(
@@ -112,11 +110,9 @@ class _MainLayoutState extends ConsumerState<MainLayout>
   Widget _buildTopNavigationBar(
     BuildContext context,
     ThemeData theme,
-    bool showCenterTopNav,
+    bool showSideNav,
   ) {
-    // Do not render the profile icon in the top bar; it will be shown in the dashboard header
     return Container(
-      height: 64,
       color: Colors.transparent,
       child: SafeArea(
         bottom: false,
@@ -129,76 +125,40 @@ class _MainLayoutState extends ConsumerState<MainLayout>
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               child: Row(
                 children: [
-                  // Removed brand glyph per design request
-
-                  // Center nav (desktop only)
-                  if (showCenterTopNav)
-                    Expanded(
-                      child: Align(
+                  // Brand mark
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary,
+                          borderRadius: AppRadius.borderMd,
+                        ),
                         alignment: Alignment.center,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: RepaintBoundary(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.surface.withValues(
-                                  alpha: 0.75,
-                                ),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: theme.colorScheme.onSurface.withValues(
-                                    alpha: 0.06,
-                                  ),
-                                ),
-                              ),
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    _buildNavItem(
-                                      context,
-                                      'Dashboard',
-                                      '/dashboard',
-                                      Icons.dashboard_outlined,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    _buildNavItem(
-                                      context,
-                                      'Students',
-                                      '/students',
-                                      Icons.people_outlined,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    _buildNavItem(
-                                      context,
-                                      'Subscriptions',
-                                      '/subscriptions',
-                                      Icons.card_membership_outlined,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    _buildNavItem(
-                                      context,
-                                      'Recent Activity',
-                                      '/activity',
-                                      Icons.access_time_outlined,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
+                        child: const Text(
+                          'I',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
                           ),
                         ),
                       ),
-                    )
-                  else
-                    const Spacer(),
+                      const SizedBox(width: 10),
+                      Text(
+                        'IQRA',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
 
-                  // User Menu moved to dashboard header; keep top bar clean
+                  // Center nav removed - navigation is now only via side nav or bottom nav
+                  const Spacer(),
                 ],
               ),
             ),
@@ -215,7 +175,9 @@ class _MainLayoutState extends ConsumerState<MainLayout>
     IconData icon,
   ) {
     final theme = Theme.of(context);
-    final isActive = widget.currentRoute == route;
+    final isActive =
+        widget.currentRoute == route ||
+        widget.currentRoute.startsWith('$route/');
 
     final Color chipBg = isActive
         ? theme.colorScheme.primary.withValues(alpha: 0.18)
@@ -231,7 +193,7 @@ class _MainLayoutState extends ConsumerState<MainLayout>
       color: Colors.transparent,
       child: InkWell(
         onTap: () => _navigateToRoute(context, route),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppRadius.borderMd,
         hoverColor: theme.colorScheme.primary.withValues(alpha: 0.06),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
@@ -241,7 +203,7 @@ class _MainLayoutState extends ConsumerState<MainLayout>
             color: isActive
                 ? theme.colorScheme.primary.withValues(alpha: 0.12)
                 : null,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppRadius.borderMd,
             border: Border.all(color: borderColor),
           ),
           child: Row(
@@ -348,11 +310,11 @@ class _MainLayoutState extends ConsumerState<MainLayout>
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppRadius.borderMd,
                       hoverColor: theme.colorScheme.primary.withValues(
                         alpha: 0.08,
                       ),
-                      onTap: () => _navigateToRoute(context, '/settings'),
+                      onTap: () => _showExportDialog(context),
                       child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(
@@ -360,7 +322,7 @@ class _MainLayoutState extends ConsumerState<MainLayout>
                           vertical: 12,
                         ),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: AppRadius.borderMd,
                         ),
                         child: Row(
                           children: [
@@ -402,14 +364,16 @@ class _MainLayoutState extends ConsumerState<MainLayout>
     IconData icon,
   ) {
     final theme = Theme.of(context);
-    final isActive = widget.currentRoute == route;
+    final isActive =
+        widget.currentRoute == route ||
+        widget.currentRoute.startsWith('$route/');
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppRadius.borderMd,
           hoverColor: theme.colorScheme.primary.withValues(alpha: 0.08),
           onTap: () {
             _navigateToRoute(context, route);
@@ -419,7 +383,7 @@ class _MainLayoutState extends ConsumerState<MainLayout>
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadius.borderMd,
               color: isActive
                   ? theme.colorScheme.primary.withValues(alpha: 0.12)
                   : null,
@@ -438,7 +402,7 @@ class _MainLayoutState extends ConsumerState<MainLayout>
                   height: 24,
                   decoration: BoxDecoration(
                     color: theme.colorScheme.primary,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: AppRadius.borderXs,
                   ),
                 ),
                 if (isActive)
@@ -499,13 +463,13 @@ class _MainLayoutState extends ConsumerState<MainLayout>
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: AppRadius.borderPill,
           child: RepaintBoundary(
             child: Container(
               height: 64,
               decoration: BoxDecoration(
                 color: theme.colorScheme.surface.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(30),
+                borderRadius: AppRadius.borderPill,
                 border: Border.all(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
                 ),
@@ -517,7 +481,7 @@ class _MainLayoutState extends ConsumerState<MainLayout>
 
                   return Expanded(
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: AppRadius.borderXl,
                       onTap: () => _navigateToRoute(context, routes[i]),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -582,91 +546,260 @@ class _MainLayoutState extends ConsumerState<MainLayout>
     );
   }
 
-  Widget _buildUserMenu(BuildContext context, ThemeData theme) {
-    return GestureDetector(
-      onTap: () {
-        // Show a simple dialog for logout instead of popup menu
-        showDialog<AlertDialog>(
-          context: context,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              title: const Text('Profile'),
-              content: const Text('What would you like to do?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+  void _navigateToRoute(BuildContext context, String route) {
+    context.go(route);
+  }
+
+  void _showExportDialog(BuildContext context) {
+    final theme = Theme.of(context);
+    showAppBottomSheet<void>(
+      context,
+      builder: (ctx) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                'Export Data',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
                 ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    ref.read(authProvider.notifier).logout();
-                  },
-                  child: const Text('Logout'),
+              ),
+            ),
+            _exportOption(
+              theme: theme,
+              icon: Icons.download_outlined,
+              title: 'Export All Data',
+              subtitle: 'Students, subscriptions, and activity logs',
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _showExportSheet(context, ExportType.all);
+              },
+            ),
+            _exportOption(
+              theme: theme,
+              icon: Icons.people_outline,
+              title: 'Export Students Only',
+              subtitle: 'Student information and details',
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _showExportSheet(context, ExportType.students);
+              },
+            ),
+            _exportOption(
+              theme: theme,
+              icon: Icons.card_membership_outlined,
+              title: 'Export Subscriptions Only',
+              subtitle: 'Subscription plans and payments',
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _showExportSheet(context, ExportType.subscriptions);
+              },
+            ),
+            _exportOption(
+              theme: theme,
+              icon: Icons.history_outlined,
+              title: 'Export Activity Logs Only',
+              subtitle: 'System activity and audit trail',
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _showExportSheet(context, ExportType.activityLogs);
+              },
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _exportOption({
+    required ThemeData theme,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: theme.colorScheme.primary),
+      title: Text(
+        title,
+        style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+      trailing: Icon(
+        Icons.chevron_right,
+        color: theme.colorScheme.outline,
+        size: 20,
+      ),
+      onTap: onTap,
+    );
+  }
+
+  void _showExportSheet(BuildContext context, ExportType exportType) {
+    final theme = Theme.of(context);
+    showAppBottomSheet<void>(
+      context,
+      builder: (ctx) {
+        return Consumer(
+          builder: (context, ref, child) {
+            final exportState = ref.watch(exportNotifierProvider);
+            final exportNotifier = ref.read(exportNotifierProvider.notifier);
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    _exportTitle(exportType),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
+                if (exportState.status == ExportStatus.loading) ...[
+                  CircularProgressIndicator(
+                    value: exportState.progress,
+                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Exporting data... ${(exportState.progress * 100).toInt()}%',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ] else if (exportState.status == ExportStatus.success) ...[
+                  Icon(
+                    Icons.check_circle_outline,
+                    color: theme.colorScheme.primary,
+                    size: 48,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Export completed successfully!',
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'File saved to: ${exportState.filePath?.split('/').last}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () => exportNotifier.shareExportedFile(),
+                    icon: const Icon(Icons.share),
+                    label: const Text('Share File'),
+                  ),
+                ] else if (exportState.status == ExportStatus.error) ...[
+                  Icon(
+                    Icons.error_outline,
+                    color: theme.colorScheme.error,
+                    size: 48,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Export failed',
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w500,
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    exportState.errorMessage ?? 'Unknown error occurred',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => exportNotifier.resetState(),
+                    child: const Text('Try Again'),
+                  ),
+                ] else ...[
+                  Icon(
+                    Icons.download_outlined,
+                    color: theme.colorScheme.primary,
+                    size: 48,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Ready to export',
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Choose a format to download.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () => exportNotifier.exportData(exportType),
+                        icon: const Icon(Icons.table_chart_outlined),
+                        label: const Text('Excel'),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        onPressed: () =>
+                            exportNotifier.exportDataCsv(exportType),
+                        icon: const Icon(Icons.description_outlined),
+                        label: const Text('CSV'),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 16),
+                if (exportState.status != ExportStatus.loading)
+                  TextButton(
+                    onPressed: () {
+                      exportNotifier.resetState();
+                      Navigator.of(ctx).pop();
+                    },
+                    child: const Text('Close'),
+                  ),
               ],
             );
           },
         );
       },
-      child: Builder(
-        builder: (context) {
-          final orientation = MediaQuery.of(context).orientation;
-          final isTablet = ResponsiveUtils.isTablet(context);
-          final isDesktop = ResponsiveUtils.isDesktop(context);
-
-          // Larger, responsive diameter across devices/orientations
-          double diameter;
-          if (isDesktop) {
-            diameter = 68;
-          } else if (isTablet) {
-            diameter = orientation == Orientation.portrait ? 72 : 64;
-          } else {
-            // mobile
-            diameter = orientation == Orientation.portrait ? 60 : 56;
-          }
-
-          // Cap to top bar height (64) minus small padding for breathing space
-          diameter = diameter.clamp(0, 56).toDouble();
-
-          final iconSize = (diameter * 0.58).clamp(24.0, 40.0);
-
-          // Neutral, theme-aware colors that work in both light and dark
-          final isLight = theme.brightness == Brightness.light;
-          final cs = theme.colorScheme;
-          final bgColor = isLight
-              ? cs.surface.withValues(alpha: 0.98)
-              : cs.surfaceContainerHighest.withValues(alpha: 0.75);
-          final fgColor = cs.onSurface;
-
-          return Container(
-            width: diameter,
-            height: diameter,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: bgColor,
-              border: Border.all(
-                color: theme.colorScheme.outline.withValues(alpha: 0.25),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            alignment: Alignment.center,
-            child: Icon(Icons.person_rounded, size: iconSize, color: fgColor),
-          );
-        },
-      ),
     );
   }
 
-  void _navigateToRoute(BuildContext context, String route) {
-    context.go(route);
+  String _exportTitle(ExportType type) {
+    switch (type) {
+      case ExportType.all:
+        return 'Export All Data';
+      case ExportType.students:
+        return 'Export Students Data';
+      case ExportType.subscriptions:
+        return 'Export Subscriptions Data';
+      case ExportType.activityLogs:
+        return 'Export Activity Logs';
+    }
   }
 }
-
-// Fixed by removing the unused _showGlobalExportSheet method

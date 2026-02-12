@@ -1,65 +1,75 @@
 import 'package:flutter/material.dart';
 
+/// Single source of truth for semantic colour constants used across the app.
+///
+/// These are used both directly in widget code (e.g. status badges) and by
+/// [AppTheme] when building [ThemeData]. Do **not** define inline
+/// `Color(0xFF...)` literals elsewhere — import this file instead.
 class AppColors {
-  // Primary colors
-  static const Color primary = Color(0xFF2563EB);
-  static const Color primaryLight = Color(0xFF3B82F6);
-  static const Color primaryDark = Color(0xFF1D4ED8);
+  AppColors._();
 
-  // Secondary colors
-  static const Color secondary = Color(0xFF10B981);
-  static const Color secondaryLight = Color(0xFF34D399);
-  static const Color secondaryDark = Color(0xFF059669);
+  // ---------------------------------------------------------------------------
+  // Status / semantic colours  (most-referenced across the codebase)
+  // ---------------------------------------------------------------------------
 
-  // Accent colors
-  static const Color accent = Color(0xFFF59E0B);
-  static const Color accentLight = Color(0xFFFBBF24);
-  static const Color accentDark = Color(0xFFD97706);
-
-  // Status colors
+  /// Success indicators, active badges, positive stat tiles.
   static const Color success = Color(0xFF10B981);
+
+  /// Warning banners, pending states, amber highlights.
   static const Color warning = Color(0xFFF59E0B);
+
+  /// Error messages, destructive actions, expired badges.
   static const Color error = Color(0xFFEF4444);
+
+  /// Informational highlights, links, login activity.
   static const Color info = Color(0xFF3B82F6);
 
-  // Neutral colors
-  static const Color white = Color(0xFFFFFFFF);
-  static const Color black = Color(0xFF000000);
-  static const Color grey50 = Color(0xFFF9FAFB);
-  static const Color grey100 = Color(0xFFF3F4F6);
-  static const Color grey200 = Color(0xFFE5E7EB);
-  static const Color grey300 = Color(0xFFD1D5DB);
-  static const Color grey400 = Color(0xFF9CA3AF);
-  static const Color grey500 = Color(0xFF6B7280);
-  static const Color grey600 = Color(0xFF4B5563);
-  static const Color grey700 = Color(0xFF374151);
-  static const Color grey800 = Color(0xFF1F2937);
-  static const Color grey900 = Color(0xFF111827);
+  /// Accent purple used in quick-action cards & charts.
+  static const Color purple = Color(0xFF8B5CF6);
 
-  // Surface colors
-  static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceVariant = Color(0xFFF8FAFC);
-  static const Color background = Color(0xFFF8FAFC);
+  // ---------------------------------------------------------------------------
+  // Brand / primary palette  (used by AppTheme for ColorScheme)
+  // ---------------------------------------------------------------------------
 
-  // Text colors
-  static const Color textPrimary = Color(0xFF111827);
-  static const Color textSecondary = Color(0xFF6B7280);
-  static const Color textTertiary = Color(0xFF9CA3AF);
-  static const Color textOnPrimary = Color(0xFFFFFFFF);
+  /// ChatGPT-inspired primary green.
+  static const Color primaryGreen = Color(0xFF10A37F);
 
-  // Border colors
-  static const Color border = Color(0xFFE5E7EB);
-  static const Color borderLight = Color(0xFFF3F4F6);
-  static const Color borderDark = Color(0xFFD1D5DB);
+  /// Dark sidebar / scaffold background for dark mode.
+  static const Color darkSidebar = Color(0xFF171717);
 
-  // Shadow colors
-  static const Color shadow = Color(0x1A000000);
-  static const Color shadowLight = Color(0x0D000000);
-  static const Color shadowDark = Color(0x26000000);
+  /// Light grey surface for light mode backgrounds.
+  static const Color lightBackground = Color(0xFFF7F7F8);
 
-  // Migration specific colors
-  static const Color migrationProgress = Color(0xFF3B82F6);
-  static const Color migrationSuccess = Color(0xFF10B981);
-  static const Color migrationError = Color(0xFFEF4444);
-  static const Color migrationWarning = Color(0xFFF59E0B);
+  /// Medium grey used for surface container highlights.
+  static const Color mediumGray = Color(0xFFECECF1);
+
+  // ---------------------------------------------------------------------------
+  // Text
+  // ---------------------------------------------------------------------------
+
+  /// Primary text colour in light mode.
+  static const Color textDark = Color(0xFF2D333A);
+
+  /// Secondary / muted text colour in light mode.
+  static const Color textLight = Color(0xFF6B7280);
+
+  // ---------------------------------------------------------------------------
+  // Borders
+  // ---------------------------------------------------------------------------
+
+  /// Default border colour in light mode.
+  static const Color borderLight = Color(0xFFD1D5DB);
+
+  // ---------------------------------------------------------------------------
+  // Dark-mode specific
+  // ---------------------------------------------------------------------------
+
+  /// Border colour in dark mode.
+  static const Color darkBorder = Color(0xFF374151);
+
+  /// Surface container highlight in dark mode.
+  static const Color darkSurface = Color(0xFF2D2D2D);
+
+  /// Muted text in dark mode.
+  static const Color darkMutedText = Color(0xFF9CA3AF);
 }

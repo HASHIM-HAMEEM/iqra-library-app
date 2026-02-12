@@ -1,7 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 class CacheService {
   CacheService({this.maxEntries = 300, this.namespace = 'v1'});
@@ -9,104 +6,54 @@ class CacheService {
   final int maxEntries;
   final String namespace;
 
-  Directory? _cacheDir;
-
-  Future<Directory> _getCacheDir() async {
-    if (_cacheDir != null) return _cacheDir!;
-    final base = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(base.path, 'cache'));
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
-    _cacheDir = dir;
-    return dir;
-  }
+  final Map<String, String> _entries = <String, String>{};
 
   String _sanitizeKey(String key) =>
       key.replaceAll(RegExp('[^A-Za-z0-9_.-]'), '_');
 
-  Future<File> _fileForKey(String key) async {
-    final dir = await _getCacheDir();
-    final name = _sanitizeKey('$namespace-$key');
-    return File(p.join(dir.path, '$name.json'));
-  }
+  String _fullKey(String key) => _sanitizeKey('$namespace-$key');
 
   Future<Map<String, dynamic>?> _readRaw(String key) async {
+    final encoded = _entries[_fullKey(key)];
+    if (encoded == null) return null;
     try {
-      final f = await _fileForKey(key);
-      if (!await f.exists()) return null;
-      final content = await f.readAsString();
-      return json.decode(content) as Map<String, dynamic>;
+      return json.decode(encoded) as Map<String, dynamic>;
     } catch (_) {
       return null;
     }
   }
 
   Future<void> _writeRaw(String key, Map<String, dynamic> payload) async {
-    final f = await _fileForKey(key);
-    final tmp = File('${f.path}.tmp');
-    await tmp.writeAsString(json.encode(payload), flush: true);
-    await tmp.rename(f.path);
+    final fullKey = _fullKey(key);
+    _entries[fullKey] = json.encode(payload);
     await _pruneIfNeeded();
   }
 
   Future<void> invalidate(String key) async {
-    try {
-      final f = await _fileForKey(key);
-      if (await f.exists()) await f.delete();
-    } catch (_) {}
+    _entries.remove(_fullKey(key));
   }
 
   Future<void> clearAll() async {
-    try {
-      final dir = await _getCacheDir();
-      if (await dir.exists()) {
-        await for (final e in dir.list()) {
-          try {
-            await e.delete(recursive: true);
-          } catch (_) {}
-        }
-      }
-    } catch (_) {}
+    _entries.clear();
   }
 
   Future<void> clearByPrefix(String prefix) async {
-    try {
-      final dir = await _getCacheDir();
-      if (!await dir.exists()) return;
-      final sanitized = _sanitizeKey('$namespace-$prefix');
-      await for (final e in dir.list()) {
-        if (e is File) {
-          final name = p.basename(e.path);
-          if (name.startsWith(sanitized)) {
-            try {
-              await e.delete();
-            } catch (_) {}
-          }
-        }
-      }
-    } catch (_) {}
+    final fullPrefix = _fullKey(prefix);
+    final keys = _entries.keys
+        .where((k) => k.startsWith(fullPrefix))
+        .toList(growable: false);
+    for (final key in keys) {
+      _entries.remove(key);
+    }
   }
 
   Future<void> _pruneIfNeeded() async {
-    try {
-      final dir = await _getCacheDir();
-      final files = await dir.list().toList();
-      final jsonFiles = files
-          .whereType<File>()
-          .where((f) => f.path.endsWith('.json'))
-          .toList();
-      if (jsonFiles.length <= maxEntries) return;
-      jsonFiles.sort(
-        (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
-      );
-      final toDelete = jsonFiles.length - maxEntries;
-      for (var i = 0; i < toDelete; i++) {
-        try {
-          await jsonFiles[i].delete();
-        } catch (_) {}
-      }
-    } catch (_) {}
+    if (_entries.length <= maxEntries) return;
+    final toRemove = _entries.length - maxEntries;
+    final keys = _entries.keys.take(toRemove).toList(growable: false);
+    for (final key in keys) {
+      _entries.remove(key);
+    }
   }
 
   Future<List<T>?> getListStale<T>({
@@ -115,7 +62,7 @@ class CacheService {
   }) async {
     final raw = await _readRaw(key);
     if (raw == null) return null;
-    final data = (raw['data'] as List<dynamic>? ?? <dynamic>[]);
+    final data = raw['data'] as List<dynamic>? ?? <dynamic>[];
     return data.map((e) => fromJson(e as Map<String, dynamic>)).toList();
   }
 
@@ -143,7 +90,7 @@ class CacheService {
     } catch (_) {
       return null;
     }
-    final data = (raw['data'] as List<dynamic>? ?? <dynamic>[]);
+    final data = raw['data'] as List<dynamic>? ?? <dynamic>[];
     return data.map((e) => fromJson(e as Map<String, dynamic>)).toList();
   }
 

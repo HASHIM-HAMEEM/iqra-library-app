@@ -1,9 +1,15 @@
 import 'package:flutter/widgets.dart';
 
+// Canonical responsive module.
+//
+// NOTE: We still export the legacy `ResponsiveUtils` API for backward
+// compatibility while the codebase migrates off of it.
+export '../utils/responsive_utils.dart';
+
 class Breakpoints {
   static const double mobile = 600; // phones
-  static const double tablet = 1024; // small/large tablets & iPads (portrait)
-  static const double desktop = 1440; // large screens
+  static const double tablet = 1024; // tablets & small laptops
+  static const double desktop = 1440; // large screens (wide layout tweaks)
 }
 
 enum DeviceType { mobile, tablet, desktop }
@@ -26,7 +32,7 @@ extension MediaQueryX on BuildContext {
 typedef ResponsiveWidgetBuilder = Widget Function(BuildContext context);
 
 class Responsive extends StatelessWidget {
-  const Responsive({super.key, required this.mobile, this.tablet, this.desktop});
+  const Responsive({required this.mobile, super.key, this.tablet, this.desktop});
   final ResponsiveWidgetBuilder mobile;
   final ResponsiveWidgetBuilder? tablet;
   final ResponsiveWidgetBuilder? desktop;
@@ -45,7 +51,7 @@ class Responsive extends StatelessWidget {
 }
 
 class ResponsivePadding extends StatelessWidget {
-  const ResponsivePadding({super.key, required this.child});
+  const ResponsivePadding({required this.child, super.key});
   final Widget child;
 
   static EdgeInsets paddingFor(BuildContext context) {
@@ -61,13 +67,13 @@ class ResponsivePadding extends StatelessWidget {
 }
 
 T responsiveValue<T>(BuildContext context, {required T mobile, T? tablet, T? desktop}) {
-  if (context.isDesktop) return (desktop ?? tablet ?? mobile);
-  if (context.isTablet) return (tablet ?? mobile);
+  if (context.isDesktop) return desktop ?? tablet ?? mobile;
+  if (context.isTablet) return tablet ?? mobile;
   return mobile;
 }
 
 class MaxWidthWrapper extends StatelessWidget {
-  const MaxWidthWrapper({super.key, required this.child, this.maxWidth = 1000, this.alignment = Alignment.topCenter});
+  const MaxWidthWrapper({required this.child, this.maxWidth = 1000, this.alignment = Alignment.topCenter, super.key});
   final Widget child;
   final double maxWidth;
   final Alignment alignment;

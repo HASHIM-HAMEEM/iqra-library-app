@@ -1,11 +1,11 @@
-import 'dart:io';
-// import 'dart:typed_data';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
 import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'package:library_registration_app/core/platform/export_file_saver.dart';
 import 'package:library_registration_app/domain/entities/activity_log.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
@@ -20,10 +20,8 @@ class ExportService {
     required List<Subscription> subscriptions,
     required List<ActivityLog> activityLogs,
   }) async {
-    final excel = Excel.createExcel();
-
-    // Remove default sheet
-    excel.delete('Sheet1');
+    final excel = Excel.createExcel()
+      ..delete('Sheet1');
 
     // Create sheets for each data type
     _createStudentsSheet(excel, students);
@@ -44,30 +42,26 @@ class ExportService {
     required List<Subscription> subscriptions,
     required List<ActivityLog> activityLogs,
   }) async {
-    final String ts = _getTimestamp();
-    final String studentsCsv = _studentsToCsv(students);
-    final String subscriptionsCsv = _subscriptionsToCsv(subscriptions);
-    final String logsCsv = _activityLogsToCsv(activityLogs);
-
-    final directory = await getApplicationDocumentsDirectory();
-    final base = directory.path;
-
-    final studentsFile = File('$base/students_$ts.csv');
-    final subsFile = File('$base/subscriptions_$ts.csv');
-    final logsFile = File('$base/activity_logs_$ts.csv');
-    await studentsFile.writeAsString(studentsCsv);
-    await subsFile.writeAsString(subscriptionsCsv);
-    await logsFile.writeAsString(logsCsv);
-
-    // Simple zip via archive_io would be ideal; to avoid adding a heavy dep here,
-    // we return directory path. If you want a single ZIP file, I can add `archive` pkg.
-    return directory.path;
+    final ts = _getTimestamp();
+    final combined = StringBuffer()
+      ..writeln('# Students')
+      ..writeln(_studentsToCsv(students))
+      ..writeln()
+      ..writeln('# Subscriptions')
+      ..writeln(_subscriptionsToCsv(subscriptions))
+      ..writeln()
+      ..writeln('# Activity Logs')
+      ..writeln(_activityLogsToCsv(activityLogs));
+    return saveExportBytes(
+      utf8.encode(combined.toString()),
+      'iqra_library_export_$ts.csv',
+    );
   }
 
   /// Export only student data
   Future<String> exportStudentsData(List<Student> students) async {
-    final excel = Excel.createExcel();
-    excel.delete('Sheet1');
+    final excel = Excel.createExcel()
+      ..delete('Sheet1');
 
     _createStudentsSheet(excel, students);
 
@@ -78,18 +72,18 @@ class ExportService {
   }
 
   Future<String> exportStudentsCsv(List<Student> students) async {
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/students_${_getTimestamp()}.csv');
-    await file.writeAsString(_studentsToCsv(students));
-    return file.path;
+    return saveExportBytes(
+      utf8.encode(_studentsToCsv(students)),
+      'students_${_getTimestamp()}.csv',
+    );
   }
 
   /// Export only subscription data
   Future<String> exportSubscriptionsData(
     List<Subscription> subscriptions,
   ) async {
-    final excel = Excel.createExcel();
-    excel.delete('Sheet1');
+    final excel = Excel.createExcel()
+      ..delete('Sheet1');
 
     _createSubscriptionsSheet(excel, subscriptions);
 
@@ -102,16 +96,16 @@ class ExportService {
   Future<String> exportSubscriptionsCsv(
     List<Subscription> subscriptions,
   ) async {
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/subscriptions_${_getTimestamp()}.csv');
-    await file.writeAsString(_subscriptionsToCsv(subscriptions));
-    return file.path;
+    return saveExportBytes(
+      utf8.encode(_subscriptionsToCsv(subscriptions)),
+      'subscriptions_${_getTimestamp()}.csv',
+    );
   }
 
   /// Export only activity logs
   Future<String> exportActivityLogsData(List<ActivityLog> activityLogs) async {
-    final excel = Excel.createExcel();
-    excel.delete('Sheet1');
+    final excel = Excel.createExcel()
+      ..delete('Sheet1');
 
     _createActivityLogsSheet(excel, activityLogs);
 
@@ -122,14 +116,18 @@ class ExportService {
   }
 
   Future<String> exportActivityLogsCsv(List<ActivityLog> activityLogs) async {
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/activity_logs_${_getTimestamp()}.csv');
-    await file.writeAsString(_activityLogsToCsv(activityLogs));
-    return file.path;
+    return saveExportBytes(
+      utf8.encode(_activityLogsToCsv(activityLogs)),
+      'activity_logs_${_getTimestamp()}.csv',
+    );
   }
 
   /// Share exported file
   Future<void> shareExportedFile(String filePath) async {
+    if (kIsWeb) {
+      await Share.share('Export downloaded: $filePath');
+      return;
+    }
     final file = XFile(filePath);
     await Share.shareXFiles(
       [file],
@@ -145,27 +143,27 @@ class ExportService {
   }
 
   String _studentsToCsv(List<Student> students) {
-    final buf = StringBuffer();
-    buf.writeln(
-      [
-        'ID',
-        'First Name',
-        'Last Name',
-        'Date of Birth',
-        'Age',
-        'Email',
-        'Phone',
+    final buf = StringBuffer()
+      ..writeln(
+        [
+          'ID',
+          'First Name',
+          'Last Name',
+          'Date of Birth',
+          'Age',
+          'Email',
+          'Phone',
         'Address',
         'Seat Number',
         'Subscription Plan',
-        'Subscription Status',
-        'Subscription Start',
-        'Subscription End',
-        'Subscription Amount',
-        'Created At',
-        'Updated At',
-      ].join(','),
-    );
+          'Subscription Status',
+          'Subscription Start',
+          'Subscription End',
+          'Subscription Amount',
+          'Created At',
+          'Updated At',
+        ].join(','),
+      );
     for (final s in students) {
       buf.writeln(
         _rowToCsv([
@@ -177,16 +175,16 @@ class ExportService {
           s.email,
           s.phone,
           s.address,
-          s.seatNumber,
-          s.subscriptionPlan,
-          s.subscriptionStatus,
+          s.seatNumber ?? '',
+          s.subscriptionPlan ?? '',
+          s.subscriptionStatus ?? '',
           s.subscriptionStartDate != null
               ? _formatDate(s.subscriptionStartDate!, _dateOnlyFormat)
-              : null,
+              : '',
           s.subscriptionEndDate != null
               ? _formatDate(s.subscriptionEndDate!, _dateOnlyFormat)
-              : null,
-          s.subscriptionAmount,
+              : '',
+          s.subscriptionAmount?.toString() ?? '',
           _formatDate(s.createdAt, _dateFormat),
           _formatDate(s.updatedAt, _dateFormat),
         ]),
@@ -196,20 +194,20 @@ class ExportService {
   }
 
   String _subscriptionsToCsv(List<Subscription> subs) {
-    final buf = StringBuffer();
-    buf.writeln(
-      [
-        'ID',
-        'Student ID',
-        'Plan Name',
-        'Start Date',
-        'End Date',
-        'Amount',
-        'Status',
-        'Created At',
-        'Updated At',
-      ].join(','),
-    );
+    final buf = StringBuffer()
+      ..writeln(
+        [
+          'ID',
+          'Student ID',
+          'Plan Name',
+          'Start Date',
+          'End Date',
+          'Amount',
+          'Status',
+          'Created At',
+          'Updated At',
+        ].join(','),
+      );
     for (final s in subs) {
       buf.writeln(
         _rowToCsv([
@@ -229,18 +227,18 @@ class ExportService {
   }
 
   String _activityLogsToCsv(List<ActivityLog> logs) {
-    final buf = StringBuffer();
-    buf.writeln(
-      [
-        'ID',
-        'Activity Type',
-        'Description',
-        'Entity Type',
-        'Entity ID',
-        'Timestamp',
-        'Metadata',
-      ].join(','),
-    );
+    final buf = StringBuffer()
+      ..writeln(
+        [
+          'ID',
+          'Activity Type',
+          'Description',
+          'Entity Type',
+          'Entity ID',
+          'Timestamp',
+          'Metadata',
+        ].join(','),
+      );
     for (final l in logs) {
       buf.writeln(
         _rowToCsv([
@@ -260,7 +258,7 @@ class ExportService {
   String _escapeCsv(String value) {
     final needsQuotes =
         value.contains(',') || value.contains('"') || value.contains('\n');
-    var v = value.replaceAll('"', '""');
+    final v = value.replaceAll('"', '""');
     return needsQuotes ? '"$v"' : v;
   }
 
@@ -288,7 +286,7 @@ class ExportService {
     ];
 
     // Add headers
-    for (int i = 0; i < headers.length; i++) {
+    for (var i = 0; i < headers.length; i++) {
       final cell = sheet.cell(
         CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0),
       );
@@ -316,18 +314,20 @@ class ExportService {
         student.seatNumber ?? '',
         student.subscriptionPlan ?? '',
         student.subscriptionStatus ?? '',
-        student.subscriptionStartDate != null
-            ? _formatDate(student.subscriptionStartDate!, _dateOnlyFormat)
-            : '',
-        student.subscriptionEndDate != null
-            ? _formatDate(student.subscriptionEndDate!, _dateOnlyFormat)
-            : '',
+        if (student.subscriptionStartDate != null)
+          _formatDate(student.subscriptionStartDate!, _dateOnlyFormat)
+        else
+          '',
+        if (student.subscriptionEndDate != null)
+          _formatDate(student.subscriptionEndDate!, _dateOnlyFormat)
+        else
+          '',
         student.subscriptionAmount?.toString() ?? '',
         _formatDate(student.createdAt, _dateFormat),
         _formatDate(student.updatedAt, _dateFormat),
       ];
 
-      for (int j = 0; j < data.length; j++) {
+      for (var j = 0; j < data.length; j++) {
         final cell = sheet.cell(
           CellIndex.indexByColumnRow(columnIndex: j, rowIndex: row),
         );
@@ -386,7 +386,7 @@ class ExportService {
         _formatDate(subscription.updatedAt, _dateFormat),
       ];
 
-      for (int j = 0; j < data.length; j++) {
+      for (var j = 0; j < data.length; j++) {
         final cell = sheet.cell(
           CellIndex.indexByColumnRow(columnIndex: j, rowIndex: row),
         );
@@ -412,7 +412,7 @@ class ExportService {
     ];
 
     // Add headers
-    for (int i = 0; i < headers.length; i++) {
+    for (var i = 0; i < headers.length; i++) {
       final cell = sheet.cell(
         CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0),
       );
@@ -424,7 +424,7 @@ class ExportService {
     }
 
     // Add data
-    for (int i = 0; i < activityLogs.length; i++) {
+    for (var i = 0; i < activityLogs.length; i++) {
       final log = activityLogs[i];
       final row = i + 1;
 
@@ -438,7 +438,7 @@ class ExportService {
         log.metadata?.toString() ?? '',
       ];
 
-      for (int j = 0; j < data.length; j++) {
+      for (var j = 0; j < data.length; j++) {
         final cell = sheet.cell(
           CellIndex.indexByColumnRow(columnIndex: j, rowIndex: row),
         );
@@ -491,7 +491,7 @@ class ExportService {
       ],
     ];
 
-    for (int i = 0; i < stats.length; i++) {
+    for (var i = 0; i < stats.length; i++) {
       final labelCell = sheet.cell(
         CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 4 + i),
       );
@@ -508,7 +508,7 @@ class ExportService {
   }
 
   void _autoSizeColumns(Sheet sheet, int columnCount) {
-    for (int i = 0; i < columnCount; i++) {
+    for (var i = 0; i < columnCount; i++) {
       sheet.setColumnAutoFit(i);
     }
   }
@@ -533,11 +533,6 @@ class ExportService {
 
   Future<String> _saveExcelFile(Excel excel, String fileName) async {
     final List<int> bytes = excel.save()!;
-
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/$fileName');
-    await file.writeAsBytes(bytes);
-
-    return file.path;
+    return saveExportBytes(bytes, fileName);
   }
 }

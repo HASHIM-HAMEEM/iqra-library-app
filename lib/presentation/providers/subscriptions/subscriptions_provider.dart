@@ -9,6 +9,12 @@ final pagedSubscriptionsProvider = FutureProvider.family<List<Subscription>, ({i
   return repository.getSubscriptionsPaginated(params.offset, params.limit);
 });
 
+// Paginated discarded subscriptions provider (offset-based)
+final pagedDiscardedSubscriptionsProvider = FutureProvider.family<List<Subscription>, ({int offset, int limit})>((ref, params) async {
+  final repository = ref.watch(subscriptionRepositoryProvider);
+  return repository.getDiscardedSubscriptionsPaginated(params.offset, params.limit);
+});
+
 // All subscriptions provider
 final subscriptionsProvider = StreamProvider<List<Subscription>>((ref) {
   final repository = ref.watch(subscriptionRepositoryProvider);

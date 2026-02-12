@@ -1,3 +1,5 @@
+import 'dart:convert' show base64Url, jsonDecode, utf8;
+
 /// App configuration constants and settings
 class AppConfig {
   // App Information
@@ -48,15 +50,70 @@ class AppConfig {
   static const bool enableDataExport = true;
   static const bool enableAutoBackup = true;
 
-  // Supabase Configuration (MUST be set via CI/CD or runtime injection)
-  // SECURITY: Never hardcode production credentials in source code
-  // These must be provided via --dart-define during build or environment variables
+  // Supabase Configuration
+  // Project ref from anon key: rqghiwjhizmlvdagicnw
   static const String supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: '', // Empty default requires explicit configuration
+    defaultValue: 'https://rqghiwjhizmlvdagicnw.supabase.co',
   );
   static const String supabaseAnonKey = String.fromEnvironment(
-    'SUPABASE_ANON_KEY', 
-    defaultValue: '', // Empty default requires explicit configuration
+    'SUPABASE_ANON_KEY',
+    defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJxZ2hpd2poaXptbHZkYWdpY253Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMTEwMjUsImV4cCI6MjA3MDU4NzAyNX0.zm7SWW-6d_STzZ97L5D-bWdJLmAdgsX_yZV_C7ArjY4',
+  );
+
+  static bool get hasSupabaseConfig =>
+      supabaseUrl.trim().isNotEmpty && supabaseAnonKey.trim().isNotEmpty;
+
+  static List<String> get supabaseConfigIssues {
+    final issues = <String>[];
+    final url = supabaseUrl.trim();
+    final key = supabaseAnonKey.trim();
+    if (url.isEmpty) issues.add('Missing SUPABASE_URL');
+    if (key.isEmpty) issues.add('Missing SUPABASE_ANON_KEY');
+    if (url.isNotEmpty && !url.startsWith('https://')) {
+      issues.add('SUPABASE_URL must start with https://');
+    }
+
+    // Supabase supports both legacy JWT keys and the newer `sb_publishable_*`
+    // keys. We accept either, but we try to detect and block service-role keys.
+    if (key.startsWith('sb_secret_')) {
+      issues.add(
+        'SUPABASE_ANON_KEY must be a publishable/anon key (sb_publishable_* or anon JWT), not an sb_secret_* key',
+      );
+      return issues;
+    }
+
+    // Best-effort detection for JWT service_role keys.
+    // (If it isn't a JWT, we just accept it as-is.)
+    final parts = key.split('.');
+    if (parts.length == 3) {
+      try {
+        final payload = _decodeJwtPayload(parts[1]);
+        final role = payload['role'];
+        if (role == 'service_role') {
+          issues.add(
+            'SUPABASE_ANON_KEY appears to be a service_role key. Use the anon/publishable key instead.',
+          );
+        }
+      } catch (_) {
+        // Ignore decoding errors; key may be a non-JWT publishable key.
+      }
+    }
+    return issues;
+  }
+
+  static Map<String, dynamic> _decodeJwtPayload(String b64Url) {
+    // Normalize base64url padding
+    final normalized = b64Url.padRight(b64Url.length + ((4 - b64Url.length % 4) % 4), '=');
+    final bytes = base64Url.decode(normalized);
+    final jsonStr = utf8.decode(bytes);
+    return jsonDecode(jsonStr) as Map<String, dynamic>;
+  }
+
+  // Student ID Card configuration
+  // NOTE: In production, keep signing in trusted backend when possible.
+  static const String idCardVerificationBaseUrl = String.fromEnvironment(
+    'ID_CARD_VERIFY_URL',
+    defaultValue: '',
   );
 }

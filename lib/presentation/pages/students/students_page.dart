@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:library_registration_app/core/utils/responsive_utils.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
+import 'package:library_registration_app/core/theme/app_colors.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/presentation/providers/students/students_notifier.dart';
@@ -12,6 +14,7 @@ import 'package:library_registration_app/presentation/providers/subscriptions/su
 import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
 import 'package:library_registration_app/presentation/widgets/common/async_avatar.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
+import 'package:library_registration_app/presentation/widgets/common/page_header.dart';
 
 class StudentsPage extends ConsumerStatefulWidget {
   const StudentsPage({super.key});
@@ -293,35 +296,43 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
       backgroundColor: theme.colorScheme.surface,
       body: RefreshIndicator(
         onRefresh: _onRefresh,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          controller: _scrollController,
-          slivers: [
-            // Modern Header
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: ResponsiveUtils.getResponsivePadding(
-                  context,
-                ).copyWith(top: 8),
-                child: _buildModernHeader(theme),
-              ),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: ResponsiveUtils.getMaxContentWidth(context),
             ),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              controller: _scrollController,
+              slivers: [
+                // Modern Header
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: ResponsiveUtils.getResponsivePadding(
+                      context,
+                    ).copyWith(top: 8),
+                    child: _buildModernHeader(theme),
+                  ),
+                ),
 
-            // Search and Filter Section
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: ResponsiveUtils.getResponsivePadding(
-                  context,
-                ).copyWith(top: 16),
-                child: _buildSearchSection(theme),
-              ),
+                // Search and Filter Section
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: ResponsiveUtils.getResponsivePadding(
+                      context,
+                    ).copyWith(top: 16),
+                    child: _buildSearchSection(theme),
+                  ),
+                ),
+
+                // Chips moved into filter sheet (tune icon)
+
+                // Students List (slivers)
+                ..._buildStudentsSlivers(subsAsync),
+              ],
             ),
-
-            // Chips moved into filter sheet (tune icon)
-
-            // Students List (slivers)
-            ..._buildStudentsSlivers(subsAsync),
-          ],
+          ),
         ),
       ),
       floatingActionButton: Listener(
@@ -341,28 +352,20 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
   }
 
   Widget _buildModernHeader(ThemeData theme) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Students',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              Text(
-                'Manage student records and information',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
+    return PageHeader(
+      title: 'Students',
+      subtitle: 'Manage student records and information',
+      showBack: false,
+      actions: [
+        IconButton(
+          onPressed: () => context.push('/verify-card'),
+          icon: const Icon(Icons.qr_code_scanner_rounded),
+          tooltip: 'Scan Card',
+        ),
+        IconButton(
+          onPressed: () => context.go('/students/discarded'),
+          icon: const Icon(Icons.delete_outline_rounded),
+          tooltip: 'Discarded Students',
         ),
         IconButton(
           onPressed: _showFiltersSheet,
@@ -377,7 +380,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
     return Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.surface.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: AppRadius.borderXl,
         boxShadow: [
           BoxShadow(
             color: theme.shadowColor.withValues(alpha: 0.04),
@@ -475,7 +478,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                       height: 4,
                       decoration: BoxDecoration(
                         color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(2),
+                        borderRadius: AppRadius.borderXs,
                       ),
                     ),
                   ),
@@ -529,7 +532,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                           color: selected
                               ? theme.colorScheme.primaryContainer
                               : theme.colorScheme.surface,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: AppRadius.borderMd,
                           border: Border.all(
                             color: selected
                                 ? theme.colorScheme.primary
@@ -544,7 +547,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                           child: InkWell(
                             onTap: () =>
                                 setSheetState(() => _stagedFilter = option),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: AppRadius.borderMd,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 16,
@@ -600,7 +603,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                       return InkWell(
                         onTap: () =>
                             setSheetState(() => _stagedSortBy = option),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: AppRadius.borderMd,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
@@ -611,7 +614,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                                 ? theme.colorScheme.secondaryContainer
                                 : theme.colorScheme.surfaceContainerHighest
                                       .withValues(alpha: 0.3),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: AppRadius.borderMd,
                             border: Border.all(
                               color: selected
                                   ? theme.colorScheme.secondary
@@ -651,7 +654,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: AppRadius.borderLg,
                         ),
                       ),
                       child: const Text(
@@ -762,8 +765,14 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
         ),
       );
     }
-    final columns = ResponsiveUtils.isTablet(context) ? 2 : 3;
-    final aspect = ResponsiveUtils.isTablet(context) ? 2.2 : 2.6;
+
+    // Desktop / tablet: data table view
+    if (ResponsiveUtils.isDesktop(context)) {
+      return SliverToBoxAdapter(child: _buildStudentsDataTable(students));
+    }
+
+    final columns = 2;
+    final aspect = 2.2;
     return SliverGrid(
       delegate: SliverChildBuilderDelegate(
         (context, index) =>
@@ -776,6 +785,93 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
         mainAxisSpacing: 16,
         childAspectRatio: aspect,
       ),
+    );
+  }
+
+  Widget _buildStudentsDataTable(List<Student> students) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: AppRadius.borderLg,
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          // Table header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.3,
+              ),
+              border: Border(
+                bottom: BorderSide(
+                  color: theme.colorScheme.outlineVariant.withValues(
+                    alpha: 0.3,
+                  ),
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(width: 52),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 3,
+                  child: Text('Name', style: _tableHeaderStyle(theme)),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Text('Email', style: _tableHeaderStyle(theme)),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text('Phone', style: _tableHeaderStyle(theme)),
+                ),
+                SizedBox(
+                  width: 80,
+                  child: Text('Seat #', style: _tableHeaderStyle(theme)),
+                ),
+                SizedBox(
+                  width: 80,
+                  child: Text('Status', style: _tableHeaderStyle(theme)),
+                ),
+                const SizedBox(width: 48),
+              ],
+            ),
+          ),
+          // Table rows
+          ...students.asMap().entries.map((entry) {
+            final index = entry.key;
+            final student = entry.value;
+            final hasActive = _activeStatusCache[student.id] ?? false;
+            final hasExpired = _expiredStatusCache[student.id] ?? false;
+            return _StudentTableRow(
+              student: student,
+              hasActiveSubscription: hasActive,
+              hasExpiredSubscription: hasExpired,
+              isEven: index.isEven,
+              theme: theme,
+              onTap: () => context.push('/students/${student.id}'),
+              onDelete: () => _showDeleteConfirmation(student),
+              avatarBuilder: (Student s) =>
+                  _buildStudentAvatar(s, theme, size: 40),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  TextStyle _tableHeaderStyle(ThemeData theme) {
+    return theme.textTheme.labelMedium!.copyWith(
+      fontWeight: FontWeight.w700,
+      color: theme.colorScheme.onSurfaceVariant,
+      letterSpacing: 0.5,
     );
   }
 
@@ -819,7 +915,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                 height: 56,
                 decoration: BoxDecoration(
                   color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: AppRadius.borderLg,
                 ),
                 child: Icon(
                   Icons.people_outline_rounded,
@@ -898,7 +994,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: theme.colorScheme.errorContainer.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: AppRadius.borderXl,
               ),
               child: Icon(
                 Icons.error_outline_rounded,
@@ -952,7 +1048,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
     return Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: AppRadius.borderXl,
         boxShadow: [
           BoxShadow(
             color: theme.shadowColor.withValues(alpha: 0.04),
@@ -968,13 +1064,13 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-            context.push('/students/details/${student.id}');
+            context.push('/students/${student.id}');
             // _showNotification("Opening ${student.fullName}'s profile");
           },
           onLongPress: () {
             _showDeleteConfirmation(student);
           },
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: AppRadius.borderXl,
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -986,7 +1082,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: hasActiveSubscription
-                          ? const Color(0xFF10B981) // Success Green
+                          ? AppColors.success
                           : (hasExpiredSubscription
                                 ? theme.colorScheme.error
                                 : Colors.transparent),
@@ -1045,7 +1141,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                     color: theme.colorScheme.surfaceContainerHighest.withValues(
                       alpha: 0.5,
                     ),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: AppRadius.borderMd,
                   ),
                   child: Icon(
                     Icons.arrow_forward_ios_rounded,
@@ -1093,20 +1189,22 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                 height: 4,
                 decoration: BoxDecoration(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: AppRadius.borderXs,
                 ),
               ),
             ),
             const SizedBox(height: 16),
             Text(
-              'Delete Student',
+              'Move Student to Trash',
               style: theme.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
-            Text('Are you sure you want to delete ${student.fullName}?'),
+            Text(
+              'Move ${student.fullName} to trash? You can restore from Discarded Students.',
+            ),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -1147,7 +1245,7 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
                       }
                     }
                   },
-                  child: const Text('Delete'),
+                  child: const Text('Move to trash'),
                 ),
               ],
             ),
@@ -1155,6 +1253,202 @@ class _StudentsPageState extends ConsumerState<StudentsPage> {
           ],
         );
       },
+    );
+  }
+}
+
+class _StudentTableRow extends StatefulWidget {
+  const _StudentTableRow({
+    required this.student,
+    required this.hasActiveSubscription,
+    required this.hasExpiredSubscription,
+    required this.isEven,
+    required this.theme,
+    required this.onTap,
+    required this.onDelete,
+    required this.avatarBuilder,
+  });
+
+  final Student student;
+  final bool hasActiveSubscription;
+  final bool hasExpiredSubscription;
+  final bool isEven;
+  final ThemeData theme;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+  final Widget Function(Student) avatarBuilder;
+
+  @override
+  State<_StudentTableRow> createState() => _StudentTableRowState();
+}
+
+class _StudentTableRowState extends State<_StudentTableRow> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+    final student = widget.student;
+
+    Color statusColor;
+    String statusLabel;
+    if (widget.hasActiveSubscription) {
+      statusColor = AppColors.success;
+      statusLabel = 'Active';
+    } else if (widget.hasExpiredSubscription) {
+      statusColor = theme.colorScheme.error;
+      statusLabel = 'Expired';
+    } else {
+      statusColor = theme.colorScheme.onSurfaceVariant;
+      statusLabel = 'None';
+    }
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            color: _hovered
+                ? theme.colorScheme.primary.withValues(alpha: 0.04)
+                : (widget.isEven
+                      ? Colors.transparent
+                      : theme.colorScheme.surfaceContainerHighest.withValues(
+                          alpha: 0.15,
+                        )),
+            border: Border(
+              bottom: BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.2),
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              // Avatar
+              SizedBox(
+                width: 52,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: widget.hasActiveSubscription
+                            ? AppColors.success
+                            : (widget.hasExpiredSubscription
+                                  ? theme.colorScheme.error
+                                  : Colors.transparent),
+                        width: 2,
+                      ),
+                    ),
+                    child: widget.avatarBuilder(student),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Name
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      student.fullName,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              // Email
+              Expanded(
+                flex: 3,
+                child: Text(
+                  student.email,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              // Phone
+              Expanded(
+                flex: 2,
+                child: Text(
+                  student.phone ?? '—',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              // Seat #
+              SizedBox(
+                width: 80,
+                child: Text(
+                  student.seatNumber ?? '—',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+              // Status badge
+              SizedBox(
+                width: 80,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.1),
+                    borderRadius: AppRadius.borderXs,
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: statusColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+              // Actions
+              SizedBox(
+                width: 48,
+                child: _hovered
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          InkWell(
+                            onTap: widget.onDelete,
+                            borderRadius: AppRadius.borderXs,
+                            child: Padding(
+                              padding: const EdgeInsets.all(4),
+                              child: Icon(
+                                Icons.delete_outline_rounded,
+                                size: 18,
+                                color: theme.colorScheme.error,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

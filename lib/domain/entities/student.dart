@@ -20,6 +20,8 @@ class Student extends Equatable {
     this.subscriptionEndDate,
     this.subscriptionAmount,
     this.subscriptionStatus,
+    this.idCardToken,
+    this.idCardIssuedAt,
   });
   final String id;
   final String firstName;
@@ -40,6 +42,8 @@ class Student extends Equatable {
   final DateTime? subscriptionEndDate;
   final double? subscriptionAmount;
   final String? subscriptionStatus;
+  final String? idCardToken;
+  final DateTime? idCardIssuedAt;
 
   String get fullName => '$firstName $lastName';
 
@@ -77,6 +81,8 @@ class Student extends Equatable {
     DateTime? subscriptionEndDate,
     double? subscriptionAmount,
     String? subscriptionStatus,
+    String? idCardToken,
+    DateTime? idCardIssuedAt,
   }) {
     return Student(
       id: id ?? this.id,
@@ -97,6 +103,8 @@ class Student extends Equatable {
       subscriptionEndDate: subscriptionEndDate ?? this.subscriptionEndDate,
       subscriptionAmount: subscriptionAmount ?? this.subscriptionAmount,
       subscriptionStatus: subscriptionStatus ?? this.subscriptionStatus,
+      idCardToken: idCardToken ?? this.idCardToken,
+      idCardIssuedAt: idCardIssuedAt ?? this.idCardIssuedAt,
     );
   }
 
@@ -119,59 +127,141 @@ class Student extends Equatable {
     subscriptionEndDate,
     subscriptionAmount,
     subscriptionStatus,
+    idCardToken,
+    idCardIssuedAt,
   ];
 
   // JSON mapping for Supabase rows
   factory Student.fromJson(Map<String, dynamic> json) {
+    String readString(
+      List<String> keys, {
+      String fallback = '',
+      bool trim = false,
+    }) {
+      for (final key in keys) {
+        final raw = json[key];
+        if (raw == null) continue;
+        final value = raw.toString();
+        return trim ? value.trim() : value;
+      }
+      return fallback;
+    }
+
+    DateTime readDate(
+      List<String> keys, {
+      required DateTime fallback,
+    }) {
+      for (final key in keys) {
+        final raw = json[key];
+        if (raw == null) continue;
+        if (raw is DateTime) return raw;
+        final text = raw.toString().trim();
+        if (text.isEmpty) continue;
+        final parsed = DateTime.tryParse(text);
+        if (parsed != null) return parsed;
+      }
+      return fallback;
+    }
+
+    DateTime? readNullableDate(List<String> keys) {
+      for (final key in keys) {
+        final raw = json[key];
+        if (raw == null) continue;
+        if (raw is DateTime) return raw;
+        final text = raw.toString().trim();
+        if (text.isEmpty) continue;
+        final parsed = DateTime.tryParse(text);
+        if (parsed != null) return parsed;
+      }
+      return null;
+    }
+
+    bool readBool(List<String> keys, {bool fallback = false}) {
+      for (final key in keys) {
+        final raw = json[key];
+        if (raw == null) continue;
+        if (raw is bool) return raw;
+        final text = raw.toString().toLowerCase().trim();
+        if (text == 'true' || text == '1') return true;
+        if (text == 'false' || text == '0') return false;
+      }
+      return fallback;
+    }
+
+    double? readNullableDouble(List<String> keys) {
+      for (final key in keys) {
+        final raw = json[key];
+        if (raw == null) continue;
+        if (raw is num) return raw.toDouble();
+        final parsed = double.tryParse(raw.toString());
+        if (parsed != null) return parsed;
+      }
+      return null;
+    }
+
+    final nowUtc = DateTime.now().toUtc();
     return Student(
-      id: json['id'] as String,
-      firstName: (json['first_name'] ?? json['firstName']) as String,
-      lastName: (json['last_name'] ?? json['lastName']) as String,
-      dateOfBirth: DateTime.parse(
-        (json['date_of_birth'] ?? json['dateOfBirth']) as String,
+      id: readString(const ['id'], trim: true),
+      firstName: readString(const ['first_name', 'firstName'], trim: true),
+      lastName: readString(const ['last_name', 'lastName'], trim: true),
+      dateOfBirth: readDate(
+        const ['date_of_birth', 'dateOfBirth'],
+        fallback: DateTime(1970, 1, 1).toUtc(),
       ),
-      email: json['email'] as String,
-      phone: json['phone'] as String?,
-      address: json['address'] as String?,
+      email: readString(const ['email'], trim: true),
+      phone: readString(const ['phone']).trim().isEmpty
+          ? null
+          : readString(const ['phone']).trim(),
+      address: readString(const ['address']).trim().isEmpty
+          ? null
+          : readString(const ['address']).trim(),
       profileImagePath:
-          (json['profile_image_path'] ?? json['profileImagePath']) as String?,
-      seatNumber: (json['seat_number'] ?? json['seatNumber']) as String?,
-      createdAt: DateTime.parse(
-        (json['created_at'] ?? json['createdAt']) as String,
+          readString(const ['profile_image_path', 'profileImagePath'])
+                  .trim()
+                  .isEmpty
+          ? null
+          : readString(const ['profile_image_path', 'profileImagePath']).trim(),
+      seatNumber:
+          readString(const ['seat_number', 'seatNumber']).trim().isEmpty
+          ? null
+          : readString(const ['seat_number', 'seatNumber']).trim(),
+      createdAt: readDate(
+        const ['created_at', 'createdAt'],
+        fallback: nowUtc,
       ),
-      updatedAt: DateTime.parse(
-        (json['updated_at'] ?? json['updatedAt']) as String,
+      updatedAt: readDate(
+        const ['updated_at', 'updatedAt'],
+        fallback: nowUtc,
       ),
-      isDeleted: (json['is_deleted'] ?? json['isDeleted'] ?? false) as bool,
+      isDeleted: readBool(const ['is_deleted', 'isDeleted'], fallback: false),
       subscriptionPlan:
-          (json['subscription_plan'] ?? json['subscriptionPlan']) as String?,
-      subscriptionStartDate:
-          ((json['subscription_start_date'] ?? json['subscriptionStartDate'])
-                  as String?) !=
-              null
-          ? DateTime.parse(
-              (json['subscription_start_date'] ?? json['subscriptionStartDate'])
-                  as String,
-            )
-          : null,
-      subscriptionEndDate:
-          ((json['subscription_end_date'] ?? json['subscriptionEndDate'])
-                  as String?) !=
-              null
-          ? DateTime.parse(
-              (json['subscription_end_date'] ?? json['subscriptionEndDate'])
-                  as String,
-            )
-          : null,
-      subscriptionAmount: (() {
-        final Object? raw =
-            json['subscription_amount'] ?? json['subscriptionAmount'];
-        if (raw == null) return null;
-        return (raw as num).toDouble();
-      })(),
+          readString(const ['subscription_plan', 'subscriptionPlan'])
+                  .trim()
+                  .isEmpty
+          ? null
+          : readString(const ['subscription_plan', 'subscriptionPlan']).trim(),
+      subscriptionStartDate: readNullableDate(
+        const ['subscription_start_date', 'subscriptionStartDate'],
+      ),
+      subscriptionEndDate: readNullableDate(
+        const ['subscription_end_date', 'subscriptionEndDate'],
+      ),
+      subscriptionAmount: readNullableDouble(
+        const ['subscription_amount', 'subscriptionAmount'],
+      ),
       subscriptionStatus:
-          (json['subscription_status'] ?? json['subscriptionStatus'])
-              as String?,
+          readString(const ['subscription_status', 'subscriptionStatus'])
+                  .trim()
+                  .isEmpty
+          ? null
+          : readString(const ['subscription_status', 'subscriptionStatus']).trim(),
+      idCardToken:
+          readString(const ['id_card_token', 'idCardToken']).trim().isEmpty
+          ? null
+          : readString(const ['id_card_token', 'idCardToken']).trim(),
+      idCardIssuedAt: readNullableDate(
+        const ['id_card_issued_at', 'idCardIssuedAt'],
+      ),
     );
   }
 
@@ -196,6 +286,8 @@ class Student extends Equatable {
       'subscription_end_date': subscriptionEndDate?.toUtc().toIso8601String(),
       'subscription_amount': subscriptionAmount,
       'subscription_status': subscriptionStatus,
+      'id_card_token': idCardToken,
+      'id_card_issued_at': idCardIssuedAt?.toUtc().toIso8601String(),
     };
   }
 

@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
@@ -49,21 +48,7 @@ class AsyncAvatar extends ConsumerWidget {
 
     // Handle local file paths
     if (path.startsWith('/')) {
-      try {
-        final file = File(path);
-        return ClipOval(
-          child: Image.file(
-            file,
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) =>
-                _buildPlaceholder(theme),
-          ),
-        );
-      } catch (e) {
-        return _buildPlaceholder(theme);
-      }
+      return _buildPlaceholder(theme);
     }
 
     // Handle storage paths - generate signed URL

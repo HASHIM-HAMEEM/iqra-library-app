@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:library_registration_app/core/utils/error_mapper.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
 import 'package:library_registration_app/core/utils/telemetry_service.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
@@ -110,56 +111,64 @@ class SubscriptionDetailsPage extends ConsumerWidget {
           ),
         ],
       ),
-      body: subAsync.when(
-        data: (Subscription? sub) {
-          if (sub == null) {
-            return const Center(child: Text('Not found'));
-          }
-          final studentAsync = ref.watch(studentByIdProvider(sub.studentId));
-          return Column(
-            children: [
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        sub.planName,
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: ResponsiveUtils.getMaxContentWidth(context),
+          ),
+          child: subAsync.when(
+            data: (Subscription? sub) {
+              if (sub == null) {
+                return const Center(child: Text('Not found'));
+              }
+              final studentAsync = ref.watch(studentByIdProvider(sub.studentId));
+              return Column(
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            sub.planName,
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${dateFmt.format(sub.startDate)} – ${dateFmt.format(sub.endDate)}',
+                          ),
+                          const SizedBox(height: 8),
+                          Text('Amount: ${sub.amount.toStringAsFixed(2)}'),
+                          const SizedBox(height: 8),
+                          Text('Status: ${sub.status.name}'),
+                          const Divider(height: 32),
+                          studentAsync.when(
+                            data: (s) => s == null
+                                ? const SizedBox()
+                                : ListTile(
+                                    leading: const Icon(Icons.person_outline),
+                                    title: Text(s.fullName),
+                                    subtitle: Text(s.email),
+                                  ),
+                            loading: () => const LinearProgressIndicator(),
+                            error: (_, __) => const SizedBox(),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${dateFmt.format(sub.startDate)} – ${dateFmt.format(sub.endDate)}',
-                      ),
-                      const SizedBox(height: 8),
-                      Text('Amount: ${sub.amount.toStringAsFixed(2)}'),
-                      const SizedBox(height: 8),
-                      Text('Status: ${sub.status.name}'),
-                      const Divider(height: 32),
-                      studentAsync.when(
-                        data: (s) => s == null
-                            ? const SizedBox()
-                            : ListTile(
-                                leading: const Icon(Icons.person_outline),
-                                title: Text(s.fullName),
-                                subtitle: Text(s.email),
-                              ),
-                        loading: () => const LinearProgressIndicator(),
-                        error: (_, __) => const SizedBox(),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-              // Bottom bar removed; actions moved to AppBar 3-dot menu.
-            ],
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+                  // Bottom bar removed; actions moved to AppBar 3-dot menu.
+                ],
+              );
+            },
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(child: Text('Error: $e')),
+          ),
+        ),
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:library_registration_app/core/theme/app_theme.dart';
-import 'package:library_registration_app/core/utils/responsive_utils.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
 
 class PrimaryButton extends StatefulWidget {
   const PrimaryButton({
@@ -148,8 +149,7 @@ class _PrimaryButtonState extends State<PrimaryButton>
                   color: _isInteractive
                       ? null
                       : Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius:
-                      widget.borderRadius ?? BorderRadius.circular(16),
+                  borderRadius: widget.borderRadius ?? AppRadius.borderLg,
                   boxShadow: _isInteractive && !_isPressed
                       ? [
                           BoxShadow(
@@ -283,7 +283,7 @@ class SecondaryButton extends StatelessWidget {
                 : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
             width: 1.5,
           ),
-          borderRadius: borderRadius ?? BorderRadius.circular(16),
+          borderRadius: borderRadius ?? AppRadius.borderLg,
           color: Colors.transparent,
         ),
         child: Row(

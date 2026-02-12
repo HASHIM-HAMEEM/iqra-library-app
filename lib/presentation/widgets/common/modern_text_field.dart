@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 
 class ModernTextField extends StatelessWidget {
   const ModernTextField({
@@ -56,21 +57,21 @@ class ModernTextField extends StatelessWidget {
           alpha: 0.3,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           borderSide: BorderSide(
             color: theme.colorScheme.outlineVariant.withValues(alpha: 0.2),
           ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           borderSide: BorderSide(color: theme.colorScheme.error),
         ),
         contentPadding: const EdgeInsets.all(16),

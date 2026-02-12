@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:library_registration_app/core/theme/app_colors.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 
 class CompactStatTile extends StatelessWidget {
   const CompactStatTile({
@@ -24,7 +26,7 @@ class CompactStatTile extends StatelessWidget {
     final isUp = percent > 0;
     final isDown = percent < 0;
     final deltaColor = isUp
-        ? const Color(0xFF10B981) // green 500
+        ? AppColors.success
         : (isDown
               ? theme.colorScheme.error
               : theme.colorScheme.onSurfaceVariant);
@@ -42,7 +44,7 @@ class CompactStatTile extends StatelessWidget {
             theme.colorScheme.surfaceContainerLowest,
           ],
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadius.borderLg,
         border: Border.all(
           color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
         ),
@@ -62,7 +64,7 @@ class CompactStatTile extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadius.borderMd,
               border: Border.all(color: color.withValues(alpha: 0.1), width: 1),
             ),
             child: TweenAnimationBuilder<double>(

@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:library_registration_app/core/utils/responsive_utils.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
+import 'package:library_registration_app/core/theme/app_colors.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 import 'package:library_registration_app/domain/entities/activity_log.dart';
 import 'package:library_registration_app/presentation/providers/activity_logs/activity_logs_provider.dart';
+import 'package:library_registration_app/presentation/widgets/common/page_header.dart';
 
 class ActivityPage extends ConsumerStatefulWidget {
   const ActivityPage({super.key});
@@ -73,129 +76,209 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      appBar: AppBar(
-        backgroundColor: theme.colorScheme.surface,
-        foregroundColor: theme.colorScheme.onSurface,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            } else {
-              // Fall back to router home when pushed as root
-              if (mounted) {
-                GoRouter.of(context).go('/dashboard');
-              }
-            }
-          },
-          tooltip: 'Back',
-        ),
-        title: const Text('Recent Activity'),
-      ),
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        controller: _scrollController,
-        slivers: [
-          // header removed; AppBar provides title
-
-          // Controls
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: ResponsiveUtils.getResponsivePadding(
-                context,
-              ).copyWith(top: 4),
-              child: const SizedBox.shrink(),
-            ),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: ResponsiveUtils.getMaxContentWidth(context),
           ),
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            controller: _scrollController,
+            slivers: [
+              SliverToBoxAdapter(
+                child: PageHeader(
+                  title: 'Recent Activity',
+                  subtitle: 'Track system actions and updates',
+                  onBack: () {
+                    if (Navigator.of(context).canPop()) {
+                      Navigator.of(context).pop();
+                    } else {
+                      GoRouter.of(context).go('/dashboard');
+                    }
+                  },
+                ),
+              ),
 
-          // List
-          SliverPadding(
-            padding: ResponsiveUtils.getResponsivePadding(
-              context,
-            ).copyWith(top: 12, bottom: 24),
-            sliver: SliverToBoxAdapter(
-              child: logsStream.when(
-                data: (logs) {
-                  final source = _paged.isEmpty ? logs : _paged;
-                  final filtered = source.toList();
+              // header removed; AppBar provides title
 
-                  if (filtered.isEmpty) {
-                    return _buildEmptyState(theme);
-                  }
+              // Controls
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: ResponsiveUtils.getResponsivePadding(
+                    context,
+                  ).copyWith(top: 4),
+                  child: const SizedBox.shrink(),
+                ),
+              ),
 
-                  // Group by day and show friendly nuggets
-                  final grouped = <String, List<ActivityLog>>{};
-                  for (final a in filtered) {
-                    final k = DateFormat('yyyy-MM-dd').format(a.timestamp);
-                    (grouped[k] ??= []).add(a);
-                  }
-                  final days = grouped.keys.toList()
-                    ..sort((b, a) => a.compareTo(b));
+              // List
+              SliverPadding(
+                padding: ResponsiveUtils.getResponsivePadding(
+                  context,
+                ).copyWith(top: 12, bottom: 24),
+                sliver: SliverToBoxAdapter(
+                  child: logsStream.when(
+                    data: (logs) {
+                      final source = _paged.isEmpty ? logs : _paged;
+                      final filtered = source.toList();
 
-                  return ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: days.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final dayKey = days[index];
-                      final list = grouped[dayKey]!;
-                      final dayLabel = _friendlyDayLabel(
-                        DateTime.parse(dayKey),
-                      );
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 6, left: 4),
-                            child: Text(
-                              dayLabel,
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w700,
+                      if (filtered.isEmpty) {
+                        return _buildEmptyState(theme);
+                      }
+
+                      // Desktop: data table view
+                      if (ResponsiveUtils.isDesktop(context)) {
+                        return _buildActivityDataTable(theme, filtered);
+                      }
+
+                      // Mobile/tablet: grouped card list
+                      final grouped = <String, List<ActivityLog>>{};
+                      for (final a in filtered) {
+                        final k = DateFormat('yyyy-MM-dd').format(a.timestamp);
+                        (grouped[k] ??= []).add(a);
+                      }
+                      final days = grouped.keys.toList()
+                        ..sort((b, a) => a.compareTo(b));
+
+                      return ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: days.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final dayKey = days[index];
+                          final list = grouped[dayKey]!;
+                          final dayLabel = _friendlyDayLabel(
+                            DateTime.parse(dayKey),
+                          );
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: 6,
+                                  left: 4,
+                                ),
+                                child: Text(
+                                  dayLabel,
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                          ...list.map(
-                            (a) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: _buildActivityTile(theme, a),
-                            ),
-                          ),
-                        ],
+                              ...list.map(
+                                (a) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: _buildActivityTile(theme, a),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       );
                     },
-                  );
-                },
-                loading: () => _buildLoading(theme),
-                error: (e, _) => _buildError(theme, e),
+                    loading: () => _buildLoading(theme),
+                    error: (e, _) => _buildError(theme, e),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Center(
+                    child: _isLoadingPage
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : (!_hasMore
+                              ? Text(
+                                  'All activity loaded',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.hintColor,
+                                  ),
+                                )
+                              : const SizedBox.shrink()),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActivityDataTable(ThemeData theme, List<ActivityLog> logs) {
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: AppRadius.borderLg,
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.3,
+              ),
+              border: Border(
+                bottom: BorderSide(
+                  color: theme.colorScheme.outlineVariant.withValues(
+                    alpha: 0.3,
+                  ),
+                ),
               ),
             ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Center(
-                child: _isLoadingPage
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : (!_hasMore
-                          ? Text(
-                              'All activity loaded',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.hintColor,
-                              ),
-                            )
-                          : const SizedBox.shrink()),
-              ),
+            child: Row(
+              children: [
+                const SizedBox(width: 44),
+                Expanded(
+                  flex: 4,
+                  child: Text('Description', style: _thStyle(theme)),
+                ),
+                Expanded(flex: 2, child: Text('Type', style: _thStyle(theme))),
+                SizedBox(
+                  width: 160,
+                  child: Text('Time', style: _thStyle(theme)),
+                ),
+              ],
             ),
           ),
+          // Rows
+          ...logs.asMap().entries.map((entry) {
+            final index = entry.key;
+            final log = entry.value;
+            final color = _getActivityColor(log.activityType);
+            final icon = _getActivityIcon(log.activityType);
+            return _ActivityTableRow(
+              log: log,
+              color: color,
+              icon: icon,
+              formattedTime: _formatTimestamp(log.timestamp),
+              isEven: index.isEven,
+              theme: theme,
+            );
+          }),
         ],
       ),
+    );
+  }
+
+  TextStyle _thStyle(ThemeData theme) {
+    return theme.textTheme.labelMedium!.copyWith(
+      fontWeight: FontWeight.w700,
+      color: theme.colorScheme.onSurfaceVariant,
+      letterSpacing: 0.5,
     );
   }
 
@@ -206,7 +289,7 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppRadius.borderMd,
         border: Border.all(color: theme.colorScheme.outlineVariant, width: 0.8),
       ),
       child: Row(
@@ -216,7 +299,7 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: AppRadius.borderMd,
               border: Border.all(color: color.withValues(alpha: 0.2)),
             ),
             child: Icon(icon, color: color, size: 18),
@@ -300,7 +383,7 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadius.borderMd,
               border: Border.all(
                 color: theme.colorScheme.outlineVariant,
                 width: 0.8,
@@ -313,7 +396,7 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
                   height: 32,
                   decoration: BoxDecoration(
                     color: theme.colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: AppRadius.borderSm,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -326,7 +409,7 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
                         width: double.infinity,
                         decoration: BoxDecoration(
                           color: theme.colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: AppRadius.borderXs,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -335,7 +418,7 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
                         width: 120,
                         decoration: BoxDecoration(
                           color: theme.colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: AppRadius.borderXs,
                         ),
                       ),
                     ],
@@ -414,17 +497,17 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
       case ActivityType.subscriptionRenewed:
       case ActivityType.dataBackup:
       case ActivityType.dataRestore:
-        return const Color(0xFF10B981); // Success green
+        return AppColors.success;
       case ActivityType.login:
-        return const Color(0xFF3B82F6); // Blue
+        return AppColors.info;
       case ActivityType.studentUpdated:
       case ActivityType.subscriptionUpdated:
       case ActivityType.settingsChanged:
-        return const Color(0xFFF59E0B); // Warning yellow
+        return AppColors.warning;
       case ActivityType.studentDeleted:
       case ActivityType.subscriptionCancelled:
       case ActivityType.logout:
-        return const Color(0xFFEF4444); // Error red
+        return AppColors.error;
     }
   }
 
@@ -447,5 +530,119 @@ class _ActivityPageState extends ConsumerState<ActivityPage> {
     if (diff == 1) return 'Yesterday';
     if (diff < 7) return DateFormat('EEEE').format(date); // Weekday name
     return DateFormat('MMM d, yyyy').format(date);
+  }
+}
+
+class _ActivityTableRow extends StatefulWidget {
+  const _ActivityTableRow({
+    required this.log,
+    required this.color,
+    required this.icon,
+    required this.formattedTime,
+    required this.isEven,
+    required this.theme,
+  });
+
+  final ActivityLog log;
+  final Color color;
+  final IconData icon;
+  final String formattedTime;
+  final bool isEven;
+  final ThemeData theme;
+
+  @override
+  State<_ActivityTableRow> createState() => _ActivityTableRowState();
+}
+
+class _ActivityTableRowState extends State<_ActivityTableRow> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+    final typeName = widget.log.activityType.name
+        .replaceAllMapped(RegExp(r'[A-Z]'), (m) => ' ${m[0]}')
+        .trim();
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: _hovered
+              ? theme.colorScheme.primary.withValues(alpha: 0.04)
+              : (widget.isEven
+                    ? Colors.transparent
+                    : theme.colorScheme.surfaceContainerHighest.withValues(
+                        alpha: 0.15,
+                      )),
+          border: Border(
+            bottom: BorderSide(
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.2),
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            // Icon
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: widget.color.withValues(alpha: 0.1),
+                borderRadius: AppRadius.borderSm,
+              ),
+              alignment: Alignment.center,
+              child: Icon(widget.icon, color: widget.color, size: 16),
+            ),
+            const SizedBox(width: 12),
+            // Description
+            Expanded(
+              flex: 4,
+              child: Text(
+                widget.log.description,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            // Type
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: widget.color.withValues(alpha: 0.08),
+                  borderRadius: AppRadius.borderXs,
+                ),
+                child: Text(
+                  typeName,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: widget.color,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            // Time
+            SizedBox(
+              width: 160,
+              child: Text(
+                widget.formattedTime,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

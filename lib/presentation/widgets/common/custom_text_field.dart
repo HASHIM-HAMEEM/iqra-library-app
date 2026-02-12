@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:library_registration_app/core/theme/app_theme.dart';
-import 'package:library_registration_app/core/utils/responsive_utils.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
 
 class CustomTextField extends StatefulWidget {
   const CustomTextField({
@@ -92,7 +93,7 @@ class _CustomTextFieldState extends State<CustomTextField>
           scale: _scaleAnimation.value,
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: AppRadius.borderLg,
               boxShadow: _isFocused
                   ? [
                       BoxShadow(
@@ -105,10 +106,9 @@ class _CustomTextFieldState extends State<CustomTextField>
                     ]
                   : [
                       BoxShadow(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.05),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.05),
                         blurRadius: 10,
                         offset: const Offset(0, 2),
                       ),
@@ -166,47 +166,46 @@ class _CustomTextFieldState extends State<CustomTextField>
                       ? Theme.of(context).inputDecorationTheme.fillColor
                       : Theme.of(context).colorScheme.surfaceContainerHighest,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppRadius.borderLg,
                     borderSide: BorderSide(
                       color: Theme.of(context).colorScheme.outline,
                       width: 1.5,
                     ),
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppRadius.borderLg,
                     borderSide: BorderSide(
                       color: Theme.of(context).colorScheme.outline,
                       width: 1.5,
                     ),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppRadius.borderLg,
                     borderSide: BorderSide(
                       color: Theme.of(context).primaryColor,
                       width: 2,
                     ),
                   ),
                   errorBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppRadius.borderLg,
                     borderSide: BorderSide(
                       color: Theme.of(context).colorScheme.error,
                       width: 1.5,
                     ),
                   ),
                   focusedErrorBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppRadius.borderLg,
                     borderSide: BorderSide(
                       color: Theme.of(context).colorScheme.error,
                       width: 2,
                     ),
                   ),
                   disabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppRadius.borderLg,
                     borderSide: BorderSide(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .outline
-                          .withValues(alpha: 0.6),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outline.withValues(alpha: 0.6),
                     ),
                   ),
                   contentPadding: EdgeInsets.symmetric(

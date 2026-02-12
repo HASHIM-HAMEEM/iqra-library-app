@@ -8,9 +8,13 @@ import 'package:library_registration_app/presentation/pages/dashboard/dashboard_
 // Migration page removed - using Supabase only
 import 'package:library_registration_app/presentation/pages/settings/settings_page.dart';
 import 'package:library_registration_app/presentation/pages/students/add_student_page.dart';
+import 'package:library_registration_app/presentation/pages/students/discarded_students_page.dart';
 import 'package:library_registration_app/presentation/pages/students/edit_student_page.dart';
 import 'package:library_registration_app/presentation/pages/students/student_details_page.dart';
+import 'package:library_registration_app/presentation/pages/students/student_id_card_page.dart';
 import 'package:library_registration_app/presentation/pages/students/students_page.dart';
+import 'package:library_registration_app/presentation/pages/students/verify_student_card_page.dart';
+import 'package:library_registration_app/presentation/pages/subscriptions/discarded_subscriptions_page.dart';
 import 'package:library_registration_app/presentation/pages/subscriptions/subscription_details_page.dart';
 import 'package:library_registration_app/presentation/pages/subscriptions/subscriptions_page.dart';
 import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
@@ -19,15 +23,16 @@ final routerProvider = Provider<GoRouter>((ref) {
   // Always derive routing from auth state; auth can be local-only (offline biometric)
   final isAuthenticated = ref.watch(isAuthenticatedProvider);
 
-  final computedInitialLocation = !isAuthenticated ? '/auth' : '/dashboard';
-
   return GoRouter(
-    initialLocation: computedInitialLocation,
+    // No initialLocation - let GoRouter use the actual browser URL
+    // This enables deep linking to /verify-card and other routes
     redirect: (context, state) {
       final currentPath = state.uri.path;
 
       // Check authentication
-      if (!isAuthenticated && currentPath != '/auth') {
+      if (!isAuthenticated &&
+          currentPath != '/auth' &&
+          currentPath != '/verify-card') {
         debugPrint(
           '[Router] redirect -> /auth (not authenticated). from=$currentPath',
         );
@@ -42,6 +47,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         return '/dashboard';
       }
 
+      // If authenticated at root, redirect to dashboard
+      if (isAuthenticated && currentPath == '/') {
+        return '/dashboard';
+      }
+
       return null; // No redirect needed
     },
     routes: [
@@ -52,6 +62,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/auth',
         pageBuilder: (context, state) =>
             _buildFadeThroughPage(key: state.pageKey, child: const AuthPage()),
+      ),
+      GoRoute(
+        path: '/verify-card',
+        pageBuilder: (context, state) => _buildFadeThroughPage(
+          key: state.pageKey,
+          child: VerifyStudentCardPage(query: state.uri.queryParameters),
+        ),
       ),
 
       // Main app routes with layout
@@ -80,6 +97,14 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
             routes: [
               GoRoute(
+                path: 'discarded',
+                pageBuilder: (context, state) => _buildSharedAxisPage(
+                  key: state.pageKey,
+                  child: const DiscardedStudentsPage(),
+                  axis: SharedAxisAxis.horizontal,
+                ),
+              ),
+              GoRoute(
                 path: 'add',
                 pageBuilder: (context, state) => _buildModalSheetPage(
                   key: state.pageKey,
@@ -107,7 +132,29 @@ final routerProvider = Provider<GoRouter>((ref) {
                   );
                 },
               ),
+              GoRoute(
+                path: 'id-card/:id',
+                pageBuilder: (context, state) {
+                  final studentId = state.pathParameters['id']!;
+                  return _buildSharedAxisPage(
+                    key: state.pageKey,
+                    child: StudentIdCardPage(studentId: studentId),
+                    axis: SharedAxisAxis.horizontal,
+                  );
+                },
+              ),
             ],
+          ),
+          // Canonical aliases
+          GoRoute(
+            path: '/students/:id',
+            redirect: (context, state) =>
+                '/students/details/${state.pathParameters['id']}',
+          ),
+          GoRoute(
+            path: '/students/:id/edit',
+            redirect: (context, state) =>
+                '/students/edit/${state.pathParameters['id']}',
           ),
 
           // Subscriptions
@@ -120,6 +167,14 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
             routes: [
               GoRoute(
+                path: 'discarded',
+                pageBuilder: (context, state) => _buildSharedAxisPage(
+                  key: state.pageKey,
+                  child: const DiscardedSubscriptionsPage(),
+                  axis: SharedAxisAxis.horizontal,
+                ),
+              ),
+              GoRoute(
                 path: 'details/:id',
                 pageBuilder: (context, state) {
                   final id = state.pathParameters['id']!;
@@ -131,6 +186,11 @@ final routerProvider = Provider<GoRouter>((ref) {
                 },
               ),
             ],
+          ),
+          GoRoute(
+            path: '/subscriptions/:id',
+            redirect: (context, state) =>
+                '/subscriptions/details/${state.pathParameters['id']}',
           ),
 
           // Activity
@@ -238,7 +298,6 @@ CustomTransitionPage<void> _buildFadeThroughPage({
 }) {
   return CustomTransitionPage<void>(
     key: key,
-    transitionDuration: const Duration(milliseconds: 300),
     reverseTransitionDuration: const Duration(milliseconds: 260),
     child: child,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -269,7 +328,6 @@ CustomTransitionPage<void> _buildModalSheetPage({
 }) {
   return CustomTransitionPage<void>(
     key: key,
-    transitionDuration: const Duration(milliseconds: 300),
     reverseTransitionDuration: const Duration(milliseconds: 260),
     child: child,
     barrierDismissible: true,

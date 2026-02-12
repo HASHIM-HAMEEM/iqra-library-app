@@ -65,6 +65,13 @@ final pagedStudentsProvider = FutureProvider.family<List<Student>, ({int offset,
   return data;
 });
 
+// Simple paginated discarded students provider (offset-based)
+final pagedDiscardedStudentsProvider = FutureProvider.family<List<Student>, ({int offset, int limit})>((ref, params) async {
+  final repository = ref.watch(studentRepositoryProvider);
+  final data = await repository.getDiscardedStudentsPaginated(params.offset, params.limit);
+  return data;
+});
+
 // Email exists check provider
 final emailExistsProvider =
     FutureProvider.family<bool, ({String email, String? excludeId})>((

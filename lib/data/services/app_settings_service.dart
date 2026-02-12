@@ -70,8 +70,8 @@ class AppSettingsService {
 
   /// Set a boolean setting value
   Future<void> setBoolSetting(
-    String key,
-    bool value, {
+    String key, {
+    required bool value,
     String? description,
   }) async {
     await setStringSetting(key, value.toString(), description: description);

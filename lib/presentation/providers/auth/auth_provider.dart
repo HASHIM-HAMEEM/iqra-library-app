@@ -343,7 +343,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Mark that a real credential sign-in occurred. Used to gate biometrics visibility.
       await _appSettingsService.setBoolSetting(
         'has_signed_in_once',
-        true,
+        value: true,
         description: 'Admin has completed at least one credential login',
       );
       // Persist last known admin email for offline biometric display
@@ -518,7 +518,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Mark that user explicitly logged out - prevents auto-login on app restart
       await _appSettingsService.setBoolSetting(
         'user_logged_out',
-        true,
+        value: true,
         description: 'User explicitly logged out',
       );
 
@@ -528,14 +528,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
       await _clearSession();
       state = state.copyWith(
-        isAuthenticated: false,
         requiresReauth: true,
         user: null,
       );
     } catch (e) {
       await _clearSession();
       state = state.copyWith(
-        isAuthenticated: false,
         user: null,
         requiresReauth: true,
         error: null,
@@ -576,7 +574,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Validate that the Supabase session is still valid
       final session = _supabaseService.currentSession;
       if (session == null) {
-        await logout();
+        state = state.copyWith(
+          isAuthenticated: false,
+          requiresReauth: true,
+          user: null,
+        );
         return;
       }
 
@@ -589,8 +591,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       state = state.copyWith(lastAuthTime: now);
     } catch (e) {
-      // If extending session fails, force logout for security
-      await logout();
+      // Don't force logout on transient failures.
     }
   }
 
@@ -631,15 +632,30 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       // Check local session expiry
       if (state.isSessionExpired) {
-        await logout();
+        state = state.copyWith(
+          isAuthenticated: false,
+          requiresReauth: true,
+          user: null,
+        );
         return;
       }
 
       // Check Supabase session validity
-      final session = _supabaseService.currentSession;
+      var session = _supabaseService.currentSession;
       if (session == null) {
-        await logout();
-        return;
+        // Attempt one silent refresh before deciding the session is invalid.
+        try {
+          await _supabaseService.refreshSession();
+          session = _supabaseService.currentSession;
+        } catch (_) {}
+        if (session == null) {
+          state = state.copyWith(
+            isAuthenticated: false,
+            requiresReauth: true,
+            user: null,
+          );
+          return;
+        }
       }
 
       // Check if Supabase session is expired
@@ -648,13 +664,29 @@ class AuthNotifier extends StateNotifier<AuthState> {
           session.expiresAt! * 1000,
         );
         if (expiryTime.isBefore(DateTime.now())) {
-          await logout();
-          return;
+          try {
+            await _supabaseService.refreshSession();
+            session = _supabaseService.currentSession;
+          } catch (_) {}
+          final refreshedExpiry = session?.expiresAt != null
+              ? DateTime.fromMillisecondsSinceEpoch(
+                  session!.expiresAt! * 1000,
+                )
+              : null;
+          if (session == null ||
+              (refreshedExpiry != null &&
+                  refreshedExpiry.isBefore(DateTime.now()))) {
+            state = state.copyWith(
+              isAuthenticated: false,
+              requiresReauth: true,
+              user: null,
+            );
+            return;
+          }
         }
       }
     } catch (e) {
-      // If validation fails, logout for security
-      await logout();
+      // Don't force logout on validation exceptions caused by temporary issues.
     }
   }
 
@@ -665,9 +697,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> refreshSession() async {
     try {
       await _supabaseService.refreshSession();
-    } catch (e) {
-      // If refresh fails, force logout for security
-      await logout();
+    } on AuthException catch (e) {
+      // Logout only when the session is actually invalid.
+      final code = (e.statusCode ?? '').toLowerCase();
+      final message = e.message.toLowerCase();
+      final invalidSession =
+          code == '401' ||
+          message.contains('invalid refresh token') ||
+          message.contains('refresh token not found') ||
+          message.contains('jwt expired') ||
+          message.contains('session not found');
+      if (invalidSession) {
+        await logout();
+      }
+    } catch (_) {
+      // Ignore transient refresh failures.
     }
   }
 }

@@ -1,28 +1,28 @@
-import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
+import 'package:image/image.dart' as img;
 
 /// Exception thrown when image is too large to be uploaded.
 ///
-/// This exception is raised when an image file exceeds the maximum allowed size
+/// This exception is raised when an image exceeds the maximum allowed size
 /// limit of 300KB, which is enforced to minimize Supabase storage usage.
 class ImageTooLargeException implements Exception {
-  /// Actual size of the image file in bytes
-  final int actualSizeBytes;
-
-  /// Maximum allowed size in bytes (300KB)
-  final int maxSizeBytes;
-
-  /// Creates a new ImageTooLargeException with the given file sizes
   ImageTooLargeException(this.actualSizeBytes, this.maxSizeBytes);
 
-  /// Human-readable error message with formatted file sizes
-  String get message =>
-      'Image size (${_formatBytes(actualSizeBytes)}) exceeds maximum allowed size (${_formatBytes(maxSizeBytes)})';
+  /// Actual size of the image data in bytes.
+  final int actualSizeBytes;
 
-  /// Formats bytes into human-readable format (B, KB, MB)
+  /// Maximum allowed size in bytes (300KB).
+  final int maxSizeBytes;
+
+  String get message =>
+      'Image size (${_formatBytes(actualSizeBytes)}) exceeds maximum allowed '
+      'size (${_formatBytes(maxSizeBytes)})';
+
   String _formatBytes(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).round()} KB';
@@ -34,199 +34,137 @@ class ImageTooLargeException implements Exception {
 }
 
 /// Service for compressing and validating images before upload.
-///
-/// This service provides automatic image compression to ensure uploaded images
-/// stay within acceptable size limits while minimizing Supabase storage usage.
-/// It uses the flutter_image_compress package for efficient compression.
-///
-/// Features:
-/// - ALWAYS compresses images to save storage space
-/// - Aggressive quality reduction (50-70%) for smaller files
-/// - Small dimensions (400x400) optimized for profile photos
-/// - Maximum 300KB file size limit
-/// - Progressive compression with multiple quality levels
 class ImageCompressionService {
-  /// Maximum allowed file size in bytes (300KB - aggressive limit for storage savings)
-  static const int maxFileSizeBytes = 300 * 1024; // 300KB
+  // Keep profile photos reasonably small for storage and fast loads.
+  static const int maxFileSizeBytes = 1024 * 1024; // 1MB
+  static const int maxFileSizeKB = 1024;
+  static const int maxFileSizeMB = 1;
 
-  /// Maximum allowed file size in KB (for display purposes)
-  static const int maxFileSizeKB = 300;
-
-  /// Target dimensions for profile images (square, small for storage)
   static const int targetWidth = 400;
   static const int targetHeight = 400;
-
-  /// Quality levels for progressive compression
   static const int highQuality = 70;
   static const int mediumQuality = 50;
   static const int lowQuality = 35;
 
-  /// Maximum allowed file size in MB (for backward compatibility)
-  static const int maxFileSizeMB = 1;
-
-  /// Compresses an image file to reduce its size for minimal storage usage.
-  ///
-  /// This method ALWAYS compresses images regardless of original size to ensure
-  /// consistent storage savings. It uses progressive quality reduction:
-  /// - First try: 70% quality, 400x400
-  /// - Second try: 50% quality, 300x300
-  /// - Third try: 35% quality, 200x200
-  ///
-  /// Parameters:
-  /// - [imageFile]: The original image file to compress
-  ///
-  /// Returns:
-  /// - A Future<File> containing the compressed image
-  ///
-  /// Throws:
-  /// - [ImageTooLargeException] if the compressed image is still over 300KB
-  static Future<File> compressImage(File imageFile) async {
-    final originalSize = await imageFile.length();
-
-    // Get temporary directory for compressed file
-    final tempDir = await getTemporaryDirectory();
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}_compressed.jpg';
-    final targetPath = path.join(tempDir.path, fileName);
-
-    try {
-      // First pass: 70% quality, 400x400
-      var compressedBytes = await FlutterImageCompress.compressWithFile(
-        imageFile.absolute.path,
-        quality: highQuality,
-        minWidth: targetWidth,
-        minHeight: targetHeight,
-        format: CompressFormat.jpeg,
-      );
-
-      if (compressedBytes == null) {
-        throw ImageTooLargeException(originalSize, maxFileSizeBytes);
-      }
-
-      // Second pass if still too large: 50% quality, 300x300
-      if (compressedBytes.length > maxFileSizeBytes) {
-        compressedBytes = await FlutterImageCompress.compressWithFile(
-          imageFile.absolute.path,
-          quality: mediumQuality,
-          minWidth: 300,
-          minHeight: 300,
-          format: CompressFormat.jpeg,
-        );
-
-        if (compressedBytes == null) {
-          throw ImageTooLargeException(originalSize, maxFileSizeBytes);
-        }
-      }
-
-      // Third pass if still too large: 35% quality, 200x200
-      if (compressedBytes.length > maxFileSizeBytes) {
-        compressedBytes = await FlutterImageCompress.compressWithFile(
-          imageFile.absolute.path,
-          quality: lowQuality,
-          minWidth: 200,
-          minHeight: 200,
-          format: CompressFormat.jpeg,
-        );
-
-        if (compressedBytes == null ||
-            compressedBytes.length > maxFileSizeBytes) {
-          throw ImageTooLargeException(
-            compressedBytes?.length ?? originalSize,
-            maxFileSizeBytes,
-          );
-        }
-      }
-
-      // Write the compressed version
-      final compressedFile = File(targetPath);
-      await compressedFile.writeAsBytes(compressedBytes);
-      return compressedFile;
-    } catch (e) {
-      if (e is ImageTooLargeException) {
-        rethrow;
-      }
-      // If compression fails completely, throw exception
-      throw ImageTooLargeException(originalSize, maxFileSizeBytes);
-    }
-  }
-
-  /// Compresses image data (Uint8List) to reduce size.
-  /// ALWAYS compresses for consistent storage savings.
-  /// Returns compressed data or throws ImageTooLargeException if still too large.
   static Future<Uint8List> compressImageData(Uint8List imageData) async {
-    try {
-      // First pass: 70% quality, 400x400
-      var compressedBytes = await FlutterImageCompress.compressWithList(
-        imageData,
-        quality: highQuality,
-        minWidth: targetWidth,
-        minHeight: targetHeight,
-        format: CompressFormat.jpeg,
-      );
+    if (imageData.isEmpty) return imageData;
 
-      if (compressedBytes.isEmpty) {
-        throw ImageTooLargeException(imageData.length, maxFileSizeBytes);
-      }
+    // If already within limit, keep as-is to avoid quality loss.
+    if (imageData.length <= maxFileSizeBytes) return imageData;
 
-      // Second pass if still too large: 50% quality, 300x300
-      if (compressedBytes.length > maxFileSizeBytes) {
-        compressedBytes = await FlutterImageCompress.compressWithList(
-          imageData,
-          quality: mediumQuality,
-          minWidth: 300,
-          minHeight: 300,
-          format: CompressFormat.jpeg,
-        );
-
-        if (compressedBytes.isEmpty) {
-          throw ImageTooLargeException(imageData.length, maxFileSizeBytes);
-        }
-      }
-
-      // Third pass if still too large: 35% quality, 200x200
-      if (compressedBytes.length > maxFileSizeBytes) {
-        compressedBytes = await FlutterImageCompress.compressWithList(
-          imageData,
-          quality: lowQuality,
-          minWidth: 200,
-          minHeight: 200,
-          format: CompressFormat.jpeg,
-        );
-
-        if (compressedBytes.isEmpty ||
-            compressedBytes.length > maxFileSizeBytes) {
-          throw ImageTooLargeException(
-            compressedBytes.isNotEmpty
-                ? compressedBytes.length
-                : imageData.length,
-            maxFileSizeBytes,
-          );
-        }
-      }
-
-      return compressedBytes;
-    } catch (e) {
-      if (e is ImageTooLargeException) {
-        rethrow;
-      }
-      throw ImageTooLargeException(imageData.length, maxFileSizeBytes);
+    // Web: `flutter_image_compress` isn't available. Use pure Dart compression.
+    if (kIsWeb) {
+      return _compressWithImagePackage(imageData);
     }
+
+    // Non-web: try native compression first, fall back to pure Dart if needed.
+    try {
+      final attempts = <({int quality, int minSize})>[
+        (quality: highQuality, minSize: targetWidth),
+        (quality: mediumQuality, minSize: 320),
+        (quality: lowQuality, minSize: 240),
+      ];
+
+      Uint8List? last;
+      for (final a in attempts) {
+        final out = await FlutterImageCompress.compressWithList(
+          imageData,
+          quality: a.quality,
+          minWidth: a.minSize,
+          minHeight: a.minSize,
+          format: CompressFormat.jpeg,
+        );
+        if (out.isEmpty) continue;
+        last = out;
+        if (out.length <= maxFileSizeBytes) return out;
+      }
+
+      // If we managed to compress but it's still too big, throw a size error.
+      if (last != null && last.isNotEmpty) {
+        throw ImageTooLargeException(last.length, maxFileSizeBytes);
+      }
+    } on MissingPluginException {
+      // Fall through to pure Dart.
+    } catch (_) {
+      // Fall through to pure Dart.
+    }
+
+    return _compressWithImagePackage(imageData);
   }
 
-  /// Validates if an image file size is within acceptable limits
-  static Future<bool> validateImageSize(File imageFile) async {
-    final size = await imageFile.length();
-    return size <= maxFileSizeBytes;
+  static bool validateImageSizeBytes(Uint8List imageData) {
+    return imageData.length <= maxFileSizeBytes;
   }
 
-  /// Gets formatted file size string
   static String formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).round()} KB';
     return '${(bytes / (1024 * 1024)).round()} MB';
   }
 
-  /// Gets the file size in MB
-  static double getFileSizeInMB(int bytes) {
-    return bytes / (1024 * 1024);
+  static String detectFileExtension(Uint8List bytes, {String fallback = 'jpg'}) {
+    if (bytes.length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xD8) {
+      return 'jpg';
+    }
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47) {
+      return 'png';
+    }
+    return fallback;
+  }
+
+  static String mimeTypeForExtension(String extension) {
+    final ext = extension.toLowerCase().replaceAll('.', '').trim();
+    return switch (ext) {
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'png' => 'image/png',
+      _ => 'application/octet-stream',
+    };
+  }
+
+  static Future<Uint8List> _compressWithImagePackage(Uint8List imageData) async {
+    final decoded = img.decodeImage(imageData);
+    if (decoded == null) {
+      // Unknown format; allow it if it already fits.
+      if (imageData.length <= maxFileSizeBytes) return imageData;
+      throw ImageTooLargeException(imageData.length, maxFileSizeBytes);
+    }
+
+    final oriented = img.bakeOrientation(decoded);
+
+    final attempts = <({int maxDim, int quality})>[
+      (maxDim: 400, quality: 75),
+      (maxDim: 320, quality: 60),
+      (maxDim: 240, quality: 45),
+      (maxDim: 200, quality: 35),
+    ];
+
+    Uint8List? last;
+    for (final a in attempts) {
+      final resized = _resizeToMax(oriented, a.maxDim);
+      final encoded = img.encodeJpg(resized, quality: a.quality);
+      final out = Uint8List.fromList(encoded);
+      last = out;
+      if (out.length <= maxFileSizeBytes) return out;
+    }
+
+    throw ImageTooLargeException(last?.length ?? imageData.length, maxFileSizeBytes);
+  }
+
+  static img.Image _resizeToMax(img.Image input, int maxDim) {
+    final maxSide = math.max(input.width, input.height);
+    if (maxSide <= maxDim) return input;
+    final scale = maxDim / maxSide;
+    final w = math.max(1, (input.width * scale).round());
+    final h = math.max(1, (input.height * scale).round());
+    return img.copyResize(
+      input,
+      width: w,
+      height: h,
+      interpolation: img.Interpolation.average,
+    );
   }
 }

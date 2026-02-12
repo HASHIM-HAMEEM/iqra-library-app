@@ -1,5 +1,9 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 import 'package:library_registration_app/presentation/providers/auth/auth_provider.dart';
 import 'package:library_registration_app/presentation/providers/auth/setup_provider.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
@@ -7,6 +11,7 @@ import 'package:library_registration_app/presentation/providers/ui/ui_state_prov
 import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
 import 'package:library_registration_app/presentation/widgets/common/modern_text_field.dart';
+import 'package:library_registration_app/presentation/widgets/common/page_header.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -40,7 +45,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Future<void> _logout() async {
     await ref.read(authProvider.notifier).logout();
     if (!mounted) return;
-    Navigator.of(context).pushNamedAndRemoveUntil('/auth', (route) => false);
+    context.go('/auth');
   }
 
   Future<void> _loadSettings() async {
@@ -91,7 +96,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         .read(appSettingsDaoProvider)
         .setBoolSetting(
           'biometric_auth_enabled',
-          enabled,
+          value: enabled,
           description: 'Biometric auth',
         );
   }
@@ -142,174 +147,212 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           ),
 
-          CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: _buildModernHeader(theme),
-                ),
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: ResponsiveUtils.getMaxContentWidth(context),
               ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    children: [
-                      // Profile Section
-                      _buildSettingsSection(
-                        theme,
-                        title: 'Profile',
-                        children: [
-                          ModernTextField(
-                            controller: _libraryNameCtrl,
-                            label: 'Library Name',
-                            icon: Icons.business_rounded,
-                            onChanged: _saveLibraryName,
-                          ),
-                          const SizedBox(height: 16),
-                          ModernTextField(
-                            controller: _adminEmailCtrl,
-                            label: 'Admin Email',
-                            icon: Icons.email_outlined,
-                            keyboardType: TextInputType.emailAddress,
-                            onChanged: _saveAdminEmail,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Appearance Section
-                      _buildSettingsSection(
-                        theme,
-                        title: 'Appearance',
-                        children: [
-                          _buildListTile(
-                            context,
-                            icon: Icons.dark_mode_outlined,
-                            title: 'Theme',
-                            subtitle: switch (_themeMode) {
-                              ThemeMode.light => 'Light',
-                              ThemeMode.dark => 'Dark',
-                              _ => 'System Default',
-                            },
-                            onTap: _showThemeSheet,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Security Section
-                      _buildSettingsSection(
-                        theme,
-                        title: 'Security',
-                        children: [
-                          _buildSwitchListTile(
-                            context,
-                            icon: Icons.fingerprint_outlined,
-                            title: 'Biometric Login',
-                            subtitle: 'Use Face ID or Touch ID',
-                            value: _biometricEnabled,
-                            onChanged: _saveBiometric,
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Divider(
-                              height: 1,
-                              color: theme.colorScheme.outlineVariant
-                                  .withValues(alpha: 0.5),
-                            ),
-                          ),
-                          // Session timeout removed - user stays logged in indefinitely
-                          _buildListTile(
-                            context,
-                            icon: Icons.logout_rounded,
-                            title: 'Sign Out',
-                            subtitle: 'Return to login screen',
-                            iconColor: theme.colorScheme.error,
-                            textColor: theme.colorScheme.error,
-                            onTap: _logout,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Actions
-                      _buildActionCard(
-                        context,
-                        icon: Icons.restore_rounded,
-                        title: 'Reset to Defaults',
-                        subtitle: 'Restore all app settings',
-                        destructive: true,
-                        onTap: () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('Reset settings?'),
-                              content: const Text(
-                                'This will reset all your preferences to default. This action cannot be undone.',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, false),
-                                  child: const Text('Cancel'),
-                                ),
-                                FilledButton(
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text('Reset'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (confirm == true) {
-                            await ref
-                                .read(appSettingsDaoProvider)
-                                .resetToDefaults();
-                            await _loadSettings();
-                            if (mounted)
-                              CustomNotification.show(
-                                context,
-                                message: 'Settings reset',
-                                type: NotificationType.success,
-                              );
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 32),
-
-                      _buildFooter(theme),
-                      const SizedBox(height: 32),
-                    ],
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: _buildModernHeader(theme),
+                    ),
                   ),
-                ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: ResponsiveUtils.isDesktop(context)
+                          ? _buildDesktopSettingsLayout(theme)
+                          : _buildMobileSettingsLayout(theme),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildModernHeader(ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildResetAction(ThemeData theme) {
+    return _buildActionCard(
+      context,
+      icon: Icons.restore_rounded,
+      title: 'Reset to Defaults',
+      subtitle: 'Restore all app settings',
+      destructive: true,
+      onTap: () async {
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Reset settings?'),
+            content: const Text(
+              'This will reset all your preferences to default. This action cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Reset'),
+              ),
+            ],
+          ),
+        );
+        if (confirm ?? false) {
+          await ref.read(appSettingsDaoProvider).resetToDefaults();
+          await _loadSettings();
+          if (mounted) {
+            CustomNotification.show(context, message: 'Settings reset');
+          }
+        }
+      },
+    );
+  }
+
+  Widget _buildProfileSection(ThemeData theme) {
+    return _buildSettingsSection(
+      theme,
+      title: 'Profile',
       children: [
-        Text(
-          'Settings',
-          style: theme.textTheme.headlineMedium?.copyWith(
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.5,
-          ),
+        ModernTextField(
+          controller: _libraryNameCtrl,
+          label: 'Library Name',
+          icon: Icons.business_rounded,
+          onChanged: _saveLibraryName,
         ),
-        const SizedBox(height: 4),
-        Text(
-          'Manage app preferences and configurations',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w500,
-          ),
+        const SizedBox(height: 16),
+        ModernTextField(
+          controller: _adminEmailCtrl,
+          label: 'Admin Email',
+          icon: Icons.email_outlined,
+          keyboardType: TextInputType.emailAddress,
+          onChanged: _saveAdminEmail,
         ),
       ],
+    );
+  }
+
+  Widget _buildAppearanceSection(ThemeData theme) {
+    return _buildSettingsSection(
+      theme,
+      title: 'Appearance',
+      children: [
+        _buildListTile(
+          context,
+          icon: Icons.dark_mode_outlined,
+          title: 'Theme',
+          subtitle: switch (_themeMode) {
+            ThemeMode.light => 'Light',
+            ThemeMode.dark => 'Dark',
+            _ => 'System Default',
+          },
+          onTap: _showThemeSheet,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSecuritySection(ThemeData theme) {
+    return _buildSettingsSection(
+      theme,
+      title: 'Security',
+      children: [
+        if (!kIsWeb) ...[
+          _buildSwitchListTile(
+            context,
+            icon: Icons.fingerprint_outlined,
+            title: 'Biometric Login',
+            subtitle: 'Use Face ID or Touch ID',
+            value: _biometricEnabled,
+            onChanged: _saveBiometric,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Divider(
+              height: 1,
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+            ),
+          ),
+        ],
+        _buildListTile(
+          context,
+          icon: Icons.logout_rounded,
+          title: 'Sign Out',
+          subtitle: 'Return to login screen',
+          iconColor: theme.colorScheme.error,
+          textColor: theme.colorScheme.error,
+          onTap: _logout,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileSettingsLayout(ThemeData theme) {
+    return Column(
+      children: [
+        _buildProfileSection(theme),
+        const SizedBox(height: 24),
+        _buildAppearanceSection(theme),
+        const SizedBox(height: 24),
+        _buildSecuritySection(theme),
+        const SizedBox(height: 24),
+        _buildResetAction(theme),
+        const SizedBox(height: 32),
+        _buildFooter(theme),
+        const SizedBox(height: 32),
+      ],
+    );
+  }
+
+  Widget _buildDesktopSettingsLayout(ThemeData theme) {
+    return Column(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Left column
+            Expanded(
+              child: Column(
+                children: [
+                  _buildProfileSection(theme),
+                  const SizedBox(height: 24),
+                  _buildAppearanceSection(theme),
+                ],
+              ),
+            ),
+            const SizedBox(width: 24),
+            // Right column
+            Expanded(
+              child: Column(
+                children: [
+                  _buildSecuritySection(theme),
+                  const SizedBox(height: 24),
+                  _buildResetAction(theme),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 32),
+        _buildFooter(theme),
+        const SizedBox(height: 32),
+      ],
+    );
+  }
+
+  Widget _buildModernHeader(ThemeData theme) {
+    return const PageHeader(
+      title: 'Settings',
+      subtitle: 'Manage app preferences and configurations',
+      showBack: false,
     );
   }
 
@@ -335,7 +378,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             color: theme.colorScheme.surfaceContainerHighest.withValues(
               alpha: 0.3,
             ),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: AppRadius.borderXl,
             border: Border.all(
               color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
             ),
@@ -361,7 +404,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: AppRadius.borderMd,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
         child: Row(
@@ -370,7 +413,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: effectiveIconColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: AppRadius.borderMd,
               ),
               child: Icon(icon, color: effectiveIconColor, size: 20),
             ),
@@ -423,7 +466,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: theme.colorScheme.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadius.borderMd,
             ),
             child: Icon(icon, color: theme.colorScheme.primary, size: 20),
           ),
@@ -469,7 +512,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppRadius.borderXl,
         border: Border.all(
           color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
         ),
@@ -478,7 +521,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: AppRadius.borderXl,
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -487,7 +530,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppRadius.borderMd,
                   ),
                   child: Icon(icon, color: color, size: 20),
                 ),
@@ -521,17 +564,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Widget _buildFooter(ThemeData theme) {
+    final auth = ref.watch(authProvider);
+    final configuredEmail = _adminEmailCtrl.text.trim();
+    final authEmail = auth.user?.email ?? auth.lastKnownEmail;
+    final displayEmail = configuredEmail.isNotEmpty
+        ? configuredEmail
+        : (authEmail?.trim().isNotEmpty ?? false)
+        ? authEmail!.trim()
+        : 'No admin email set';
+
     return Column(
       children: [
         Text(
-          'scnz.',
+          'IQRA Library',
           style: theme.textTheme.labelLarge?.copyWith(
             fontWeight: FontWeight.w900,
             color: theme.colorScheme.primary.withValues(alpha: 0.5),
           ),
         ),
         Text(
-          'hashimdar141@yahoo.com',
+          displayEmail,
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -578,7 +630,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   color: theme.colorScheme.onSurfaceVariant.withValues(
                     alpha: 0.3,
                   ),
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: AppRadius.borderXs,
                 ),
               ),
             ),

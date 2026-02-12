@@ -43,8 +43,7 @@ final activityLogRepositoryProvider = Provider<ActivityLogRepository>((ref) {
 // Supabase service provider
 final supabaseServiceProvider = Provider<SupabaseService>((ref) {
   // Use the initialized Supabase instance with session persistence
-  final bool hasConfig =
-      AppConfig.supabaseUrl.isNotEmpty && AppConfig.supabaseAnonKey.isNotEmpty;
+  final bool hasConfig = AppConfig.supabaseConfigIssues.isEmpty;
 
   if (!hasConfig) {
     // Disabled service when not configured

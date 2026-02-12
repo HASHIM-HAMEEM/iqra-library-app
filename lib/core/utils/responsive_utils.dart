@@ -1,9 +1,15 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 class ResponsiveUtils {
   static const double mobileBreakpoint = 600;
-  static const double tabletBreakpoint = 900;
-  static const double desktopBreakpoint = 1200;
+  // Tablet layout starts at 600px and runs until desktop breakpoint.
+  // Desktop layout starts at >= 1024px.
+  static const double tabletBreakpoint = 1024;
+  static const double desktopBreakpoint = 1024;
+  static const double wideDesktopBreakpoint = 1440;
+
+  static bool get isWeb => kIsWeb;
 
   static bool isMobile(BuildContext context) {
     return MediaQuery.of(context).size.width < mobileBreakpoint;
@@ -16,6 +22,10 @@ class ResponsiveUtils {
 
   static bool isDesktop(BuildContext context) {
     return MediaQuery.of(context).size.width >= desktopBreakpoint;
+  }
+
+  static bool isWideDesktop(BuildContext context) {
+    return MediaQuery.of(context).size.width >= wideDesktopBreakpoint;
   }
 
   static bool isSmallMobile(BuildContext context) {
@@ -140,7 +150,9 @@ class ResponsiveUtils {
   }
 
   static double getMaxContentWidth(BuildContext context) {
-    if (isDesktop(context)) {
+    if (isWideDesktop(context)) {
+      return 1400;
+    } else if (isDesktop(context)) {
       return 1200;
     } else if (isTablet(context)) {
       // Allow wider content on tablets in landscape so the UI doesn't look "shrunk".
@@ -148,6 +160,18 @@ class ResponsiveUtils {
     } else {
       return double.infinity;
     }
+  }
+
+  static double getDialogWidth(BuildContext context) {
+    if (isDesktop(context)) return 560;
+    if (isTablet(context)) return 480;
+    return MediaQuery.of(context).size.width * 0.9;
+  }
+
+  static double getSidePanelWidth(BuildContext context) {
+    if (isWideDesktop(context)) return 480;
+    if (isDesktop(context)) return 420;
+    return 360;
   }
 
   static double getResponsiveValue(

@@ -4,6 +4,7 @@ abstract class SubscriptionRepository {
   Future<List<Subscription>> getAllSubscriptions();
   Future<List<Subscription>> getActiveSubscriptions();
   Future<List<Subscription>> getExpiredSubscriptions();
+  Future<List<Subscription>> getDiscardedSubscriptionsPaginated(int offset, int limit);
   Future<List<Subscription>> getSubscriptionsByStatus(
     SubscriptionStatus status,
   );
@@ -21,7 +22,8 @@ abstract class SubscriptionRepository {
   Future<void> updateSubscription(Subscription subscription, {bool allowOverlap = false});
   Future<void> cancelSubscription(String id);
   Future<void> renewSubscription(String id, DateTime newEndDate, double amount, {bool allowOverlap = false});
-  Future<void> deleteSubscription(String id);
+  Future<void> deleteSubscription(String id, {bool hard = false});
+  Future<void> restoreSubscription(String id);
 
   Stream<List<Subscription>> watchAllSubscriptions();
   Stream<List<Subscription>> watchActiveSubscriptions();

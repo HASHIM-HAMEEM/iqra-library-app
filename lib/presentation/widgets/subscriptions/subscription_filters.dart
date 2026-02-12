@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:library_registration_app/core/theme/app_colors.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 
-import 'package:library_registration_app/core/utils/responsive_utils.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 
 class SubscriptionFilters extends StatelessWidget {
@@ -54,33 +56,30 @@ class SubscriptionFilters extends StatelessWidget {
     return TextField(
       onChanged: onSearchChanged,
       decoration: InputDecoration(
-        hintText: 'Search by plan, student name, email, phone, seat number, amount, or ID...',
+        hintText:
+            'Search by plan, student name, email, phone, seat number, amount, or ID...',
         prefixIcon: Icon(
           Icons.search,
           color: searchQuery.isNotEmpty ? theme.colorScheme.primary : null,
         ),
         suffixIcon: searchQuery.isNotEmpty
             ? IconButton(
-                icon: Icon(
-                  Icons.clear,
-                  color: theme.colorScheme.primary,
-                ),
+                icon: Icon(Icons.clear, color: theme.colorScheme.primary),
                 onPressed: () => onSearchChanged(''),
               )
             : null,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppRadius.borderMd,
           borderSide: BorderSide(
-            color: searchQuery.isNotEmpty ? theme.colorScheme.primary : theme.colorScheme.outline,
+            color: searchQuery.isNotEmpty
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outline,
             width: searchQuery.isNotEmpty ? 2 : 1,
           ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(
-            color: theme.colorScheme.primary,
-            width: 2,
-          ),
+          borderRadius: AppRadius.borderMd,
+          borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
         ),
         filled: true,
         fillColor: searchQuery.isNotEmpty
@@ -179,9 +178,9 @@ class SubscriptionFilters extends StatelessWidget {
             textColor = theme.colorScheme.surface;
             borderColor = theme.colorScheme.onSurfaceVariant;
           case SubscriptionStatus.pending:
-            backgroundColor = const Color(0xFFF59E0B);
+            backgroundColor = AppColors.warning;
             textColor = theme.colorScheme.onPrimary;
-            borderColor = const Color(0xFFF59E0B);
+            borderColor = AppColors.warning;
         }
       }
     } else {
@@ -219,11 +218,13 @@ class SubscriptionFilters extends StatelessWidget {
       opacity: hasActiveFilters ? 1.0 : 0.0,
       duration: const Duration(milliseconds: 200),
       child: OutlinedButton.icon(
-        onPressed: hasActiveFilters ? () {
-          onStatusChanged(null);
-          onSearchChanged('');
-          onClearFilters?.call();
-        } : null,
+        onPressed: hasActiveFilters
+            ? () {
+                onStatusChanged(null);
+                onSearchChanged('');
+                onClearFilters?.call();
+              }
+            : null,
         icon: const Icon(Icons.clear_all, size: 18),
         label: Text(hasActiveFilters ? 'Clear Filters' : 'Clear'),
         style: OutlinedButton.styleFrom(

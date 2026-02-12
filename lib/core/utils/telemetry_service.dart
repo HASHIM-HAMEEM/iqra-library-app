@@ -75,7 +75,7 @@ class TelemetryService {
   }
 
   Map<String, Object?> _sanitizeContext(Map<String, Object?> context) {
-    final Map<String, Object?> out = <String, Object?>{};
+    final out = <String, Object?>{};
     for (final entry in context.entries) {
       final key = entry.key.toLowerCase();
       final value = entry.value;
@@ -116,17 +116,15 @@ class TelemetryService {
 
   String _hash(String input) {
     // Lightweight non-cryptographic hash for correlation without exposing PII.
-    int hash = 0;
-    for (int i = 0; i < input.length; i++) {
+    var hash = 0;
+    for (var i = 0; i < input.length; i++) {
       hash = 0x1fffffff & (hash + input.codeUnitAt(i));
-      hash = 0x1fffffff & (hash + ((0x0007ffff & hash) << 10));
-      hash ^= (hash >> 6);
+      hash = 0x1fffffff & hash + 0x0007ffff & hash << 10;
+      hash ^= hash >> 6;
     }
-    hash = 0x1fffffff & (hash + ((0x03ffffff & hash) << 3));
-    hash ^= (hash >> 11);
-    hash = 0x1fffffff & (hash + ((0x000003ff & hash) << 15));
+    hash = 0x1fffffff & hash + 0x03ffffff & hash << 3;
+    hash ^= hash >> 11;
+    hash = 0x1fffffff & hash + 0x000003ff & hash << 15;
     return hash.toRadixString(16);
   }
 }
-
-

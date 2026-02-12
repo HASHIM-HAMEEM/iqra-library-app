@@ -1,20 +1,22 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:library_registration_app/core/utils/permission_service.dart';
-import 'package:library_registration_app/core/utils/responsive_utils.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
+import 'package:library_registration_app/core/theme/app_colors.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 import 'package:library_registration_app/core/services/image_compression_service.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/presentation/providers/students/students_notifier.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
 import 'package:library_registration_app/presentation/widgets/common/custom_notification.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as path;
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
+import 'package:library_registration_app/presentation/widgets/common/app_bottom_sheet.dart';
 import 'package:library_registration_app/presentation/widgets/common/async_avatar.dart';
+import 'package:library_registration_app/presentation/widgets/common/page_header.dart';
 
 class EditStudentPage extends ConsumerStatefulWidget {
   const EditStudentPage({required this.studentId, super.key});
@@ -41,7 +43,9 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
   bool _isCompressingImage = false;
   String? _emailError;
   bool _hasChanges = false;
-  File? _selectedImage;
+  Uint8List? _selectedImageBytes;
+  String _selectedImageExtension = 'jpg';
+  String? _selectedImageMimeType;
   String? _profileImagePath;
   int _currentPage = 0;
   Student? _loadedStudent;
@@ -77,7 +81,7 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
 
   bool _hasFormChanges() {
     if (_hasChanges) return true;
-    if (_selectedImage != null) return true;
+    if (_selectedImageBytes != null) return true;
     // Deep check if needed, but _onFieldChanged covers text fields
     return false;
   }
@@ -100,8 +104,8 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    await showModalBottomSheet<void>(
-      context: context,
+    await showAppBottomSheet<void>(
+      context,
       builder: (context) => SafeArea(
         child: Wrap(
           children: [
@@ -131,17 +135,17 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
                 }
               },
             ),
-            if (_selectedImage != null || _profileImagePath != null)
+            if (_selectedImageBytes != null || _profileImagePath != null)
               ListTile(
-                leading: const Icon(Icons.delete, color: Colors.red),
-                title: const Text(
+                leading: Icon(Icons.delete, color: AppColors.error),
+                title: Text(
                   'Remove Photo',
-                  style: TextStyle(color: Colors.red),
+                  style: TextStyle(color: AppColors.error),
                 ),
                 onTap: () {
                   Navigator.pop(context);
                   setState(() {
-                    _selectedImage = null;
+                    _selectedImageBytes = null;
                     _profileImagePath = null;
                     _hasChanges = true;
                   });
@@ -156,19 +160,26 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
   Future<void> _processSelectedImage(XFile image) async {
     setState(() => _isCompressingImage = true);
     try {
-      final appDir = await getApplicationDocumentsDirectory();
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_${path.basename(image.path)}';
-      final savedPath = path.join(appDir.path, 'profile_images', fileName);
-      final profileDir = Directory(path.dirname(savedPath));
-      if (!await profileDir.exists()) await profileDir.create(recursive: true);
-
-      final tempImage = await File(image.path).copy(savedPath);
-      // Simplify compression for edit (using service)
-      final compressed = await ImageCompressionService.compressImage(tempImage);
+      final originalBytes = await image.readAsBytes();
+      final compressed = await ImageCompressionService.compressImageData(
+        originalBytes,
+      );
+      final fileName = image.name.isNotEmpty ? image.name : image.path;
+      final dot = fileName.lastIndexOf('.');
+      final fallbackExt = dot >= 0
+          ? fileName.substring(dot + 1).toLowerCase()
+          : 'jpg';
+      final ext = ImageCompressionService.detectFileExtension(
+        compressed,
+        fallback: fallbackExt,
+      );
 
       setState(() {
-        _selectedImage = compressed;
+        _selectedImageBytes = compressed;
+        _selectedImageExtension = ext;
+        _selectedImageMimeType = ImageCompressionService.mimeTypeForExtension(
+          ext,
+        );
         _hasChanges = true;
       });
     } catch (e) {
@@ -197,7 +208,7 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Discard', style: TextStyle(color: Colors.red)),
+            child: Text('Discard', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -220,11 +231,13 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
     try {
       // 1. Upload image if new
       String? finalImagePath = _profileImagePath;
-      if (_selectedImage != null) {
+      if (_selectedImageBytes != null) {
         final supabase = ref.read(supabaseServiceProvider);
         finalImagePath = await supabase.uploadProfileImage(
           studentId: widget.studentId,
-          file: _selectedImage!,
+          imageBytes: _selectedImageBytes!,
+          fileExtension: _selectedImageExtension,
+          contentType: _selectedImageMimeType,
         );
         // Supabase trigger might handle DB update, but we set it explicitly below
       }
@@ -306,6 +319,7 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
               _seatNumberController.text = student.seatNumber ?? '';
               _selectedDate = student.dateOfBirth;
               _profileImagePath = student.profileImagePath;
+              _selectedImageBytes = null;
               // Reset trigger after init
               Future.microtask(() => setState(() => _hasChanges = false));
             }
@@ -338,73 +352,84 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
                 Positioned.fill(
                   child: GestureDetector(
                     onTap: () => FocusScope.of(context).unfocus(),
-                    child: CustomScrollView(
-                      slivers: [
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: ResponsiveUtils.getResponsivePadding(
-                              context,
-                            ).copyWith(top: 8, bottom: 0),
-                            child: _buildModernHeader(context, student),
-                          ),
-                        ),
-                        // Stepper
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 16,
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: LinearProgressIndicator(
-                                      value: progress,
-                                      minHeight: 6,
-                                      backgroundColor: theme
-                                          .colorScheme
-                                          .surfaceContainerHighest,
-                                      valueColor: AlwaysStoppedAnimation(
-                                        theme.colorScheme.primary,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Step ${_currentPage + 1} of 2',
-                                  style: theme.textTheme.labelMedium?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        // Form
-                        SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: Form(
-                            key: _formKey,
-                            child: SizedBox(
-                              height: MediaQuery.of(context).size.height - 200,
-                              child: PageView(
-                                controller: _pageController,
-                                physics: const NeverScrollableScrollPhysics(),
-                                onPageChanged: (i) =>
-                                    setState(() => _currentPage = i),
-                                children: [
-                                  _buildPersonalInfoPage(theme),
-                                  _buildProfilePhotoPage(theme),
-                                ],
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 760),
+                        child: CustomScrollView(
+                          slivers: [
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: ResponsiveUtils.getResponsivePadding(
+                                  context,
+                                ).copyWith(top: 8, bottom: 0),
+                                child: _buildModernHeader(context, student),
                               ),
                             ),
-                          ),
+                            // Stepper
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 16,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: ClipRRect(
+                                        borderRadius: AppRadius.borderXs,
+                                        child: LinearProgressIndicator(
+                                          value: progress,
+                                          minHeight: 6,
+                                          backgroundColor: theme
+                                              .colorScheme
+                                              .surfaceContainerHighest,
+                                          valueColor: AlwaysStoppedAnimation(
+                                            theme.colorScheme.primary,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      'Step ${_currentPage + 1} of 2',
+                                      style: theme.textTheme.labelMedium
+                                          ?.copyWith(
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            // Form
+                            SliverFillRemaining(
+                              hasScrollBody: false,
+                              child: Form(
+                                key: _formKey,
+                                child: SizedBox(
+                                  height:
+                                      MediaQuery.of(context).size.height - 200,
+                                  child: PageView(
+                                    controller: _pageController,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    onPageChanged: (i) =>
+                                        setState(() => _currentPage = i),
+                                    children: [
+                                      _buildPersonalInfoPage(theme),
+                                      _buildProfilePhotoPage(theme),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -428,77 +453,87 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
                     ),
                     child: SafeArea(
                       top: false,
-                      child: Row(
-                        children: [
-                          if (_currentPage > 0)
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () => _pageController.previousPage(
-                                  duration: const Duration(milliseconds: 300),
-                                  curve: Curves.easeInOut,
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                ),
-                                child: const Text('Previous'),
-                              ),
-                            ),
-                          if (_currentPage > 0) const SizedBox(width: 16),
-                          Expanded(
-                            flex: 2,
-                            child: FilledButton(
-                              onPressed: _currentPage == 0
-                                  ? () {
-                                      if (_formKey.currentState!.validate() &&
-                                          _selectedDate != null) {
-                                        _pageController.nextPage(
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 760),
+                          child: Row(
+                            children: [
+                              if (_currentPage > 0)
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () =>
+                                        _pageController.previousPage(
                                           duration: const Duration(
                                             milliseconds: 300,
                                           ),
                                           curve: Curves.easeInOut,
-                                        );
-                                      } else if (_selectedDate == null) {
-                                        CustomNotification.show(
-                                          context,
-                                          message: 'Date of birth is required',
-                                          type: NotificationType.error,
-                                        );
-                                      }
-                                    }
-                                  : (_isLoading ? null : _updateStudent),
-                              style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                              child: _isLoading
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
+                                        ),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
                                       ),
-                                    )
-                                  : Text(
-                                      _currentPage == 0
-                                          ? 'Next Step'
-                                          : 'Update Student',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: AppRadius.borderLg,
                                       ),
                                     ),
-                            ),
+                                    child: const Text('Previous'),
+                                  ),
+                                ),
+                              if (_currentPage > 0) const SizedBox(width: 16),
+                              Expanded(
+                                flex: 2,
+                                child: FilledButton(
+                                  onPressed: _currentPage == 0
+                                      ? () {
+                                          if (_formKey.currentState!
+                                                  .validate() &&
+                                              _selectedDate != null) {
+                                            _pageController.nextPage(
+                                              duration: const Duration(
+                                                milliseconds: 300,
+                                              ),
+                                              curve: Curves.easeInOut,
+                                            );
+                                          } else if (_selectedDate == null) {
+                                            CustomNotification.show(
+                                              context,
+                                              message:
+                                                  'Date of birth is required',
+                                              type: NotificationType.error,
+                                            );
+                                          }
+                                        }
+                                      : (_isLoading ? null : _updateStudent),
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: AppRadius.borderLg,
+                                    ),
+                                  ),
+                                  child: _isLoading
+                                      ? const SizedBox(
+                                          height: 20,
+                                          width: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : Text(
+                                          _currentPage == 0
+                                              ? 'Next Step'
+                                              : 'Update Student',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -514,37 +549,12 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
   }
 
   Widget _buildModernHeader(BuildContext context, Student student) {
-    final theme = Theme.of(context);
-    return Row(
-      children: [
-        IconButton(
-          onPressed: () async {
-            if (await _onWillPop() && context.mounted) Navigator.pop(context);
-          },
-          icon: const Icon(Icons.arrow_back),
-          tooltip: 'Back',
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Edit Student',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Text(
-                student.fullName,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+    return PageHeader(
+      title: 'Edit Student',
+      subtitle: student.fullName,
+      onBack: () async {
+        if (await _onWillPop() && context.mounted) Navigator.pop(context);
+      },
     );
   }
 
@@ -570,14 +580,14 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
         const SizedBox(height: 16),
         InkWell(
           onTap: () => _selectDate(context),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: theme.colorScheme.surfaceContainerHighest.withValues(
                 alpha: 0.3,
               ),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: AppRadius.borderLg,
               border: Border.all(
                 color: theme.colorScheme.outlineVariant.withValues(alpha: 0.2),
               ),
@@ -641,6 +651,14 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
           Icons.location_on_outlined,
           maxLines: 2,
         ),
+        const SizedBox(height: 16),
+        _buildModernTextField(
+          theme,
+          _seatNumberController,
+          'Seat Number (Optional)',
+          Icons.event_seat_outlined,
+        ),
+        const SizedBox(height: 16),
       ],
     );
   }
@@ -678,8 +696,8 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
                   child: SizedBox(
                     width: 190,
                     height: 190,
-                    child: _selectedImage != null
-                        ? Image.file(_selectedImage!, fit: BoxFit.cover)
+                    child: _selectedImageBytes != null
+                        ? Image.memory(_selectedImageBytes!, fit: BoxFit.cover)
                         : AsyncAvatar(
                             imagePath: _profileImagePath,
                             initials: _loadedStudent?.initials ?? '?',
@@ -745,21 +763,21 @@ class _EditStudentPageState extends ConsumerState<EditStudentPage> {
           alpha: 0.3,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           borderSide: BorderSide(
             color: theme.colorScheme.outlineVariant.withValues(alpha: 0.2),
           ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           borderSide: BorderSide(color: theme.colorScheme.error),
         ),
         contentPadding: const EdgeInsets.all(16),

@@ -32,8 +32,7 @@ class ConnectivityService {
   Future<void> initialize() async {
     try {
       // Check initial connectivity status
-      final List<ConnectivityResult> connectivityResults = 
-          await _connectivity.checkConnectivity();
+      final connectivityResults = await _connectivity.checkConnectivity();
       _updateConnectionStatus(connectivityResults);
       
       // Listen for connectivity changes
@@ -49,11 +48,10 @@ class ConnectivityService {
   
   /// Update connection status based on connectivity results
   void _updateConnectionStatus(List<ConnectivityResult> results) {
-    final bool wasConnected = _isConnected.value;
+    final wasConnected = _isConnected.value;
     
     // Check if any connection type indicates connectivity
-    final bool isNowConnected = results.any((result) => 
-        result != ConnectivityResult.none);
+    final isNowConnected = results.any((result) => result != ConnectivityResult.none);
     
     _isConnected.value = isNowConnected;
     

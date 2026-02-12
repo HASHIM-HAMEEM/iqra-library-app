@@ -93,3 +93,11 @@ Desktop.ini
 *.tmp
 *.temp
 .cache/
+
+# Local Netlify folder
+.netlify
+
+# Firebase local state / credentials
+.firebase/
+firebase-service-account.json
+*-firebase-adminsdk-*.json

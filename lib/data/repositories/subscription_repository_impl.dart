@@ -58,6 +58,14 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
   }
 
   @override
+  Future<List<Subscription>> getDiscardedSubscriptionsPaginated(
+    int offset,
+    int limit,
+  ) async {
+    return _supabase.getDiscardedSubscriptionsPaginated(offset, limit);
+  }
+
+  @override
   Future<List<Subscription>> getSubscriptionsByStatus(
     SubscriptionStatus status,
   ) async {
@@ -221,8 +229,13 @@ class SubscriptionRepositoryImpl implements SubscriptionRepository {
   }
 
   @override
-  Future<void> deleteSubscription(String id) async {
-    await _supabase.deleteSubscription(id);
+  Future<void> deleteSubscription(String id, {bool hard = false}) async {
+    await _supabase.deleteSubscription(id, hard: hard);
+  }
+
+  @override
+  Future<void> restoreSubscription(String id) async {
+    await _supabase.restoreSubscription(id);
   }
 
   @override

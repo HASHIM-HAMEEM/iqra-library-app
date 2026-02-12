@@ -5,7 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
 import 'package:library_registration_app/core/utils/error_mapper.dart';
-import 'package:library_registration_app/core/utils/responsive_utils.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 import 'package:library_registration_app/core/utils/telemetry_service.dart';
 import 'package:library_registration_app/presentation/providers/activity_logs/activity_logs_provider.dart';
 import 'package:library_registration_app/presentation/providers/students/students_provider.dart';
@@ -15,6 +16,7 @@ import 'package:library_registration_app/presentation/widgets/common/custom_noti
 // cached_network_image removed; using Image.network with errorBuilder
 import 'package:library_registration_app/presentation/widgets/common/async_avatar.dart';
 import 'package:library_registration_app/presentation/pages/students/profile_photo_view_page.dart';
+import 'package:library_registration_app/presentation/widgets/common/page_header.dart';
 
 class StudentDetailsPage extends ConsumerWidget {
   const StudentDetailsPage({required this.studentId, super.key});
@@ -82,54 +84,31 @@ class StudentDetailsPage extends ConsumerWidget {
 
   Widget _buildModernHeader(BuildContext context, Student student) {
     final theme = Theme.of(context);
-    return Row(
-      children: [
+    return PageHeader(
+      title: 'Student Profile',
+      subtitle: 'View and manage details',
+      onBack: () => context.pop(),
+      actions: [
         IconButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.go('/students/id-card/${student.id}'),
           style: IconButton.styleFrom(
             backgroundColor: theme.colorScheme.surfaceContainerHighest
-                .withValues(alpha: 0.3),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+                .withValues(alpha: 0.35),
+            shape: RoundedRectangleBorder(borderRadius: AppRadius.borderMd),
           ),
-          icon: Icon(
-            Icons.arrow_back_rounded,
-            color: theme.colorScheme.onSurface,
-          ),
-          tooltip: 'Back',
+          icon: const Icon(Icons.badge_outlined),
+          tooltip: 'ID Card',
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Student Profile',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 20,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              Text(
-                'View and manage details',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
+        const SizedBox(width: 8),
         FilledButton.icon(
-          onPressed: () => context.go('/students/edit/${student.id}'),
+          onPressed: () => context.go('/students/${student.id}/edit'),
           icon: const Icon(Icons.edit_outlined, size: 18),
           label: const Text('Edit'),
           style: FilledButton.styleFrom(
             backgroundColor: theme.colorScheme.primaryContainer,
             foregroundColor: theme.colorScheme.onPrimaryContainer,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            shape: RoundedRectangleBorder(borderRadius: AppRadius.borderMd),
           ),
         ),
       ],
@@ -225,7 +204,7 @@ Widget _buildProfileHero(BuildContext context, Student student) {
           theme.colorScheme.surface,
         ],
       ),
-      borderRadius: BorderRadius.circular(32),
+      borderRadius: AppRadius.borderPill,
       border: Border.all(
         color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
       ),
@@ -289,7 +268,7 @@ Widget _buildProfileHero(BuildContext context, Student student) {
             color: theme.colorScheme.surfaceContainerHighest.withValues(
               alpha: 0.5,
             ),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: AppRadius.borderXl,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -343,7 +322,7 @@ Future<void> _renewSubscriptionForStudent(
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         decoration: const InputDecoration(
           labelText: 'Renewal amount',
-          prefixIcon: Icon(Icons.currency_rupee),
+          prefixIcon: Icon(Icons.payments_outlined),
         ),
       ),
       actions: [
@@ -464,7 +443,7 @@ Widget _sectionCard(
     padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(
       color: theme.colorScheme.surface,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: AppRadius.borderXl,
       border: Border.all(
         color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
       ),
@@ -488,7 +467,7 @@ Widget _sectionCard(
                   color: theme.colorScheme.primaryContainer.withValues(
                     alpha: 0.5,
                   ),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: AppRadius.borderMd,
                 ),
                 child: Icon(
                   leadingIcon,
@@ -683,7 +662,7 @@ Widget _buildLibrarySection(BuildContext context, WidgetRef ref, Student s) {
                       ),
                       decoration: BoxDecoration(
                         color: statusColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: AppRadius.borderLg,
                       ),
                       child: Text(
                         sub.status.displayName,
@@ -748,6 +727,12 @@ Widget _buildMetaSection(BuildContext context, Student s) {
         icon: Icons.delete_outline,
         label: 'Deleted',
         value: deleted,
+      ),
+      _infoRow(
+        context,
+        icon: Icons.verified_user_outlined,
+        label: 'ID Card Token',
+        value: (s.idCardToken ?? '').isNotEmpty ? 'Issued' : 'Pending',
       ),
     ],
     leadingIcon: Icons.info_outline,
@@ -826,7 +811,7 @@ Widget _buildLoadingSkeleton(BuildContext context) {
               color: theme.colorScheme.surfaceContainerHighest.withValues(
                 alpha: 0.3,
               ),
-              borderRadius: BorderRadius.circular(32),
+              borderRadius: AppRadius.borderPill,
             ),
           ),
           const SizedBox(height: 32),
@@ -839,7 +824,7 @@ Widget _buildLoadingSkeleton(BuildContext context) {
                 color: theme.colorScheme.surfaceContainerHighest.withValues(
                   alpha: 0.3,
                 ),
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: AppRadius.borderXl,
               ),
             ),
             const SizedBox(height: 16),

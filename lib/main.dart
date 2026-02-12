@@ -23,12 +23,14 @@ import 'package:flutter/material.dart';
 // Release builds: avoid importing ui we don't need
 import 'package:flutter/services.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:library_registration_app/core/config/app_config.dart';
 import 'package:library_registration_app/core/routing/app_router.dart';
 import 'package:library_registration_app/core/services/connectivity_service.dart';
 import 'package:library_registration_app/core/theme/app_theme.dart';
 import 'package:library_registration_app/core/utils/telemetry_service.dart';
+import 'package:library_registration_app/presentation/pages/config/config_error_page.dart';
 import 'package:library_registration_app/presentation/pages/splash/splash_page.dart';
 import 'package:library_registration_app/presentation/providers/database_provider.dart';
 import 'package:library_registration_app/presentation/providers/ui/ui_state_provider.dart';
@@ -63,6 +65,19 @@ final splashHoldProvider = FutureProvider<void>((ref) async {
 });
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Use clean path URLs on web (no #/hash routing).
+  // Also enables correct deep-link handling for routes like `/verify-card?tok=...`.
+  if (kIsWeb) {
+    usePathUrlStrategy();
+  }
+
+  final configIssues = AppConfig.supabaseConfigIssues;
+  if (configIssues.isNotEmpty) {
+    // Don't attempt to initialize Supabase; render a clear configuration screen.
+    runApp(const ConfigErrorApp());
+    return;
+  }
   // Ensure no runtime font fetching
   // Prefer the highest refresh rate available on Android devices (e.g., 120Hz),
   // and gracefully no-op on other platforms.

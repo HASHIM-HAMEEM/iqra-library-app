@@ -20,6 +20,11 @@ class StudentRepositoryImpl implements StudentRepository {
   }
 
   @override
+  Future<List<Student>> getDiscardedStudentsPaginated(int offset, int limit) async {
+    return _supabase.getDiscardedStudentsPaginated(offset, limit);
+  }
+
+  @override
   Future<Student?> getStudentById(String id) async {
     return _supabase.getStudentById(id);
   }
@@ -58,6 +63,13 @@ class StudentRepositoryImpl implements StudentRepository {
   Future<String> createStudent(Student student) async {
     final id = _uuid.v4();
     final now = DateTime.now();
+    // Always ensure a secure, unique token exists so ID card verification works
+    // even if the database enforces NOT NULL/UNIQUE constraints for this field.
+    final token =
+        (student.idCardToken?.trim().isNotEmpty ?? false)
+            ? student.idCardToken!.trim()
+            : _uuid.v4().replaceAll('-', '');
+    final issuedAt = student.idCardIssuedAt ?? now;
 
     final studentWithId = Student(
       id: id,
@@ -71,6 +83,8 @@ class StudentRepositoryImpl implements StudentRepository {
       profileImagePath: student.profileImagePath,
       createdAt: now,
       updatedAt: now,
+      idCardToken: token,
+      idCardIssuedAt: issuedAt,
     );
 
     await _supabase.createStudent(studentWithId);
@@ -92,6 +106,13 @@ class StudentRepositoryImpl implements StudentRepository {
       createdAt: student.createdAt,
       updatedAt: DateTime.now(),
       isDeleted: student.isDeleted,
+      subscriptionPlan: student.subscriptionPlan,
+      subscriptionStartDate: student.subscriptionStartDate,
+      subscriptionEndDate: student.subscriptionEndDate,
+      subscriptionAmount: student.subscriptionAmount,
+      subscriptionStatus: student.subscriptionStatus,
+      idCardToken: student.idCardToken,
+      idCardIssuedAt: student.idCardIssuedAt,
     );
 
     await _supabase.updateStudent(updatedStudent);

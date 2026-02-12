@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 
 class DiagnosticsOverlay extends StatefulWidget {
   const DiagnosticsOverlay({required this.logFeed, super.key});
@@ -30,7 +31,7 @@ class _DiagnosticsOverlayState extends State<DiagnosticsOverlay> {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.surface.withValues(alpha: 0.95),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: AppRadius.borderSm,
                     border: Border.all(
                       color: theme.colorScheme.outline.withValues(alpha: 0.3),
                     ),

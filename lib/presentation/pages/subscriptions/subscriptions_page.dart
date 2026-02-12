@@ -2,7 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:library_registration_app/core/utils/responsive_utils.dart';
+import 'package:intl/intl.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
+import 'package:library_registration_app/core/theme/app_colors.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 
 import 'package:library_registration_app/domain/entities/student.dart';
 import 'package:library_registration_app/domain/entities/subscription.dart';
@@ -16,6 +19,7 @@ import 'package:library_registration_app/presentation/widgets/common/primary_but
 import 'package:library_registration_app/presentation/widgets/common/typeahead_student_field.dart';
 import 'package:library_registration_app/presentation/widgets/subscriptions/subscription_card.dart';
 import 'package:library_registration_app/presentation/widgets/subscriptions/subscription_filters.dart';
+import 'package:library_registration_app/presentation/widgets/common/page_header.dart';
 import 'package:library_registration_app/presentation/widgets/subscriptions/subscription_timeline.dart';
 
 String _getStatusDisplayName(SubscriptionStatus status) {
@@ -154,113 +158,129 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
           ),
           RefreshIndicator(
             onRefresh: _onRefresh,
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              controller: _scrollController,
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: ResponsiveUtils.getResponsivePadding(
-                      context,
-                    ).copyWith(top: 8),
-                    child: _buildModernHeader(theme),
-                  ),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: ResponsiveUtils.getMaxContentWidth(context),
                 ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: ResponsiveUtils.getResponsivePadding(
-                      context,
-                    ).copyWith(top: 16),
-                    child: SubscriptionFilters(
-                      selectedStatus: _selectedStatus,
-                      searchQuery: _searchQuery,
-                      onStatusChanged: (status) =>
-                          setState(() => _selectedStatus = status),
-                      onSearchChanged: _onSearchChanged,
-                      onClearFilters: () {
-                        setState(() {
-                          _selectedStatus = null;
-                          _searchQuery = '';
-                        });
-                      },
-                    ),
-                  ),
-                ),
-                const SliverToBoxAdapter(child: SizedBox(height: 8)),
-                subscriptionsAsync.when(
-                  data: (subscriptions) => studentsAsync.when(
-                    data: (students) {
-                      final hasActiveFilters =
-                          _selectedStatus != null || _searchQuery.isNotEmpty;
-                      final source = hasActiveFilters
-                          ? subscriptions
-                          : (_paged.isEmpty ? subscriptions : _paged);
-                      final filtered = _filterSubscriptions(source, students);
-
-                      if (filtered.isEmpty) {
-                        if (_selectedStatus != null ||
-                            _searchQuery.isNotEmpty) {
-                          return SliverToBoxAdapter(
-                            child: _buildNoFilteredResultsState(theme),
-                          );
-                        }
-                        return SliverToBoxAdapter(
-                          child: _buildEmptyState(theme),
-                        );
-                      }
-                      final idToStudent = {for (final s in students) s.id: s};
-                      return _isTimelineView
-                          ? SliverToBoxAdapter(
-                              child: SubscriptionTimeline(
-                                subscriptions: filtered,
-                                studentNamesById: idToStudent.map(
-                                  (k, v) => MapEntry(k, v.fullName),
-                                ),
-                              ),
-                            )
-                          : _buildListView(filtered, students);
-                    },
-                    loading: () => const SliverToBoxAdapter(
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                    error: (_, __) => const SliverToBoxAdapter(
-                      child: Center(child: Text('Error loading student data')),
-                    ),
-                  ),
-                  loading: () => const SliverToBoxAdapter(
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-                  error: (error, _) => SliverToBoxAdapter(
-                    child: Center(
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  controller: _scrollController,
+                  slivers: [
+                    SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.error_outline,
-                              size: 48,
-                              color: theme.colorScheme.error,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Unable to load subscriptions',
-                              style: theme.textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 8),
-                            PrimaryButton(
-                              text: 'Retry',
-                              onPressed: () =>
-                                  ref.invalidate(subscriptionsProvider),
-                            ),
-                          ],
+                        padding: ResponsiveUtils.getResponsivePadding(
+                          context,
+                        ).copyWith(top: 8),
+                        child: _buildModernHeader(theme),
+                      ),
+                    ),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: ResponsiveUtils.getResponsivePadding(
+                          context,
+                        ).copyWith(top: 16),
+                        child: SubscriptionFilters(
+                          selectedStatus: _selectedStatus,
+                          searchQuery: _searchQuery,
+                          onStatusChanged: (status) =>
+                              setState(() => _selectedStatus = status),
+                          onSearchChanged: _onSearchChanged,
+                          onClearFilters: () {
+                            setState(() {
+                              _selectedStatus = null;
+                              _searchQuery = '';
+                            });
+                          },
                         ),
                       ),
                     ),
-                  ),
+                    const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                    subscriptionsAsync.when(
+                      data: (subscriptions) => studentsAsync.when(
+                        data: (students) {
+                          final hasActiveFilters =
+                              _selectedStatus != null ||
+                              _searchQuery.isNotEmpty;
+                          final source = hasActiveFilters
+                              ? subscriptions
+                              : (_paged.isEmpty ? subscriptions : _paged);
+                          final filtered = _filterSubscriptions(
+                            source,
+                            students,
+                          );
+
+                          if (filtered.isEmpty) {
+                            if (_selectedStatus != null ||
+                                _searchQuery.isNotEmpty) {
+                              return SliverToBoxAdapter(
+                                child: _buildNoFilteredResultsState(theme),
+                              );
+                            }
+                            return SliverToBoxAdapter(
+                              child: _buildEmptyState(theme),
+                            );
+                          }
+                          final idToStudent = {
+                            for (final s in students) s.id: s,
+                          };
+                          return _isTimelineView
+                              ? SliverToBoxAdapter(
+                                  child: SubscriptionTimeline(
+                                    subscriptions: filtered,
+                                    studentNamesById: idToStudent.map(
+                                      (k, v) => MapEntry(k, v.fullName),
+                                    ),
+                                  ),
+                                )
+                              : _buildListView(filtered, students);
+                        },
+                        loading: () => const SliverToBoxAdapter(
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                        error: (_, __) => const SliverToBoxAdapter(
+                          child: Center(
+                            child: Text('Error loading student data'),
+                          ),
+                        ),
+                      ),
+                      loading: () => const SliverToBoxAdapter(
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                      error: (error, _) => SliverToBoxAdapter(
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.error_outline,
+                                  size: 48,
+                                  color: theme.colorScheme.error,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Unable to load subscriptions',
+                                  style: theme.textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 8),
+                                PrimaryButton(
+                                  text: 'Retry',
+                                  onPressed: () =>
+                                      ref.invalidate(subscriptionsProvider),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
+                  ],
                 ),
-                const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
-              ],
+              ),
             ),
           ),
         ],
@@ -281,12 +301,10 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
             onPressed: () => _showAddSubscriptionDialog(context),
             backgroundColor: theme.colorScheme.primary,
             elevation: 8,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: AppRadius.borderXl),
             child: Container(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: AppRadius.borderXl,
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -307,44 +325,22 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
   }
 
   Widget _buildModernHeader(ThemeData theme) {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Subscriptions',
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Manage student access and payments',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            IconButton.filledTonal(
-              onPressed: () =>
-                  setState(() => _isTimelineView = !_isTimelineView),
-              icon: Icon(
-                _isTimelineView
-                    ? Icons.view_list_rounded
-                    : Icons.timeline_rounded,
-              ),
-              tooltip: _isTimelineView ? 'List View' : 'Timeline View',
-            ),
-          ],
+    return PageHeader(
+      title: 'Subscriptions',
+      subtitle: 'Manage student access and payments',
+      showBack: false,
+      actions: [
+        IconButton(
+          onPressed: () => context.go('/subscriptions/discarded'),
+          icon: const Icon(Icons.delete_outline_rounded),
+          tooltip: 'Discarded Subscriptions',
+        ),
+        IconButton(
+          onPressed: () => setState(() => _isTimelineView = !_isTimelineView),
+          icon: Icon(
+            _isTimelineView ? Icons.view_list_rounded : Icons.timeline_rounded,
+          ),
+          tooltip: _isTimelineView ? 'List View' : 'Timeline View',
         ),
       ],
     );
@@ -389,6 +385,12 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
         return planMatch || amountMatch || idMatch || studentMatch;
       }).toList();
     }
+
+    // Hide subscriptions whose student record has been deleted/discarded.
+    // These will be visible in the Discarded Subscriptions section.
+    filtered = filtered
+        .where((s) => idToStudent.containsKey(s.studentId))
+        .toList();
     return filtered;
   }
 
@@ -398,11 +400,18 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
   ) {
     final idToStudent = {for (final s in students) s.id: s};
     final padding = ResponsiveUtils.getResponsivePadding(context);
-
-    // Grid Logic
-    final media = MediaQuery.of(context);
-    final screenWidth = media.size.width;
+    final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
+    final isDesktop = ResponsiveUtils.isDesktop(context);
+
+    if (isDesktop) {
+      return SliverPadding(
+        padding: padding,
+        sliver: SliverToBoxAdapter(
+          child: _buildSubscriptionsDataTable(subscriptions, idToStudent),
+        ),
+      );
+    }
 
     if (isMobile) {
       return SliverPadding(
@@ -418,8 +427,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
                 studentName: student?.fullName,
                 studentAvatarPath: student?.profileImagePath,
                 studentInitials: student?.initials,
-                onTap: () =>
-                    context.go('/students/details/${subscription.studentId}'),
+                onTap: () => context.go('/students/${subscription.studentId}'),
                 onEdit: () => _showEditSubscriptionDialog(subscription),
                 onCancel: () => _cancelSubscription(subscription),
                 onRenew: () => _renewSubscription(subscription),
@@ -442,8 +450,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
               studentName: student?.fullName,
               studentAvatarPath: student?.profileImagePath,
               studentInitials: student?.initials,
-              onTap: () =>
-                  context.go('/students/details/${subscription.studentId}'),
+              onTap: () => context.go('/students/${subscription.studentId}'),
               onEdit: () => _showEditSubscriptionDialog(subscription),
               onCancel: () => _cancelSubscription(subscription),
               onRenew: () => _renewSubscription(subscription),
@@ -459,6 +466,101 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
         ),
       );
     }
+  }
+
+  Widget _buildSubscriptionsDataTable(
+    List<Subscription> subscriptions,
+    Map<String, Student> idToStudent,
+  ) {
+    final theme = Theme.of(context);
+    final dateFmt = DateFormat('MMM dd, yyyy');
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    final currFmt = NumberFormat.simpleCurrency(locale: locale);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: AppRadius.borderLg,
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.3,
+              ),
+              border: Border(
+                bottom: BorderSide(
+                  color: theme.colorScheme.outlineVariant.withValues(
+                    alpha: 0.3,
+                  ),
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Text('Student', style: _tHeaderStyle(theme)),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text('Plan', style: _tHeaderStyle(theme)),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text('Start', style: _tHeaderStyle(theme)),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text('End', style: _tHeaderStyle(theme)),
+                ),
+                SizedBox(
+                  width: 100,
+                  child: Text('Amount', style: _tHeaderStyle(theme)),
+                ),
+                SizedBox(
+                  width: 90,
+                  child: Text('Status', style: _tHeaderStyle(theme)),
+                ),
+                const SizedBox(width: 48),
+              ],
+            ),
+          ),
+          // Rows
+          ...subscriptions.asMap().entries.map((entry) {
+            final index = entry.key;
+            final sub = entry.value;
+            final student = idToStudent[sub.studentId];
+            return _SubscriptionTableRow(
+              subscription: sub,
+              studentName: student?.fullName ?? 'Unknown',
+              startDate: dateFmt.format(sub.startDate),
+              endDate: dateFmt.format(sub.endDate),
+              amount: currFmt.format(sub.amount),
+              isEven: index.isEven,
+              theme: theme,
+              onTap: () => context.go('/subscriptions/${sub.id}'),
+              onEdit: () => _showEditSubscriptionDialog(sub),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  TextStyle _tHeaderStyle(ThemeData theme) {
+    return theme.textTheme.labelMedium!.copyWith(
+      fontWeight: FontWeight.w700,
+      color: theme.colorScheme.onSurfaceVariant,
+      letterSpacing: 0.5,
+    );
   }
 
   Widget _buildEmptyState(ThemeData theme) {
@@ -552,8 +654,10 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete subscription?'),
-        content: Text('Permanently delete "${s.planName}" subscription?'),
+        title: const Text('Move subscription to trash?'),
+        content: Text(
+          'Move "${s.planName}" subscription to trash? You can restore it later.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -561,7 +665,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text('Move to trash'),
           ),
         ],
       ),
@@ -575,7 +679,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
         if (mounted) {
           CustomNotification.show(
             context,
-            message: 'Subscription deleted',
+            message: 'Subscription moved to trash',
             type: NotificationType.success,
           );
         }
@@ -606,9 +710,9 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
+            child: Text(
               'Cancel Subscription',
-              style: TextStyle(color: Colors.red),
+              style: TextStyle(color: AppColors.error),
             ),
           ),
         ],
@@ -665,7 +769,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: const InputDecoration(
             labelText: 'Renewal Amount',
-            prefixIcon: Icon(Icons.currency_rupee),
+            prefixIcon: Icon(Icons.payments_outlined),
             border: OutlineInputBorder(),
           ),
         ),
@@ -694,7 +798,7 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
         if (mounted) {
           CustomNotification.show(
             context,
-            message: 'Renowed successfully',
+            message: 'Renewed successfully',
             type: NotificationType.success,
           );
         }
@@ -774,7 +878,7 @@ class _AddSubscriptionSheetState extends ConsumerState<_AddSubscriptionSheet> {
                         color: theme.colorScheme.onSurfaceVariant.withValues(
                           alpha: 0.2,
                         ),
-                        borderRadius: BorderRadius.circular(2),
+                        borderRadius: AppRadius.borderXs,
                       ),
                     ),
                   ),
@@ -844,8 +948,8 @@ class _AddSubscriptionSheetState extends ConsumerState<_AddSubscriptionSheet> {
                     const SizedBox(height: 16),
                     ModernTextField(
                       controller: _amountCtrl,
-                      label: 'Amount (₹)',
-                      icon: Icons.currency_rupee,
+                      label: 'Amount',
+                      icon: Icons.payments_outlined,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
@@ -878,13 +982,13 @@ class _AddSubscriptionSheetState extends ConsumerState<_AddSubscriptionSheet> {
                               );
                               if (d != null) setState(() => _start = d);
                             },
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: AppRadius.borderLg,
                             child: Container(
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
                                 color: theme.colorScheme.surfaceContainerHighest
                                     .withValues(alpha: 0.3),
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: AppRadius.borderLg,
                                 border: Border.all(
                                   color: theme.colorScheme.outlineVariant
                                       .withValues(alpha: 0.5),
@@ -923,10 +1027,10 @@ class _AddSubscriptionSheetState extends ConsumerState<_AddSubscriptionSheet> {
                           ),
                         ),
                         const SizedBox(width: 12),
-                        const Icon(
+                        Icon(
                           Icons.arrow_forward,
                           size: 16,
-                          color: Colors.grey,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -940,13 +1044,13 @@ class _AddSubscriptionSheetState extends ConsumerState<_AddSubscriptionSheet> {
                               );
                               if (d != null) setState(() => _end = d);
                             },
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: AppRadius.borderLg,
                             child: Container(
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
                                 color: theme.colorScheme.surfaceContainerHighest
                                     .withValues(alpha: 0.3),
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: AppRadius.borderLg,
                                 border: Border.all(
                                   color: theme.colorScheme.outlineVariant
                                       .withValues(alpha: 0.5),
@@ -995,7 +1099,7 @@ class _AddSubscriptionSheetState extends ConsumerState<_AddSubscriptionSheet> {
                         onPressed: _save,
                         style: FilledButton.styleFrom(
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: AppRadius.borderLg,
                           ),
                           elevation: 2,
                         ),
@@ -1139,7 +1243,7 @@ class _EditSubscriptionSheetState
                         color: theme.colorScheme.onSurfaceVariant.withValues(
                           alpha: 0.2,
                         ),
-                        borderRadius: BorderRadius.circular(2),
+                        borderRadius: AppRadius.borderXs,
                       ),
                     ),
                   ),
@@ -1199,8 +1303,8 @@ class _EditSubscriptionSheetState
                     const SizedBox(height: 16),
                     ModernTextField(
                       controller: _amountCtrl,
-                      label: 'Amount (₹)',
-                      icon: Icons.currency_rupee,
+                      label: 'Amount',
+                      icon: Icons.payments_outlined,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
@@ -1220,11 +1324,11 @@ class _EditSubscriptionSheetState
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: AppRadius.borderLg,
                           borderSide: BorderSide.none,
                         ),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: AppRadius.borderLg,
                           borderSide: BorderSide(
                             color: theme.colorScheme.outlineVariant.withValues(
                               alpha: 0.2,
@@ -1232,7 +1336,7 @@ class _EditSubscriptionSheetState
                           ),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: AppRadius.borderLg,
                           borderSide: BorderSide(
                             color: theme.colorScheme.primary,
                           ),
@@ -1267,7 +1371,7 @@ class _EditSubscriptionSheetState
                         onPressed: _save,
                         style: FilledButton.styleFrom(
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: AppRadius.borderLg,
                           ),
                           elevation: 2,
                         ),
@@ -1322,5 +1426,184 @@ class _EditSubscriptionSheetState
         );
       }
     }
+  }
+}
+
+class _SubscriptionTableRow extends StatefulWidget {
+  const _SubscriptionTableRow({
+    required this.subscription,
+    required this.studentName,
+    required this.startDate,
+    required this.endDate,
+    required this.amount,
+    required this.isEven,
+    required this.theme,
+    required this.onTap,
+    required this.onEdit,
+  });
+
+  final Subscription subscription;
+  final String studentName;
+  final String startDate;
+  final String endDate;
+  final String amount;
+  final bool isEven;
+  final ThemeData theme;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
+
+  @override
+  State<_SubscriptionTableRow> createState() => _SubscriptionTableRowState();
+}
+
+class _SubscriptionTableRowState extends State<_SubscriptionTableRow> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+    final sub = widget.subscription;
+
+    Color statusColor;
+    String statusLabel;
+    if (sub.status == SubscriptionStatus.active && !sub.isExpired) {
+      statusColor = AppColors.success;
+      statusLabel = 'Active';
+    } else if (sub.status == SubscriptionStatus.expired || sub.isExpired) {
+      statusColor = theme.colorScheme.error;
+      statusLabel = 'Expired';
+    } else if (sub.status == SubscriptionStatus.cancelled) {
+      statusColor = AppColors.warning;
+      statusLabel = 'Cancelled';
+    } else {
+      statusColor = theme.colorScheme.onSurfaceVariant;
+      statusLabel = 'Pending';
+    }
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            color: _hovered
+                ? theme.colorScheme.primary.withValues(alpha: 0.04)
+                : (widget.isEven
+                      ? Colors.transparent
+                      : theme.colorScheme.surfaceContainerHighest.withValues(
+                          alpha: 0.15,
+                        )),
+            border: Border(
+              bottom: BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.2),
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              // Student name
+              Expanded(
+                flex: 3,
+                child: Text(
+                  widget.studentName,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              // Plan
+              Expanded(
+                flex: 2,
+                child: Text(
+                  sub.planName,
+                  style: theme.textTheme.bodySmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              // Start
+              Expanded(
+                flex: 2,
+                child: Text(
+                  widget.startDate,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              // End
+              Expanded(
+                flex: 2,
+                child: Text(
+                  widget.endDate,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              // Amount
+              SizedBox(
+                width: 100,
+                child: Text(
+                  widget.amount,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              // Status
+              SizedBox(
+                width: 90,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.1),
+                    borderRadius: AppRadius.borderXs,
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: statusColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+              // Actions
+              SizedBox(
+                width: 48,
+                child: _hovered
+                    ? IconButton(
+                        onPressed: widget.onEdit,
+                        icon: Icon(
+                          Icons.edit_outlined,
+                          size: 16,
+                          color: theme.colorScheme.primary,
+                        ),
+                        iconSize: 16,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
+                        tooltip: 'Edit',
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

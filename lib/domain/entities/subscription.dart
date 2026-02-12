@@ -58,13 +58,18 @@ class Subscription extends Equatable {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  bool get isActive => status == SubscriptionStatus.active && !isExpired;
+  bool get isActive {
+    final now = DateTime.now().toUtc();
+    return status == SubscriptionStatus.active &&
+        !now.isBefore(startDate.toUtc()) &&
+        !now.isAfter(endDate.toUtc());
+  }
 
-  bool get isExpired => DateTime.now().isAfter(endDate);
+  bool get isExpired => DateTime.now().toUtc().isAfter(endDate.toUtc());
 
   int get daysRemaining {
     if (isExpired) return 0;
-    return endDate.difference(DateTime.now()).inDays;
+    return endDate.toUtc().difference(DateTime.now().toUtc()).inDays;
   }
 
   Duration get duration => endDate.difference(startDate);
@@ -115,28 +120,67 @@ class Subscription extends Equatable {
 
   // JSON mapping for Supabase rows
   factory Subscription.fromJson(Map<String, dynamic> json) {
-    final statusStr = (json['status'] ?? json['subscription_status']) as String;
-    final start =
-        (json['start_date'] ??
-                json['subscription_start_date'] ??
-                json['startDate'])
-            as String;
-    final endRaw =
-        (json['end_date'] ?? json['subscription_end_date'] ?? json['endDate'])
-            as String?;
-    final created = (json['created_at'] ?? json['createdAt']) as String;
-    final updated = (json['updated_at'] ?? json['updatedAt']) as String;
+    String readString(List<String> keys, {String fallback = ''}) {
+      for (final key in keys) {
+        final raw = json[key];
+        if (raw == null) continue;
+        final text = raw.toString().trim();
+        if (text.isEmpty) continue;
+        return text;
+      }
+      return fallback;
+    }
+
+    DateTime readDate(List<String> keys, {required DateTime fallback}) {
+      for (final key in keys) {
+        final raw = json[key];
+        if (raw == null) continue;
+        if (raw is DateTime) return raw;
+        final parsed = DateTime.tryParse(raw.toString());
+        if (parsed != null) return parsed;
+      }
+      return fallback;
+    }
+
+    double readDouble(List<String> keys, {double fallback = 0.0}) {
+      for (final key in keys) {
+        final raw = json[key];
+        if (raw == null) continue;
+        if (raw is num) return raw.toDouble();
+        final parsed = double.tryParse(raw.toString());
+        if (parsed != null) return parsed;
+      }
+      return fallback;
+    }
+
+    final nowUtc = DateTime.now().toUtc();
+    final startDate = readDate(
+      const ['start_date', 'subscription_start_date', 'startDate'],
+      fallback: nowUtc,
+    );
+    final endDate = readDate(
+      const ['end_date', 'subscription_end_date', 'endDate'],
+      fallback: startDate,
+    );
 
     return Subscription(
-      id: json['id'] as String,
-      studentId: (json['student_id'] ?? json['studentId']) as String,
-      planName: (json['plan_name'] ?? json['planName']) as String,
-      startDate: DateTime.parse(start),
-      endDate: DateTime.parse(endRaw ?? start),
-      amount: (json['amount'] as num).toDouble(),
-      status: SubscriptionStatus.fromString(statusStr),
-      createdAt: DateTime.parse(created),
-      updatedAt: DateTime.parse(updated),
+      id: readString(const ['id']),
+      studentId: readString(const ['student_id', 'studentId']),
+      planName: readString(const ['plan_name', 'planName']),
+      startDate: startDate,
+      endDate: endDate,
+      amount: readDouble(const ['amount', 'subscription_amount']),
+      status: SubscriptionStatus.fromString(
+        readString(const ['status', 'subscription_status'], fallback: 'pending'),
+      ),
+      createdAt: readDate(
+        const ['created_at', 'createdAt'],
+        fallback: nowUtc,
+      ),
+      updatedAt: readDate(
+        const ['updated_at', 'updatedAt'],
+        fallback: nowUtc,
+      ),
     );
   }
 

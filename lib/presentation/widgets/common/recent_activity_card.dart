@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:library_registration_app/core/theme/app_colors.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 
 import 'package:library_registration_app/domain/entities/activity_log.dart';
 import 'package:library_registration_app/presentation/providers/activity_logs/activity_logs_provider.dart';
@@ -24,7 +26,7 @@ class RecentActivityCard extends ConsumerWidget {
             theme.colorScheme.surfaceContainerLowest,
           ],
         ),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: AppRadius.borderXl,
         border: Border.all(
           color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
         ),
@@ -67,7 +69,7 @@ class RecentActivityCard extends ConsumerWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppRadius.borderMd,
         border: Border.all(
           color: theme.colorScheme.outline.withValues(alpha: 0.08),
         ),
@@ -89,7 +91,7 @@ class RecentActivityCard extends ConsumerWidget {
                   ).withValues(alpha: 0.08),
                 ],
               ),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: AppRadius.borderMd,
               border: Border.all(
                 color: _getActivityColor(
                   activity.activityType,
@@ -177,7 +179,7 @@ class RecentActivityCard extends ConsumerWidget {
                 height: 32,
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppRadius.borderSm,
                 ),
               ),
               const SizedBox(width: 12),
@@ -191,7 +193,7 @@ class RecentActivityCard extends ConsumerWidget {
                       width: double.infinity,
                       decoration: BoxDecoration(
                         color: theme.colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: AppRadius.borderXs,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -200,7 +202,7 @@ class RecentActivityCard extends ConsumerWidget {
                       width: 100,
                       decoration: BoxDecoration(
                         color: theme.colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: AppRadius.borderXs,
                       ),
                     ),
                   ],
@@ -285,17 +287,17 @@ class RecentActivityCard extends ConsumerWidget {
       case ActivityType.subscriptionRenewed:
       case ActivityType.dataBackup:
       case ActivityType.dataRestore:
-        return const Color(0xFF10B981); // Success green
+        return AppColors.success;
       case ActivityType.login:
-        return const Color(0xFF3B82F6); // Blue
+        return AppColors.info;
       case ActivityType.studentUpdated:
       case ActivityType.subscriptionUpdated:
       case ActivityType.settingsChanged:
-        return const Color(0xFFF59E0B); // Warning yellow
+        return AppColors.warning;
       case ActivityType.studentDeleted:
       case ActivityType.subscriptionCancelled:
       case ActivityType.logout:
-        return const Color(0xFFEF4444); // Error red
+        return AppColors.error;
     }
   }
 

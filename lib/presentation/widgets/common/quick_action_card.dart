@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:library_registration_app/core/utils/responsive_utils.dart';
+import 'package:library_registration_app/core/responsive/responsive.dart';
+import 'package:library_registration_app/core/theme/design_tokens.dart';
 import 'package:library_registration_app/presentation/widgets/common/app_card.dart';
 
 class QuickActionCard extends StatelessWidget {
@@ -48,10 +49,8 @@ class QuickActionCard extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: actionColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: actionColor.withValues(alpha: 0.2),
-                  ),
+                  borderRadius: AppRadius.borderMd,
+                  border: Border.all(color: actionColor.withValues(alpha: 0.2)),
                 ),
                 child: Icon(
                   icon,
